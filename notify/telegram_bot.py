@@ -1497,6 +1497,21 @@ async def set_menu_commands(application: Application) -> None:
         logger.debug(f"Gagal mengatur menu perintah bot: {e}")
 
 
+async def on_bot_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Error handler terpusat untuk menangani error tak terduga pada polling Telegram."""
+    from telegram.error import Conflict, NetworkError, TimedOut
+    if isinstance(context.error, Conflict):
+        logger.warning(
+            "⚠️ [Conflict Handled] Terdeteksi instance bot lain aktif bersamaan atau sedang proses transisi redeploy di Railway. "
+            "Bot otomatis menyinkronkan koneksi..."
+        )
+        return
+    if isinstance(context.error, (NetworkError, TimedOut)):
+        logger.warning(f"⚠️ [Network Handled] Masalah koneksi sementara ke Telegram API: {context.error}")
+        return
+    logger.error(f"Telegram Bot Error: {context.error}")
+
+
 def build_telegram_application() -> Optional[Application]:
     """Membuat dan mengonfigurasi aplikasi bot Telegram dengan seluruh CommandHandler."""
     token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
@@ -1505,6 +1520,7 @@ def build_telegram_application() -> Optional[Application]:
         return None
 
     app = Application.builder().token(token).post_init(set_menu_commands).build()
+    app.add_error_handler(on_bot_error)
     cmd_handler = TelegramBotCommands()
 
     app.add_handler(CommandHandler(["start", "help"], cmd_handler.start_command))
