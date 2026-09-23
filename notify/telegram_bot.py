@@ -397,20 +397,36 @@ class TelegramBotCommands:
         if not await self.check_user_access(update, context):
             return
         user_name = update.effective_user.first_name if update.effective_user else "Trader"
-        welcome_text = (
-            f"👋 Halo <b>{html.escape(user_name)}</b>!\n\n"
-            f"Selamat datang di <b>IDX Stock Signal Bot</b> 🇮🇩\n\n"
-            f"<b>Perintah yang tersedia:</b>\n"
-            f"🎯 /harian - Rekomendasi sinyal trading harian (Entry, TP & SL)\n"
-            f"🥇 /gold - Analisis & sinyal emas dunia XAU/USD (24 Jam)\n"
-            f"🔍 /scan - Pindai seluruh saham potensial sekarang juga (On-Demand)\n"
-            f"📋 /watchlist - Lihat daftar saham potensial cuan & harga terkini\n"
-            f"⚙️ /status - Cek status kesehatan & info sistem bot\n"
-            f"📜 /lasthistory - Tampilkan 5 riwayat sinyal terakhir\n"
-            f"ℹ️ /help - Bantuan & panduan bot\n\n"
-            f"<i>Bot ini berjalan otomatis untuk saham IDX & komoditas global.</i>"
-        )
-        await update.message.reply_html(welcome_text)
+        welcome_lines = [
+            f"👋 Halo <b>{html.escape(user_name)}</b>!",
+            "",
+            "Selamat datang di <b>IDX Stock & Gold Signal Bot</b> 🇮🇩🥇",
+            "",
+            "<b>🎯 Fitur & Perintah yang Dapat Anda Gunakan:</b>",
+            "• /harian - Rekomendasi sinyal trading harian (Entry, TP & SL)",
+            "• /candle - Bedah pola candlestick & price action (7 buku)",
+            "• /gold - Analisis & sinyal emas dunia XAU/USD (24 Jam)",
+            "• /scan - Pindai seluruh saham potensial sekarang juga (On-Demand)",
+            "• /watchlist - Lihat daftar saham potensial cuan & harga terkini",
+            "• /status - Cek status bot & strategi aktif",
+            "• /lasthistory - Tampilkan 5 riwayat sinyal terakhir",
+            "• /help - Bantuan & panduan penggunaan bot",
+        ]
+
+        if self._is_admin(update):
+            welcome_lines.extend([
+                "",
+                "👑 <b>Menu Khusus Pemilik / Super Admin:</b>",
+                "• /users - Lihat daftar seluruh pengguna & status izin",
+                "• /approve &lt;id&gt; - Izinkan akses pengguna baru",
+                "• /reject &lt;id&gt; - Tolak / cabut akses pengguna",
+            ])
+
+        welcome_lines.extend([
+            "",
+            "<i>Bot ini berjalan otomatis memantau saham IDX dan komoditas emas dunia.</i>",
+        ])
+        await update.message.reply_html("\n".join(welcome_lines))
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /status untuk cek kondisi bot."""
