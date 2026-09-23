@@ -138,28 +138,33 @@ class SignalEngine:
             is_sell = any(sell_satisfied_list) and len(sell_satisfied_list) > 0
 
         # 3. Hitung Manajemen Risiko Trading Harian (TP / SL / RRR)
-        trading_cfg = self.config.get("trading", {})
-        trading_mode = trading_cfg.get("mode", "intraday")
-        mode_cfg = trading_cfg.get(trading_mode, {})
-        tp_pct = float(mode_cfg.get("take_profit_pct", 2.5 if trading_mode == "intraday" else 5.0))
-        sl_pct = float(mode_cfg.get("stop_loss_pct", 1.5 if trading_mode == "intraday" else 3.0))
+        is_gold = any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        if is_gold:
+            tp_pct = 0.6
+            sl_pct = 0.35
+            tp_price = round(curr_price * (1.0 + (tp_pct / 100.0)), 2)
+            sl_price = round(curr_price * (1.0 - (sl_pct / 100.0)), 2)
+            risk_dist = max(curr_price - sl_price, 0.01)
+            rrr = round((tp_price - curr_price) / risk_dist, 2)
+        else:
+            trading_cfg = self.config.get("trading", {})
+            trading_mode = trading_cfg.get("mode", "intraday")
+            mode_cfg = trading_cfg.get(trading_mode, {})
+            tp_pct = float(mode_cfg.get("take_profit_pct", 2.5 if trading_mode == "intraday" else 5.0))
+            sl_pct = float(mode_cfg.get("stop_loss_pct", 1.5 if trading_mode == "intraday" else 3.0))
 
-        tp_price = round(curr_price * (1.0 + (tp_pct / 100.0)), 0)
-        sl_price = round(curr_price * (1.0 - (sl_pct / 100.0)), 0)
-        risk_dist = max(curr_price - sl_price, 1.0)
-        rrr = round((tp_price - curr_price) / risk_dist, 2)
+            tp_price = round(curr_price * (1.0 + (tp_pct / 100.0)), 0)
+            sl_price = round(curr_price * (1.0 - (sl_pct / 100.0)), 0)
+            risk_dist = max(curr_price - sl_price, 1.0)
+            rrr = round((tp_price - curr_price) / risk_dist, 2)
 
         # 4. Keputusan Sinyal & Alasan
         if is_buy:
             signal = "BUY"
             reasons = list(buy_reasons)
-            reasons.append(
-                f"🎯 Level Trading Harian: TP = Rp {tp_price:,.0f} (+{tp_pct:.1f}%), "
-                f"SL = Rp {sl_price:,.0f} (-{sl_pct:.1f}%), RRR = 1:{rrr}"
-            )
         elif is_sell:
             signal = "SELL"
-            reasons = sell_reasons
+            reasons = list(sell_reasons)
         else:
             signal = "HOLD"
             # Sertakan penjelasan kondisi saat ini

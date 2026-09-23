@@ -94,6 +94,48 @@ def is_idx_market_open(
         return False, f"Bursa Sudah Tutup (Perdagangan berakhir pukul 15:50 WIB)."
 
 
+def is_gold_market_open(
+    dt: Optional[datetime] = None,
+    config: Optional[Dict[str, Any]] = None,
+) -> Tuple[bool, str]:
+    """
+    Memeriksa apakah pasar Emas global (COMEX / CME) sedang buka.
+    Jadwal (WIB - Asia/Jakarta):
+    - Buka: Senin 05:00 WIB s/d Sabtu 04:00 WIB (23 jam sehari).
+    - Jeda harian: 04:00 - 05:00 WIB (Selasa - Jumat).
+    - Tutup: Sabtu 04:00 WIB s/d Senin 05:00 WIB.
+    """
+    cfg = config or load_config()
+    sched_cfg = cfg.get("scheduler", {})
+    if not sched_cfg.get("check_market_hours", True):
+        return True, "Filter jam komoditas dinonaktifkan."
+
+    tz_name = sched_cfg.get("timezone", "Asia/Jakarta")
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("Asia/Jakarta")
+
+    now = dt or datetime.now(tz)
+    weekday = now.weekday()  # 0: Senin, ..., 5: Sabtu, 6: Minggu
+    curr_time = now.time()
+
+    # Sabtu setelah 04:00 WIB s/d Minggu
+    if weekday == 5 and curr_time >= dtime(4, 0):
+        return False, "Pasar Emas Libur Akhir Pekan (Sabtu > 04:00 WIB)."
+    if weekday == 6:
+        return False, "Pasar Emas Libur Akhir Pekan (Minggu)."
+    # Senin sebelum 05:00 WIB
+    if weekday == 0 and curr_time < dtime(5, 0):
+        return False, "Pasar Emas Belum Buka (Mulai Senin 05:00 WIB)."
+
+    # Jeda harian CME/COMEX 04:00 - 05:00 WIB
+    if dtime(4, 0) <= curr_time < dtime(5, 0):
+        return False, "Pasar Emas Jeda Harian (04:00 - 05:00 WIB)."
+
+    return True, f"Pasar Emas Buka ({now.strftime('%A')} {curr_time.strftime('%H:%M')} WIB)."
+
+
 class PipelineRunner:
     """Eksekutor pipeline analisis pasar, evaluasi sinyal, dan pengiriman notifikasi."""
 
@@ -112,22 +154,23 @@ class PipelineRunner:
     def run_pipeline(self, force_run: bool = False) -> Dict[str, Any]:
         """
         Menjalankan 1 siklus penuh pipeline:
-        1. Validasi jam bursa IDX.
-        2. Ambil data terbaru untuk seluruh saham di watchlist.
+        1. Validasi jam bursa IDX & jam pasar Emas global.
+        2. Ambil data terbaru untuk seluruh saham & komoditas di watchlist.
         3. Hitung indikator teknikal.
         4. Jalankan rule engine & evaluasi sinyal.
         5. Filter deduplikasi sinyal.
-        6. Kirim notifikasi Telegram jika ada sinyal baru.
+        6. Kirim notifikasi Telegram instan jika ada sinyal baru.
         """
-        logger.info("=== Memulai Siklus Pipeline Analisis Saham ===")
+        logger.info("=== Memulai Siklus Pipeline Analisis Saham & Komoditas ===")
 
-        # 1. Cek Jam Bursa
-        is_open, reason = is_idx_market_open(config=self.config)
-        logger.info(f"Status Pasar IDX: {reason}")
+        # 1. Cek Jam Pasar (IDX & Emas)
+        idx_open, idx_reason = is_idx_market_open(config=self.config)
+        gold_open, gold_reason = is_gold_market_open(config=self.config)
+        logger.info(f"Status Pasar: IDX={'BUKA' if idx_open else 'TUTUP'} | GOLD={'BUKA' if gold_open else 'TUTUP'}")
 
-        if not is_open and not force_run:
-            logger.info("Melewatkan pipeline karena bursa sedang tidak aktif.")
-            return {"status": "skipped", "reason": reason}
+        if not idx_open and not gold_open and not force_run:
+            logger.info("Melewatkan pipeline karena seluruh pasar sedang tutup.")
+            return {"status": "skipped", "reason": f"IDX: {idx_reason} | Gold: {gold_reason}"}
 
         # 2. Baca Konfigurasi Trading & Watchlist
         watchlist = self.config.get("watchlist", ["BBCA.JK"])
@@ -142,7 +185,7 @@ class PipelineRunner:
             period = self.config.get("data", {}).get("default_period", "2y")
 
         logger.info(
-            f"Mode Trading: {trading_mode.upper()} (Interval: {interval}, Saham: {len(watchlist)})"
+            f"Mode Trading: {trading_mode.upper()} (Interval: {interval}, Watchlist: {len(watchlist)})"
         )
 
         results = {
@@ -153,15 +196,34 @@ class PipelineRunner:
             "details": [],
         }
 
-        # 3. Iterasi setiap saham dalam watchlist
+        # 3. Iterasi setiap saham/komoditas dalam watchlist
         for ticker in watchlist:
+            is_gold = any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+
+            # Cek jam operasional pasar per instrumen
+            if not force_run:
+                if is_gold and not gold_open:
+                    logger.debug(f"Melewatkan {ticker}: {gold_reason}")
+                    continue
+                elif not is_gold and not idx_open:
+                    logger.debug(f"Melewatkan {ticker}: {idx_reason}")
+                    continue
+
             try:
                 results["processed"] += 1
                 logger.info(f"Memproses {ticker}...")
 
+                # Konfigurasi data per instrumen
+                if is_gold:
+                    item_interval = "15m"
+                    item_period = "5d"
+                else:
+                    item_interval = interval
+                    item_period = period
+
                 # Ambil data candle terbaru
-                df = self.fetcher.fetch_and_store(ticker, interval=interval, period=period)
-                if df.empty or len(df) < 20:
+                df = self.fetcher.fetch_and_store(ticker, interval=item_interval, period=item_period)
+                if df.empty or len(df) < 15:
                     logger.warning(f"Data tidak mencukupi untuk {ticker}, dilewati.")
                     continue
 

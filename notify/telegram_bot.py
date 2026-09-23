@@ -56,55 +56,44 @@ class TelegramNotifier:
             logger.info("Telegram Notifier siap dalam mode Live.")
 
     def format_signal_message(self, sig: SignalResult) -> str:
-        """Membuat template pesan sinyal kartu berformat HTML."""
+        """Membuat template pesan sinyal ringkas, padat, dan hemat token."""
         action_emoji = "🟢" if sig.signal == "BUY" else "🔴" if sig.signal == "SELL" else "⚪"
-        action_title = "SINYAL BELI (BUY)" if sig.signal == "BUY" else "SINYAL JUAL (SELL)" if sig.signal == "SELL" else "STATUS (HOLD)"
 
-        reasons_html = ""
-        for r in sig.reasons:
-            reasons_html += f"  • {html.escape(r)}\n"
+        # Tampilan instrumen
+        ticker_upper = sig.ticker.upper()
+        if any(k in ticker_upper for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"]):
+            display_ticker = "XAU/USD (Gold)"
+        else:
+            display_ticker = sig.ticker.replace(".JK", "")
+
+        price_str = format_currency(sig.price, sig.ticker)
+
+        # Waktu candle WIB
+        t_str = str(sig.candle_time or "")
+        if len(t_str) >= 16:
+            time_wib = f"{t_str[11:16]} WIB"
+        else:
+            time_wib = f"{t_str} WIB" if t_str else "WIB"
 
         snap = sig.indicators_snapshot or {}
         rsi_val = f"{snap.get('rsi', 0.0):.1f}"
-        ema50_val = format_currency(snap.get('ema_50'), sig.ticker) if snap.get("ema_50") else "-"
-        vol_ratio_val = f"{snap.get('volume_ratio', 0.0):.2f}x" if snap.get("volume_ratio") else "-"
+        vol_ratio = f"{snap.get('volume_ratio', 1.0):.1f}x"
 
-        trading_levels_html = ""
+        lines = [f"{action_emoji} <b>{sig.signal}: {display_ticker}</b> @ <b>{price_str}</b>"]
+
         if sig.take_profit_price and sig.stop_loss_price:
-            entry_str = format_currency(sig.price, sig.ticker)
             tp_str = format_currency(sig.take_profit_price, sig.ticker)
             sl_str = format_currency(sig.stop_loss_price, sig.ticker)
-            trading_levels_html = (
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🎯 <b>Rencana Trading (Plan):</b>\n"
-                f"  • Entry: <b>{entry_str}</b>\n"
-                f"  • Target Profit (TP): <b>{tp_str}</b>\n"
-                f"  • Stop Loss (SL): <b>{sl_str}</b>\n"
-                f"  • Risk/Reward Ratio: <b>1 : {sig.risk_reward_ratio or 1.5}</b>\n"
-            )
+            rrr = sig.risk_reward_ratio or 1.5
+            lines.append(f"🎯 TP: <b>{tp_str}</b> | 🛑 SL: <b>{sl_str}</b> (RRR 1:{rrr})")
 
-        asset_label = "Komoditas / Aset:" if any(k in sig.ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD"]) else "Saham:"
-        msg = (
-            f"<b>{action_emoji} NOTIFIKASI {action_title} {action_emoji}</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🏷️ <b>{asset_label}</b> <code>{html.escape(sig.ticker)}</code>\n"
-            f"💰 <b>Harga Terkini:</b> <b>{format_currency(sig.price, sig.ticker)}</b>\n"
-            f"📊 <b>Strategi:</b> <i>{html.escape(sig.strategy_name)}</i>\n"
-            f"⏱️ <b>Waktu Candle:</b> {sig.candle_time}\n"
-            f"{trading_levels_html}"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📋 <b>Kondisi & Alasan Pemicu:</b>\n"
-            f"{reasons_html}"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📈 <b>Ringkasan Indikator:</b>\n"
-            f"  • RSI 14: <b>{rsi_val}</b>\n"
-            f"  • EMA 50: <b>{ema50_val}</b>\n"
-            f"  • Vol/Avg: <b>{vol_ratio_val}</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"⚠️ <i>Disclaimer: Sinyal ini hasil algoritma teknikal otomatis dan bukan nasihat finansial. "
-            f"Selalu lakukan analisis mandiri (DYOR) sebelum bertransaksi.</i>"
-        )
-        return msg
+        lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
+
+        if sig.reasons:
+            clean_reason = sig.reasons[0].split("(")[0].strip()
+            lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
+
+        return "\n".join(lines)
 
     async def _async_send_text(self, text: str) -> bool:
         """Mengirim pesan teks secara asinkron."""
