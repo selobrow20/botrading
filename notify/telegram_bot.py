@@ -193,7 +193,7 @@ class TelegramNotifier:
             return False
 
     async def _async_send_photo(self, photo_path: str, caption: str, target_chat_id: Optional[str] = None) -> bool:
-        """Mengirim file foto beserta caption ke Telegram."""
+        """Mengirim file foto beserta caption ke Telegram dengan proteksi batas karakter caption."""
         if not self.is_configured:
             logger.info(f"[SIMULASI TELEGRAM PHOTO] {photo_path}\n{caption}")
             return True
@@ -201,18 +201,39 @@ class TelegramNotifier:
         bot = Bot(token=self.token)
         cid = str(target_chat_id or self.chat_id).strip()
         try:
+            safe_caption = caption
+            overflow_text = None
+            if len(caption) > 1020:
+                safe_caption = caption[:1000] + "...\n<i>(Rincian lanjut di bawah)</i>"
+                overflow_text = caption
+
             with open(photo_path, "rb") as photo:
                 await bot.send_photo(
                     chat_id=cid,
                     photo=photo,
-                    caption=caption,
+                    caption=safe_caption,
+                    parse_mode=ParseMode.HTML,
+                )
+            if overflow_text:
+                await bot.send_message(
+                    chat_id=cid,
+                    text=overflow_text,
                     parse_mode=ParseMode.HTML,
                 )
             logger.info(f"Foto {photo_path} berhasil terkirim ke Telegram ({cid}).")
             return True
         except Exception as e:
-            logger.error(f"Gagal mengirim foto ke Telegram ({cid}): {e}")
-            return False
+            logger.error(f"Gagal mengirim foto ke Telegram ({cid}): {e}. Mencoba fallback ke pesan teks...")
+            try:
+                await bot.send_message(
+                    chat_id=cid,
+                    text=caption,
+                    parse_mode=ParseMode.HTML,
+                )
+                return True
+            except Exception as e2:
+                logger.error(f"Fallback teks juga gagal: {e2}")
+                return False
 
     def send_signal(self, sig: SignalResult, photo_path: Optional[str] = None) -> bool:
         """
@@ -465,6 +486,8 @@ class TelegramBotCommands:
             "Selamat datang di <b>IDX Stock & Gold Signal Bot</b> 🇮🇩🥇",
             "",
             "<b>🎯 Fitur & Perintah yang Dapat Anda Gunakan:</b>",
+            "• /chart - Tampilkan live chart candlestick (Gold / Saham)",
+            "• /potensi - Radar live chart saham & gold paling berpotensi",
             "• /harian - Rekomendasi sinyal trading harian (Entry, TP & SL)",
             "• /winrate - Statistik akurasi win & lose rate sinyal bot",
             "• /candle - Bedah pola candlestick & price action (7 buku)",
@@ -727,6 +750,23 @@ class TelegramBotCommands:
             sl_calc = last_close * 0.9965
             rrr = round((tp_calc - last_close) / (last_close - sl_calc), 2)
 
+            chart_path = None
+            try:
+                from notify.chart_generator import ChartGenerator
+                chart_path = ChartGenerator.generate_chart(
+                    df=df_ind,
+                    ticker_symbol="XAUUSD",
+                    interval="15m",
+                    signal_type=sig.signal,
+                    entry_price=last_close,
+                    tp_price=tp_calc,
+                    sl_price=sl_calc,
+                    setup_grade=sig.setup_grade,
+                    pdf_confluence_score=sig.pdf_confluence_score,
+                )
+            except Exception as e:
+                logger.warning(f"Gagal generate chart di /gold: {e}")
+
             return {
                 "close": last_close,
                 "time": time_str,
@@ -743,6 +783,7 @@ class TelegramBotCommands:
                 "tp": tp_calc,
                 "sl": sl_calc,
                 "rrr": rrr,
+                "chart_path": chart_path,
             }
 
         data = await asyncio.to_thread(_compute_gold)
@@ -806,7 +847,22 @@ class TelegramBotCommands:
             "💡 <i>Pasar emas global aktif 23 jam sehari (Senin-Jumat). Kelola leverage secara bijak!</i>",
         ]
 
-        await update.message.reply_html("\n".join(msg_lines))
+        caption_text = "\n".join(msg_lines)
+        chart_path = data.get("chart_path")
+        if chart_path and Path(chart_path).exists():
+            safe_cap = caption_text if len(caption_text) <= 1020 else caption_text[:1000] + "..."
+            try:
+                with open(chart_path, "rb") as photo:
+                    await update.message.reply_photo(
+                        photo=photo,
+                        caption=safe_cap,
+                        parse_mode=ParseMode.HTML,
+                    )
+                return
+            except Exception as e:
+                logger.warning(f"Gagal kirim foto gold: {e}")
+
+        await update.message.reply_html(caption_text)
 
     async def candle_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /candle <ticker> untuk analisis pola candlestick & price action dari 7 buku."""
@@ -942,11 +998,209 @@ class TelegramBotCommands:
         ]
         await update.message.reply_html("\n".join(lines))
 
+    async def chart_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /chart <ticker> untuk menampilkan live candlestick chart (TradingView style)."""
+        if not await self.check_user_access(update, context):
+            return
+
+        ticker_arg = context.args[0].upper().strip() if context.args else "XAUUSD"
+        from data.fetcher import DataFetcher
+        from indicators.technical import TechnicalIndicators
+        from strategy.rules import get_strategy, DEFAULT_STRATEGY
+        from strategy.signal_engine import SignalEngine
+        from notify.chart_generator import ChartGenerator
+        import asyncio
+
+        fetcher = DataFetcher(storage=self.storage)
+        clean_ticker = fetcher.normalize_ticker(ticker_arg)
+        is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        disp_ticker = "XAU/USD (Gold Spot)" if is_gold else clean_ticker.replace(".JK", "")
+
+        await update.message.reply_html(f"📈 <i>Menyiapkan visual live chart untuk <b>{disp_ticker}</b>...</i>")
+
+        def _generate():
+            interval = "15m"
+            period = "5d" if is_gold else "60d"
+            df = fetcher.get_data(clean_ticker, interval=interval, period=period, force_fetch=True if is_gold else False)
+            if df.empty or len(df) < 15:
+                df = fetcher.get_data(clean_ticker, interval="1d", period="1y", force_fetch=True if is_gold else False)
+            if df.empty or len(df) < 15:
+                return None, None
+
+            df_ind = TechnicalIndicators.add_all_indicators(df)
+            strategy = get_strategy("DayTrading_Intraday_Momentum") or DEFAULT_STRATEGY
+            engine = SignalEngine([strategy])
+            sig = engine.evaluate_bar(df_ind, ticker=clean_ticker, strategy=strategy)
+
+            chart_path = ChartGenerator.generate_chart(
+                df=df_ind,
+                ticker_symbol=clean_ticker,
+                interval=interval,
+                signal_type=sig.signal,
+                entry_price=sig.price,
+                tp_price=sig.take_profit_price,
+                sl_price=sig.stop_loss_price,
+                setup_grade=sig.setup_grade,
+                pdf_confluence_score=sig.pdf_confluence_score,
+            )
+            return chart_path, sig
+
+        chart_path, sig = await asyncio.to_thread(_generate)
+        if not chart_path or not Path(chart_path).exists():
+            await update.message.reply_text(f"Gagal mengambil data pasar atau membuat chart untuk {ticker_arg}.")
+            return
+
+        price_fmt = f"${sig.price:,.2f}" if is_gold else f"Rp {sig.price:,.0f}"
+        tp_str = f"${sig.take_profit_price:,.2f}" if is_gold and sig.take_profit_price else f"Rp {sig.take_profit_price:,.0f}" if sig.take_profit_price else "-"
+        sl_str = f"${sig.stop_loss_price:,.2f}" if is_gold and sig.stop_loss_price else f"Rp {sig.stop_loss_price:,.0f}" if sig.stop_loss_price else "-"
+
+        caption_lines = [
+            f"📈 <b>LIVE CANDLESTICK CHART: {disp_ticker}</b>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"💵 <b>Harga Terkini:</b> <code>{price_fmt}</code>",
+            f"🎯 <b>Target TP:</b> <code>{tp_str}</code> | 🛑 <b>Batas SL:</b> <code>{sl_str}</code>",
+        ]
+        if sig.setup_grade:
+            caption_lines.append(f"⭐ <b>Kualitas Setup:</b> Grade {sig.setup_grade} ({int((sig.pdf_confluence_score or 0)*100)}%)")
+        if sig.market_direction_prediction:
+            caption_lines.append(f"🎯 <b>Prediksi Arah:</b> <i>{html.escape(sig.market_direction_prediction)}</i>")
+
+        caption_lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        caption_lines.append("💡 <i>Ketik /potensi untuk melihat chart saham & emas yang paling berpotensi.</i>")
+
+        caption = "\n".join(caption_lines)
+        if len(caption) > 1020:
+            caption = caption[:1020]
+
+        try:
+            with open(chart_path, "rb") as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=caption,
+                    parse_mode=ParseMode.HTML,
+                )
+        except Exception as e:
+            logger.error(f"Gagal kirim chart photo: {e}")
+            await update.message.reply_html(caption)
+
+    async def potensi_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /potensi dan /radar untuk menyaring dan memunculkan live chart aset paling berpotensi."""
+        if not await self.check_user_access(update, context):
+            return
+
+        await update.message.reply_html("🔍 <i>Memindai seluruh watchlist saham IDX & Gold untuk mencari setup paling berpotensi (7 Buku PDF)...</i>")
+
+        from data.fetcher import DataFetcher
+        from indicators.technical import TechnicalIndicators
+        from strategy.rules import get_strategy, DEFAULT_STRATEGY
+        from strategy.signal_engine import SignalEngine
+        from notify.chart_generator import ChartGenerator
+        import asyncio
+
+        def _scan_potentials():
+            cfg = load_config()
+            watchlist = cfg.get("watchlist", ["XAUUSD", "BBCA.JK", "BBRI.JK", "BMRI.JK", "BBNI.JK", "ASII.JK", "TLKM.JK"])
+            fetcher = DataFetcher(storage=self.storage)
+            strategy = get_strategy("DayTrading_Intraday_Momentum") or DEFAULT_STRATEGY
+            engine = SignalEngine([strategy])
+
+            potential_items = []
+            for ticker in watchlist:
+                is_gold = any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+                interval = "15m"
+                period = "5d" if is_gold else "60d"
+                try:
+                    df = fetcher.get_data(ticker, interval=interval, period=period, force_fetch=True if is_gold else False)
+                    if df.empty or len(df) < 15:
+                        df = fetcher.get_data(ticker, interval="1d", period="1y", force_fetch=True if is_gold else False)
+                    if df.empty or len(df) < 15:
+                        continue
+
+                    df_ind = TechnicalIndicators.add_all_indicators(df)
+                    sig = engine.evaluate_bar(df_ind, ticker=ticker, strategy=strategy)
+                    is_pot, reason_badge, reason_desc = ChartGenerator.evaluate_asset_potential(sig, df_ind)
+                    if is_pot:
+                        chart_path = ChartGenerator.generate_chart(
+                            df=df_ind,
+                            ticker_symbol=ticker,
+                            interval=interval,
+                            signal_type=sig.signal,
+                            entry_price=sig.price,
+                            tp_price=sig.take_profit_price,
+                            sl_price=sig.stop_loss_price,
+                            setup_grade=sig.setup_grade,
+                            pdf_confluence_score=sig.pdf_confluence_score,
+                        )
+                        potential_items.append({
+                            "ticker": ticker,
+                            "is_gold": is_gold,
+                            "signal": sig,
+                            "badge": reason_badge,
+                            "desc": reason_desc,
+                            "chart_path": chart_path,
+                        })
+                except Exception as e:
+                    logger.debug(f"Error scan potensi {ticker}: {e}")
+
+            return potential_items
+
+        results = await asyncio.to_thread(_scan_potentials)
+        if not results:
+            await update.message.reply_html(
+                "⚪ <b>HASIL RADAR: BELUM ADA SETUP BERPOTENSI TINGGI</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Saat ini pergerakan harga saham & emas dunia sedang berada di fase konsolidasi / netral (belum memenuhi syarat Grade A/A+ dari 7 buku PDF).\n\n"
+                "🛡️ <i>Sistem sengaja menahan agar Anda tidak entry di momen tanpa edge. Bot memantau setiap 15 menit.</i>"
+            )
+            return
+
+        # Kirim notifikasi ringkasan
+        await update.message.reply_html(
+            f"🔥 <b>RADAR POTENSI: DITEMUKAN {len(results)} INSTRUMEN BERPOTENSI!</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<i>Mengirimkan visual live chart lengkap dengan target Entry, TP & SL...</i>"
+        )
+
+        for item in results[:3]:
+            sig = item["signal"]
+            t = item["ticker"]
+            is_gold = item["is_gold"]
+            disp_ticker = "XAU/USD (Gold Spot)" if is_gold else t.replace(".JK", "")
+            price_fmt = f"${sig.price:,.2f}" if is_gold else f"Rp {sig.price:,.0f}"
+            tp_fmt = f"${sig.take_profit_price:,.2f}" if is_gold and sig.take_profit_price else f"Rp {sig.take_profit_price:,.0f}" if sig.take_profit_price else "-"
+            sl_fmt = f"${sig.stop_loss_price:,.2f}" if is_gold and sig.stop_loss_price else f"Rp {sig.stop_loss_price:,.0f}" if sig.stop_loss_price else "-"
+
+            caption = (
+                f"🎯 <b>POTENSI: {disp_ticker}</b>\n"
+                f"📌 <b>Setup:</b> {item['badge']}\n"
+                f"💵 <b>Entry:</b> <code>{price_fmt}</code> | 🎯 <b>TP:</b> <code>{tp_fmt}</code> | 🛑 <b>SL:</b> <code>{sl_fmt}</code>\n"
+                f"💡 <i>{html.escape(item['desc'])}</i>"
+            )
+            if len(caption) > 1020:
+                caption = caption[:1020]
+
+            c_path = item["chart_path"]
+            if c_path and Path(c_path).exists():
+                try:
+                    with open(c_path, "rb") as photo:
+                        await update.message.reply_photo(
+                            photo=photo,
+                            caption=caption,
+                            parse_mode=ParseMode.HTML,
+                        )
+                except Exception as e:
+                    logger.error(f"Gagal kirim foto potensi {t}: {e}")
+                    await update.message.reply_html(caption)
+            else:
+                await update.message.reply_html(caption)
+
 
 async def set_menu_commands(application: Application) -> None:
     """Mendaftarkan tombol Menu perintah interaktif di aplikasi Telegram."""
     from telegram import BotCommand
     commands = [
+        BotCommand("chart", "📈 Live Candlestick Chart (Gold / Saham)"),
+        BotCommand("potensi", "🔥 Radar Live Chart Paling Berpotensi"),
         BotCommand("harian", "🎯 Rekomendasi Sinyal Trading Harian (TP & SL)"),
         BotCommand("winrate", "📊 Statistik Akurasi Win / Lose Rate Bot"),
         BotCommand("candle", "🕯️ Bedah Pola Candlestick & Price Action"),
@@ -974,6 +1228,8 @@ def build_telegram_application() -> Optional[Application]:
     cmd_handler = TelegramBotCommands()
 
     app.add_handler(CommandHandler(["start", "help"], cmd_handler.start_command))
+    app.add_handler(CommandHandler(["chart", "grafik", "livechart"], cmd_handler.chart_command))
+    app.add_handler(CommandHandler(["potensi", "radar", "topsetup"], cmd_handler.potensi_command))
     app.add_handler(CommandHandler(["harian", "tradingharian", "daytrade"], cmd_handler.harian_command))
     app.add_handler(CommandHandler(["winrate", "performance", "akurasi"], cmd_handler.winrate_command))
     app.add_handler(CommandHandler(["candle", "candlestick", "pola"], cmd_handler.candle_command))

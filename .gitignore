@@ -27,6 +27,7 @@ logs/
 *.png
 *.jpg
 reports/
+data/charts/
 
 # Large training materials (PDFs)
 materials/*.pdf

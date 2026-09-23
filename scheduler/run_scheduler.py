@@ -260,7 +260,24 @@ class PipelineRunner:
                 # Kirim Notifikasi jika sinyal valid, bukan duplikat, dan candle segar
                 if should_notify:
                     logger.info(f"🚨 Sinyal Baru Terdeteksi: {sig_result.signal} {sig_result.ticker} @ {sig_result.price}")
-                    self.notifier.send_signal(sig_result)
+                    chart_path = None
+                    try:
+                        from notify.chart_generator import ChartGenerator
+                        chart_path = ChartGenerator.generate_chart(
+                            df=df_ind,
+                            ticker_symbol=sig_result.ticker,
+                            interval=item_interval,
+                            signal_type=sig_result.signal,
+                            entry_price=sig_result.price,
+                            tp_price=sig_result.take_profit_price,
+                            sl_price=sig_result.stop_loss_price,
+                            setup_grade=sig_result.setup_grade,
+                            pdf_confluence_score=sig_result.pdf_confluence_score,
+                        )
+                    except Exception as e:
+                        logger.warning(f"Gagal membuat visual chart untuk {sig_result.ticker}: {e}")
+
+                    self.notifier.send_signal(sig_result, photo_path=chart_path)
                     results["signals_notified"] += 1
                 elif not is_fresh and (sig_result.signal in ["BUY", "SELL"]):
                     logger.info(f"Sinyal {sig_result.signal} untuk {ticker} tidak dinotifikasikan ({fresh_reason}).")
