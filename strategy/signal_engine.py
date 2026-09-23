@@ -280,10 +280,17 @@ class SignalEngine:
         if is_gold:
             tp_pct = 0.6
             sl_pct = 0.35
-            tp_price = round(curr_price * (1.0 + (tp_pct / 100.0)), 2)
-            sl_price = round(curr_price * (1.0 - (sl_pct / 100.0)), 2)
-            risk_dist = max(curr_price - sl_price, 0.01)
-            rrr = round((tp_price - curr_price) / risk_dist, 2)
+            # Jika SELL (Short Gold): TP di bawah entry (-0.6%), SL di atas entry (+0.35%)
+            if is_sell and not is_buy:
+                tp_price = round(curr_price * (1.0 - (tp_pct / 100.0)), 2)
+                sl_price = round(curr_price * (1.0 + (sl_pct / 100.0)), 2)
+                risk_dist = max(sl_price - curr_price, 0.01)
+                rrr = round((curr_price - tp_price) / risk_dist, 2)
+            else:
+                tp_price = round(curr_price * (1.0 + (tp_pct / 100.0)), 2)
+                sl_price = round(curr_price * (1.0 - (sl_pct / 100.0)), 2)
+                risk_dist = max(curr_price - sl_price, 0.01)
+                rrr = round((tp_price - curr_price) / risk_dist, 2)
         else:
             trading_cfg = self.config.get("trading", {})
             trading_mode = trading_cfg.get("mode", "intraday")
@@ -291,10 +298,16 @@ class SignalEngine:
             tp_pct = float(mode_cfg.get("take_profit_pct", 2.5 if trading_mode == "intraday" else 5.0))
             sl_pct = float(mode_cfg.get("stop_loss_pct", 1.5 if trading_mode == "intraday" else 3.0))
 
-            tp_price = round(curr_price * (1.0 + (tp_pct / 100.0)), 0)
-            sl_price = round(curr_price * (1.0 - (sl_pct / 100.0)), 0)
-            risk_dist = max(curr_price - sl_price, 1.0)
-            rrr = round((tp_price - curr_price) / risk_dist, 2)
+            if is_sell and not is_buy:
+                tp_price = round(curr_price * (1.0 - (tp_pct / 100.0)), 0)
+                sl_price = round(curr_price * (1.0 + (sl_pct / 100.0)), 0)
+                risk_dist = max(sl_price - curr_price, 1.0)
+                rrr = round((curr_price - tp_price) / risk_dist, 2)
+            else:
+                tp_price = round(curr_price * (1.0 + (tp_pct / 100.0)), 0)
+                sl_price = round(curr_price * (1.0 - (sl_pct / 100.0)), 0)
+                risk_dist = max(curr_price - sl_price, 1.0)
+                rrr = round((tp_price - curr_price) / risk_dist, 2)
 
         # 4. Keputusan Sinyal & Alasan (Didukung Telaah 7 Buku PDF)
         pdf_approved, pdf_score, setup_grade, pdf_checks, direction_pred = self.validate_pdf_entry_confluence(
@@ -340,9 +353,9 @@ class SignalEngine:
             candle_time=candle_time,
             reasons=reasons,
             indicators_snapshot=snapshot,
-            take_profit_price=tp_price if signal == "BUY" else None,
-            stop_loss_price=sl_price if signal == "BUY" else None,
-            risk_reward_ratio=rrr if signal == "BUY" else None,
+            take_profit_price=tp_price if signal in ["BUY", "SELL"] else None,
+            stop_loss_price=sl_price if signal in ["BUY", "SELL"] else None,
+            risk_reward_ratio=rrr if signal in ["BUY", "SELL"] else None,
             pdf_confluence_score=pdf_score,
             setup_grade=setup_grade,
             pdf_confluence_details=pdf_checks,

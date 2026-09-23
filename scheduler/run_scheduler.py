@@ -228,6 +228,9 @@ class PipelineRunner:
                     logger.warning(f"Data tidak mencukupi untuk {ticker}, dilewati.")
                     continue
 
+                # Evaluasi penyelesaian sinyal terbuka (TP / SL hit check)
+                self.storage.update_open_signals_outcome(ticker, df)
+
                 # Hitung Indikator
                 df_ind = TechnicalIndicators.add_all_indicators(df)
 
@@ -241,7 +244,7 @@ class PipelineRunner:
                 if sig_result.signal in ["BUY", "SELL"]:
                     results["signals_triggered"] += 1
 
-                # Simpan ke Database
+                # Simpan ke Database lengkap dengan target TP & SL
                 self.storage.save_signal(
                     ticker=sig_result.ticker,
                     strategy_name=sig_result.strategy_name,
@@ -250,6 +253,8 @@ class PipelineRunner:
                     reasons=sig_result.reasons,
                     candle_time=sig_result.candle_time,
                     is_notified=should_notify,
+                    take_profit_price=sig_result.take_profit_price,
+                    stop_loss_price=sig_result.stop_loss_price,
                 )
 
                 # Kirim Notifikasi jika sinyal valid, bukan duplikat, dan candle segar

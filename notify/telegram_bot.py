@@ -94,15 +94,28 @@ class TelegramNotifier:
         rsi_val = f"{snap.get('rsi', 0.0):.1f}"
         vol_ratio = f"{snap.get('volume_ratio', 1.0):.1f}x"
 
+        is_gold = any(k in ticker_upper for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        wr_stats = self.storage.get_win_rate_stats()
+        comp = wr_stats.get("completed", 0)
+        wr_badge = f"📊 <b>Akurasi Bot:</b> Win Rate <b>{wr_stats['win_rate']:.1f}%</b> ({wr_stats['win_count']}W / {wr_stats['lose_count']}L)" if comp > 0 else "📊 <b>Akurasi Bot:</b> <i>Sedang aktif melacak sinyal</i>"
+
+        lines = []
+
         if sig.signal == "BUY":
-            lines = [f"🟢 <b>SINYAL ENTRY (MASUK): {display_ticker}</b> @ <b>{price_str}</b>"]
+            lines.append(f"🟢 <b>SINYAL ENTRY (MASUK / BUY): {display_ticker}</b>")
+            lines.append(f"📍 <b>Harga Entry:</b> <code>{price_str}</code>")
             if sig.take_profit_price and sig.stop_loss_price:
                 tp_str = format_currency(sig.take_profit_price, sig.ticker)
                 sl_str = format_currency(sig.stop_loss_price, sig.ticker)
                 rrr = sig.risk_reward_ratio or 1.5
-                lines.append(f"🎯 TP: <b>{tp_str}</b> | 🛑 SL: <b>{sl_str}</b> (RRR 1:{rrr})")
+                pct_tp = ((sig.take_profit_price - sig.price) / max(sig.price, 0.01)) * 100.0
+                pct_sl = ((sig.price - sig.stop_loss_price) / max(sig.price, 0.01)) * 100.0
+                lines.append(f"🎯 <b>Take Profit (TP):</b> <code>{tp_str}</code> (+{pct_tp:.2f}%)")
+                lines.append(f"🛑 <b>Stop Loss (SL):</b> <code>{sl_str}</code> (-{pct_sl:.2f}%)")
+                lines.append(f"⚖️ <b>Risk/Reward Ratio:</b> 1 : {rrr}")
 
             lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
+            lines.append(wr_badge)
 
             # Telaah 7 Buku PDF untuk Sinyal Masuk
             pdf_details = getattr(sig, "pdf_confluence_details", [])
@@ -120,15 +133,39 @@ class TelegramNotifier:
             elif sig.reasons:
                 clean_reason = sig.reasons[0].split("(")[0].strip()
                 lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
-        else:
-            lines = [f"{action_emoji} <b>{sig.signal}: {display_ticker}</b> @ <b>{price_str}</b>"]
+
+        elif sig.signal == "SELL" and is_gold:
+            # Short Gold
+            lines.append(f"🔴 <b>SINYAL ENTRY SHORT (SELL): {display_ticker}</b>")
+            lines.append(f"📍 <b>Harga Entry Short:</b> <code>{price_str}</code>")
             if sig.take_profit_price and sig.stop_loss_price:
                 tp_str = format_currency(sig.take_profit_price, sig.ticker)
                 sl_str = format_currency(sig.stop_loss_price, sig.ticker)
                 rrr = sig.risk_reward_ratio or 1.5
-                lines.append(f"🎯 TP: <b>{tp_str}</b> | 🛑 SL: <b>{sl_str}</b> (RRR 1:{rrr})")
+                pct_tp = ((sig.price - sig.take_profit_price) / max(sig.price, 0.01)) * 100.0
+                pct_sl = ((sig.stop_loss_price - sig.price) / max(sig.price, 0.01)) * 100.0
+                lines.append(f"🎯 <b>Take Profit (TP):</b> <code>{tp_str}</code> (-{pct_tp:.2f}% Target Bawah)")
+                lines.append(f"🛑 <b>Stop Loss (SL):</b> <code>{sl_str}</code> (+{pct_sl:.2f}% Batas Atas)")
+                lines.append(f"⚖️ <b>Risk/Reward Ratio:</b> 1 : {rrr}")
 
             lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
+            lines.append(wr_badge)
+            if sig.reasons:
+                clean_reason = sig.reasons[0].split("(")[0].strip()
+                lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
+
+        else:
+            # SELL Saham IDX / Exit
+            lines.append(f"🔴 <b>SINYAL EXIT / JUAL: {display_ticker}</b> @ <b>{price_str}</b>")
+            lines.append(f"📍 <b>Area Jual:</b> <code>{price_str}</code>")
+            if sig.take_profit_price and sig.stop_loss_price:
+                tp_str = format_currency(sig.take_profit_price, sig.ticker)
+                sl_str = format_currency(sig.stop_loss_price, sig.ticker)
+                rrr = sig.risk_reward_ratio or 1.5
+                lines.append(f"🎯 TP Pengaman: <b>{tp_str}</b> | 🛑 SL: <b>{sl_str}</b> (RRR 1:{rrr})")
+
+            lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
+            lines.append(wr_badge)
             if sig.reasons:
                 clean_reason = sig.reasons[0].split("(")[0].strip()
                 lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
@@ -429,6 +466,7 @@ class TelegramBotCommands:
             "",
             "<b>🎯 Fitur & Perintah yang Dapat Anda Gunakan:</b>",
             "• /harian - Rekomendasi sinyal trading harian (Entry, TP & SL)",
+            "• /winrate - Statistik akurasi win & lose rate sinyal bot",
             "• /candle - Bedah pola candlestick & price action (7 buku)",
             "• /gold - Analisis & sinyal emas dunia XAU/USD (24 Jam)",
             "• /scan - Pindai seluruh saham potensial sekarang juga (On-Demand)",
@@ -852,12 +890,65 @@ class TelegramBotCommands:
         ]
         await update.message.reply_html("\n".join(lines))
 
+    async def winrate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /winrate dan /performance untuk rekam jejak akurasi Win/Lose bot."""
+        if not await self.check_user_access(update, context):
+            return
+
+        stats = self.storage.get_win_rate_stats()
+        tot = stats["total_signals"]
+        comp = stats["completed"]
+        win = stats["win_count"]
+        lose = stats["lose_count"]
+        opn = stats["open_count"]
+        wr = stats["win_rate"]
+        lr = stats["lose_rate"]
+        pnl = stats["total_pnl"]
+
+        if comp >= 5 and wr >= 75.0:
+            eval_note = "🔥 <b>Akurasi Luar Biasa!</b> Filter 7 buku PDF terbukti sangat akurat memprediksi market."
+        elif comp >= 5 and wr >= 60.0:
+            eval_note = "🟢 <b>Akurasi Sehat & Profitable.</b> Risk:Reward terjaga dengan baik."
+        elif comp == 0:
+            eval_note = f"⏳ Sinyal masih berjalan ({opn} posisi OPEN). Menunggu candle mencapai target TP / SL."
+        else:
+            eval_note = "⚠️ <b>Perlu Penyesuaian.</b> Kami terus memperketat filter konfluensi untuk menekan loss."
+
+        g_stats = stats.get("gold_stats", {})
+        idx_stats = stats.get("idx_stats", {})
+        stars = "⭐" * min(5, max(1, int(wr / 20))) if comp > 0 else ""
+
+        lines = [
+            "📊 <b>STATISTIK AKURASI SINYAL (WIN / LOSE RATE)</b> 🏆",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"🎯 <b>Win Rate Akurasi:</b> <code>{wr:.1f}%</code> {stars}",
+            f"🛑 <b>Lose Rate:</b> <code>{lr:.1f}%</code>",
+            f"💰 <b>Total Akumulasi PnL:</b> <code>{pnl:+.2f}%</code>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "📈 <b>RINCIAN REKAM JEJAK:</b>",
+            f"• <b>Total Sinyal:</b> {tot} sinyal",
+            f"• <b>Sinyal Selesai:</b> {comp} trade (🟢 {win} Win | 🔴 {lose} Lose)",
+            f"• <b>Posisi Berjalan (OPEN):</b> {opn} sinyal aktif",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "🥇 <b>Khusus Emas Dunia (XAU/USD):</b>",
+            f"• Selesai: {g_stats.get('completed', 0)} trade (🟢 {g_stats.get('win', 0)}W | 🔴 {g_stats.get('lose', 0)}L)",
+            f"• Win Rate Gold: <b>{g_stats.get('win_rate', 0.0):.1f}%</b>",
+            "",
+            "🇮🇩 <b>Khusus Saham Indonesia (IDX):</b>",
+            f"• Selesai: {idx_stats.get('completed', 0)} trade (🟢 {idx_stats.get('win', 0)}W | 🔴 {idx_stats.get('lose', 0)}L)",
+            f"• Win Rate Saham: <b>{idx_stats.get('win_rate', 0.0):.1f}%</b>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"💡 <i>{eval_note}</i>",
+        ]
+        await update.message.reply_html("\n".join(lines))
+
 
 async def set_menu_commands(application: Application) -> None:
     """Mendaftarkan tombol Menu perintah interaktif di aplikasi Telegram."""
     from telegram import BotCommand
     commands = [
         BotCommand("harian", "🎯 Rekomendasi Sinyal Trading Harian (TP & SL)"),
+        BotCommand("winrate", "📊 Statistik Akurasi Win / Lose Rate Bot"),
         BotCommand("candle", "🕯️ Bedah Pola Candlestick & Price Action"),
         BotCommand("gold", "🥇 Analisis Sinyal Emas Dunia (XAU/USD)"),
         BotCommand("scan", "🔍 Pindai Sinyal Pasar Sekarang"),
@@ -884,6 +975,7 @@ def build_telegram_application() -> Optional[Application]:
 
     app.add_handler(CommandHandler(["start", "help"], cmd_handler.start_command))
     app.add_handler(CommandHandler(["harian", "tradingharian", "daytrade"], cmd_handler.harian_command))
+    app.add_handler(CommandHandler(["winrate", "performance", "akurasi"], cmd_handler.winrate_command))
     app.add_handler(CommandHandler(["candle", "candlestick", "pola"], cmd_handler.candle_command))
     app.add_handler(CommandHandler(["gold", "xau", "emas"], cmd_handler.gold_command))
     app.add_handler(CommandHandler("status", cmd_handler.status_command))

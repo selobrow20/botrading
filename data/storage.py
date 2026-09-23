@@ -67,7 +67,7 @@ class StockStorage:
                 ON ohlcv_data (ticker, interval, datetime ASC);
             """)
 
-            # Tabel 2: Sinyal Trading History
+            # Tabel 2: Sinyal Trading History (dengan Tracking TP/SL & Win/Lose)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS signals (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,13 +78,33 @@ class StockStorage:
                     reasons TEXT,
                     candle_time TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    is_notified INTEGER DEFAULT 0
+                    is_notified INTEGER DEFAULT 0,
+                    take_profit_price REAL,
+                    stop_loss_price REAL,
+                    outcome TEXT DEFAULT 'OPEN',
+                    exit_price REAL,
+                    exit_time TEXT,
+                    pnl_pct REAL
                 );
             """)
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_signals_ticker 
                 ON signals (ticker, strategy_name, candle_time);
             """)
+
+            # Auto-migration untuk tabel signals lama
+            for col_name, col_def in [
+                ("take_profit_price", "REAL"),
+                ("stop_loss_price", "REAL"),
+                ("outcome", "TEXT DEFAULT 'OPEN'"),
+                ("exit_price", "REAL"),
+                ("exit_time", "TEXT"),
+                ("pnl_pct", "REAL"),
+            ]:
+                try:
+                    cursor.execute(f"ALTER TABLE signals ADD COLUMN {col_name} {col_def};")
+                except Exception:
+                    pass
 
             # Tabel 3: Hasil Backtest
             cursor.execute("""
@@ -277,8 +297,10 @@ class StockStorage:
         reasons: List[str] | str,
         candle_time: str,
         is_notified: bool = False,
+        take_profit_price: Optional[float] = None,
+        stop_loss_price: Optional[float] = None,
     ) -> int:
-        """Menyimpan riwayat sinyal baru ke database."""
+        """Menyimpan riwayat sinyal baru ke database dengan target profit & stop loss."""
         if isinstance(reasons, list):
             reasons_json = json.dumps(reasons, ensure_ascii=False)
         else:
@@ -286,8 +308,8 @@ class StockStorage:
 
         query = """
             INSERT INTO signals 
-            (ticker, strategy_name, signal_type, price, reasons, candle_time, is_notified)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (ticker, strategy_name, signal_type, price, reasons, candle_time, is_notified, take_profit_price, stop_loss_price, outcome)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -301,6 +323,8 @@ class StockStorage:
                     reasons_json,
                     str(candle_time),
                     1 if is_notified else 0,
+                    float(take_profit_price) if take_profit_price is not None else None,
+                    float(stop_loss_price) if stop_loss_price is not None else None,
                 ),
             )
             conn.commit()
@@ -308,6 +332,185 @@ class StockStorage:
 
         logger.info(f"Sinyal {signal_type} untuk {ticker} tersimpan (ID: {signal_id}).")
         return signal_id
+
+    def update_open_signals_outcome(self, ticker: str, df: pd.DataFrame) -> int:
+        """
+        Mengevaluasi sinyal terbuka (outcome = 'OPEN') terhadap bar-bar candle terbaru.
+        Jika harga menyentuh TP -> WIN, jika menyentuh SL -> LOSE.
+        Mengembalikan jumlah sinyal yang diselesaikan (resolved).
+        """
+        if df.empty or "High" not in df.columns or "Low" not in df.columns:
+            return 0
+
+        clean_ticker = ticker.upper()
+        query = """
+            SELECT id, ticker, signal_type, price, candle_time, take_profit_price, stop_loss_price
+            FROM signals
+            WHERE ticker = ? AND outcome = 'OPEN' AND signal_type IN ('BUY', 'SELL')
+            AND take_profit_price IS NOT NULL AND stop_loss_price IS NOT NULL
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (clean_ticker,))
+            open_signals = [dict(r) for r in cursor.fetchall()]
+
+        if not open_signals:
+            return 0
+
+        resolved_count = 0
+        is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+
+        df_eval = df.copy()
+        if not isinstance(df_eval.index, pd.DatetimeIndex):
+            df_eval.index = pd.to_datetime(df_eval.index)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for sig in open_signals:
+                sig_id = sig["id"]
+                sig_type = sig["signal_type"]
+                entry_price = float(sig["price"])
+                tp = float(sig["take_profit_price"])
+                sl = float(sig["stop_loss_price"])
+                try:
+                    sig_time = pd.to_datetime(sig["candle_time"])
+                except Exception:
+                    continue
+
+                subsequent_bars = df_eval[df_eval.index > sig_time]
+                if subsequent_bars.empty:
+                    continue
+
+                for bar_time, bar in subsequent_bars.iterrows():
+                    high = float(bar["High"])
+                    low = float(bar["Low"])
+                    outcome = None
+                    exit_price = None
+                    pnl_pct = 0.0
+
+                    if sig_type == "BUY":
+                        if high >= tp:
+                            outcome = "WIN"
+                            exit_price = tp
+                            pnl_pct = round(((tp - entry_price) / entry_price) * 100.0, 2)
+                        elif low <= sl:
+                            outcome = "LOSE"
+                            exit_price = sl
+                            pnl_pct = round(((sl - entry_price) / entry_price) * 100.0, 2)
+                    elif sig_type == "SELL" and is_gold:
+                        if low <= tp:
+                            outcome = "WIN"
+                            exit_price = tp
+                            pnl_pct = round(((entry_price - tp) / entry_price) * 100.0, 2)
+                        elif high >= sl:
+                            outcome = "LOSE"
+                            exit_price = sl
+                            pnl_pct = round(((entry_price - sl) / entry_price) * 100.0, 2)
+                    elif sig_type == "SELL" and not is_gold:
+                        # Saham IDX SELL: Jika harga turun di bawah entry, profit teramankan (WIN)
+                        if low <= tp:
+                            outcome = "WIN"
+                            exit_price = tp
+                            pnl_pct = round(((entry_price - tp) / entry_price) * 100.0, 2)
+                        elif high >= sl:
+                            outcome = "LOSE"
+                            exit_price = sl
+                            pnl_pct = round(((entry_price - sl) / entry_price) * 100.0, 2)
+
+                    if outcome:
+                        exit_time_str = bar_time.strftime("%Y-%m-%d %H:%M:%S")
+                        cursor.execute("""
+                            UPDATE signals
+                            SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?
+                            WHERE id = ?
+                        """, (outcome, exit_price, exit_time_str, pnl_pct, sig_id))
+                        resolved_count += 1
+                        logger.info(
+                            f"🎯 Sinyal #{sig_id} {sig_type} {clean_ticker} terselesaikan: "
+                            f"{outcome} @ {exit_price} (PnL: {pnl_pct:+.2f}%) pada {exit_time_str}"
+                        )
+                        break
+
+            conn.commit()
+
+        return resolved_count
+
+    def get_win_rate_stats(self, ticker: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Menghitung ringkasan statistik performa Win Rate & Lose Rate dari seluruh sinyal.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if ticker:
+                cursor.execute("""
+                    SELECT outcome, pnl_pct, ticker, signal_type
+                    FROM signals
+                    WHERE ticker = ? AND signal_type IN ('BUY', 'SELL')
+                """, (ticker.upper(),))
+            else:
+                cursor.execute("""
+                    SELECT outcome, pnl_pct, ticker, signal_type
+                    FROM signals
+                    WHERE signal_type IN ('BUY', 'SELL')
+                """)
+            rows = [dict(r) for r in cursor.fetchall()]
+
+        total_signals = len(rows)
+        win_count = sum(1 for r in rows if r.get("outcome") == "WIN")
+        lose_count = sum(1 for r in rows if r.get("outcome") == "LOSE")
+        open_count = sum(1 for r in rows if r.get("outcome") == "OPEN")
+        expired_count = sum(1 for r in rows if r.get("outcome") == "EXPIRED")
+
+        completed = win_count + lose_count
+        win_rate = round((win_count / completed) * 100.0, 1) if completed > 0 else 0.0
+        lose_rate = round((lose_count / completed) * 100.0, 1) if completed > 0 else 0.0
+
+        pnl_values = [float(r["pnl_pct"]) for r in rows if r.get("pnl_pct") is not None]
+        total_pnl = round(sum(pnl_values), 2)
+        avg_pnl = round(total_pnl / completed, 2) if completed > 0 else 0.0
+
+        # Statistik khusus Gold
+        gold_rows = [r for r in rows if any(k in r["ticker"].upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])]
+        gold_win = sum(1 for r in gold_rows if r.get("outcome") == "WIN")
+        gold_lose = sum(1 for r in gold_rows if r.get("outcome") == "LOSE")
+        gold_comp = gold_win + gold_lose
+        gold_wr = round((gold_win / gold_comp) * 100.0, 1) if gold_comp > 0 else 0.0
+
+        # Statistik khusus Saham IDX
+        idx_rows = [r for r in rows if r not in gold_rows]
+        idx_win = sum(1 for r in idx_rows if r.get("outcome") == "WIN")
+        idx_lose = sum(1 for r in idx_rows if r.get("outcome") == "LOSE")
+        idx_comp = idx_win + idx_lose
+        idx_wr = round((idx_win / idx_comp) * 100.0, 1) if idx_comp > 0 else 0.0
+
+        return {
+            "total_signals": total_signals,
+            "completed": completed,
+            "win_count": win_count,
+            "lose_count": lose_count,
+            "open_count": open_count,
+            "expired_count": expired_count,
+            "win_rate": win_rate,
+            "win_rate_pct": win_rate,
+            "lose_rate": lose_rate,
+            "lose_rate_pct": lose_rate,
+            "total_pnl": total_pnl,
+            "avg_pnl": avg_pnl,
+            "gold_stats": {
+                "total": len(gold_rows),
+                "completed": gold_comp,
+                "win": gold_win,
+                "lose": gold_lose,
+                "win_rate": gold_wr,
+            },
+            "idx_stats": {
+                "total": len(idx_rows),
+                "completed": idx_comp,
+                "win": idx_win,
+                "lose": idx_lose,
+                "win_rate": idx_wr,
+            },
+        }
 
     def get_last_signal(self, ticker: str, strategy_name: str) -> Optional[Dict[str, Any]]:
         """Mendapatkan sinyal terakhir yang tercatat untuk suatu saham dan strategi."""

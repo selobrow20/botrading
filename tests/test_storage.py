@@ -47,3 +47,81 @@ def test_storage_crud():
         assert last_sig is not None
         assert last_sig["signal_type"] == "BUY"
         assert last_sig["price"] == 107.0
+
+
+def test_update_open_signals_outcome_and_winrate():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        db_path = Path(tmp_dir) / "test_winrate.db"
+        storage = StockStorage(db_path=db_path)
+
+        # 1. Save BUY signal on BBCA.JK: Entry=100, TP=105, SL=95
+        sig_id_buy = storage.save_signal(
+            ticker="BBCA.JK",
+            strategy_name="SmartMoney",
+            signal_type="BUY",
+            price=100.0,
+            reasons=["OrderBlock retest"],
+            candle_time="2026-01-01 10:00:00",
+            take_profit_price=105.0,
+            stop_loss_price=95.0,
+        )
+
+        # 2. Save SELL signal on GC=F (Gold): Entry=2700, TP=2680, SL=2710
+        sig_id_sell = storage.save_signal(
+            ticker="GC=F",
+            strategy_name="LiquiditySweep",
+            signal_type="SELL",
+            price=2700.0,
+            reasons=["Liquidity grab"],
+            candle_time="2026-01-01 10:00:00",
+            take_profit_price=2680.0,
+            stop_loss_price=2710.0,
+        )
+
+        # Check initial win rate (0 completed)
+        initial_stats = storage.get_win_rate_stats()
+        assert initial_stats["total_signals"] == 2
+        assert initial_stats["open_count"] == 2
+        assert initial_stats["completed"] == 0
+
+        # Create future candles for BBCA.JK hitting TP (High >= 105)
+        bbca_dates = pd.date_range("2026-01-01 11:00:00", periods=2, freq="h")
+        bbca_df = pd.DataFrame(
+            {
+                "Open": [100.0, 103.0],
+                "High": [102.0, 106.0],  # Bar 2 hits TP 105
+                "Low": [99.0, 102.0],
+                "Close": [101.0, 105.5],
+                "Volume": [1000.0, 1500.0],
+            },
+            index=bbca_dates,
+        )
+
+        resolved_bbca = storage.update_open_signals_outcome("BBCA.JK", bbca_df)
+        assert resolved_bbca == 1
+
+        # Create future candles for GC=F hitting TP (Low <= 2680)
+        gold_dates = pd.date_range("2026-01-01 11:00:00", periods=2, freq="h")
+        gold_df = pd.DataFrame(
+            {
+                "Open": [2700.0, 2690.0],
+                "High": [2705.0, 2695.0],
+                "Low": [2692.0, 2675.0],  # Bar 2 hits TP 2680
+                "Close": [2695.0, 2678.0],
+                "Volume": [500.0, 800.0],
+            },
+            index=gold_dates,
+        )
+
+        resolved_gold = storage.update_open_signals_outcome("GC=F", gold_df)
+        assert resolved_gold == 1
+
+        # Check stats after both hit TP (100% win rate)
+        stats = storage.get_win_rate_stats()
+        assert stats["total_signals"] == 2
+        assert stats["completed"] == 2
+        assert stats["win_count"] == 2
+        assert stats["lose_count"] == 0
+        assert stats["win_rate_pct"] == 100.0
+        assert stats["open_count"] == 0
+
