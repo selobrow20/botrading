@@ -1,0 +1,275 @@
+import os
+import asyncio
+import html
+from typing import Optional, List, Dict, Any
+from pathlib import Path
+from telegram import Bot, Update
+from telegram.constants import ParseMode
+from telegram.ext import Application, CommandHandler, ContextTypes
+
+from config.settings import load_config, setup_logger
+from data.storage import StockStorage
+from strategy.signal_engine import SignalResult
+
+logger = setup_logger("telegram_bot")
+
+
+class TelegramNotifier:
+    """Modul pengirim notifikasi sinyal ke Telegram via Bot API."""
+
+    def __init__(
+        self,
+        token: Optional[str] = None,
+        chat_id: Optional[str] = None,
+        storage: Optional[StockStorage] = None,
+    ):
+        self.token = token or os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID", "").strip()
+        self.storage = storage or StockStorage()
+        self.config = load_config()
+
+        # Cek apakah kredensial valid
+        is_placeholder = (
+            not self.token
+            or "your_telegram" in self.token
+            or not self.chat_id
+            or "your_telegram" in self.chat_id
+        )
+        self.is_configured = not is_placeholder
+
+        if not self.is_configured:
+            logger.warning(
+                "Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. "
+                "Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log."
+            )
+        else:
+            logger.info("Telegram Notifier siap dalam mode Live.")
+
+    def format_signal_message(self, sig: SignalResult) -> str:
+        """Membuat template pesan sinyal kartu berformat HTML."""
+        action_emoji = "🟢" if sig.signal == "BUY" else "🔴" if sig.signal == "SELL" else "⚪"
+        action_title = "SINYAL BELI (BUY)" if sig.signal == "BUY" else "SINYAL JUAL (SELL)" if sig.signal == "SELL" else "STATUS (HOLD)"
+
+        reasons_html = ""
+        for r in sig.reasons:
+            reasons_html += f"  • {html.escape(r)}\n"
+
+        snap = sig.indicators_snapshot or {}
+        rsi_val = f"{snap.get('rsi', 0.0):.1f}"
+        ema50_val = f"Rp {snap.get('ema_50', 0.0):,.0f}" if snap.get("ema_50") else "-"
+        vol_ratio_val = f"{snap.get('volume_ratio', 0.0):.2f}x" if snap.get("volume_ratio") else "-"
+
+        trading_levels_html = ""
+        if sig.take_profit_price and sig.stop_loss_price:
+            trading_levels_html = (
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🎯 <b>Rencana Trading Harian (Plan):</b>\n"
+                f"  • Entry: <b>Rp {sig.price:,.0f}</b>\n"
+                f"  • Target Profit (TP): <b>Rp {sig.take_profit_price:,.0f}</b>\n"
+                f"  • Stop Loss (SL): <b>Rp {sig.stop_loss_price:,.0f}</b>\n"
+                f"  • Risk/Reward Ratio: <b>1 : {sig.risk_reward_ratio or 1.5}</b>\n"
+            )
+
+        msg = (
+            f"<b>{action_emoji} NOTIFIKASI {action_title} {action_emoji}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏷️ <b>Saham:</b> <code>{html.escape(sig.ticker)}</code>\n"
+            f"💰 <b>Harga Terkini:</b> <b>Rp {sig.price:,.0f}</b>\n"
+            f"📊 <b>Strategi:</b> <i>{html.escape(sig.strategy_name)}</i>\n"
+            f"⏱️ <b>Waktu Candle:</b> {sig.candle_time}\n"
+            f"{trading_levels_html}"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📋 <b>Kondisi & Alasan Pemicu:</b>\n"
+            f"{reasons_html}"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📈 <b>Ringkasan Indikator:</b>\n"
+            f"  • RSI 14: <b>{rsi_val}</b>\n"
+            f"  • EMA 50: <b>{ema50_val}</b>\n"
+            f"  • Vol/Avg: <b>{vol_ratio_val}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ <i>Disclaimer: Sinyal ini hasil algoritma teknikal otomatis dan bukan nasihat finansial. "
+            f"Selalu lakukan analisis mandiri (DYOR) sebelum bertransaksi.</i>"
+        )
+        return msg
+
+    async def _async_send_text(self, text: str) -> bool:
+        """Mengirim pesan teks secara asinkron."""
+        if not self.is_configured:
+            logger.info(f"[SIMULASI TELEGRAM]\n{text}")
+            return True
+
+        bot = Bot(token=self.token)
+        try:
+            await bot.send_message(
+                chat_id=self.chat_id,
+                text=text,
+                parse_mode=ParseMode.HTML,
+            )
+            logger.info("Pesan berhasil terkirim ke Telegram.")
+            return True
+        except Exception as e:
+            logger.error(f"Gagal mengirim pesan ke Telegram: {e}")
+            return False
+
+    async def _async_send_photo(self, photo_path: str, caption: str) -> bool:
+        """Mengirim file foto beserta caption ke Telegram."""
+        if not self.is_configured:
+            logger.info(f"[SIMULASI TELEGRAM PHOTO] {photo_path}\n{caption}")
+            return True
+
+        bot = Bot(token=self.token)
+        try:
+            with open(photo_path, "rb") as photo:
+                await bot.send_photo(
+                    chat_id=self.chat_id,
+                    photo=photo,
+                    caption=caption,
+                    parse_mode=ParseMode.HTML,
+                )
+            logger.info(f"Foto {photo_path} berhasil terkirim ke Telegram.")
+            return True
+        except Exception as e:
+            logger.error(f"Gagal mengirim foto ke Telegram: {e}")
+            return False
+
+    def send_signal(self, sig: SignalResult, photo_path: Optional[str] = None) -> bool:
+        """
+        Wrapper sinkron untuk mengirim kartu sinyal (bisa dipanggil dari scheduler / synchronous code).
+        """
+        msg = self.format_signal_message(sig)
+        try:
+            if photo_path and Path(photo_path).exists():
+                return asyncio.run(self._async_send_photo(photo_path, msg))
+            else:
+                return asyncio.run(self._async_send_text(msg))
+        except Exception as e:
+            logger.error(f"Error saat mengeksekusi send_signal: {e}")
+            return False
+
+    def send_message(self, text: str) -> bool:
+        """Mengirim pesan teks biasa ke Telegram."""
+        try:
+            return asyncio.run(self._async_send_text(text))
+        except Exception as e:
+            logger.error(f"Error saat mengeksekusi send_message: {e}")
+            return False
+
+
+class TelegramBotCommands:
+    """Handler perintah interaktif bot Telegram (/status, /watchlist, /lasthistory)."""
+
+    def __init__(self, storage: Optional[StockStorage] = None):
+        self.storage = storage or StockStorage()
+        self.config = load_config()
+
+    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /start dan /help"""
+        user_name = update.effective_user.first_name if update.effective_user else "Trader"
+        welcome_text = (
+            f"👋 Halo <b>{html.escape(user_name)}</b>!\n\n"
+            f"Selamat datang di <b>IDX Stock Signal Bot</b> 🇮🇩\n\n"
+            f"<b>Perintah yang tersedia:</b>\n"
+            f"🔹 /status - Cek status kesehatan & info sistem bot\n"
+            f"🔹 /watchlist - Lihat daftar saham yang sedang dipantau\n"
+            f"🔹 /lasthistory - Tampilkan 5 riwayat sinyal terakhir\n"
+            f"🔹 /help - Bantuan & panduan bot\n\n"
+            f"<i>Bot ini berjalan secara otomatis pada jam bursa IDX.</i>"
+        )
+        await update.message.reply_html(welcome_text)
+
+    async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /status untuk cek kondisi bot."""
+        cfg = load_config()
+        strat_active = cfg.get("strategies", {}).get("active", "Default")
+        interval = cfg.get("scheduler", {}).get("interval_minutes", 15)
+        watchlist = cfg.get("watchlist", [])
+
+        status_text = (
+            f"🟢 <b>STATUS SISTEM: RUNNING / AKTIF</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚙️ <b>Strategi Aktif:</b> <code>{html.escape(strat_active)}</code>\n"
+            f"⏱️ <b>Interval Pengecekan:</b> Tiap {interval} Menit\n"
+            f"📊 <b>Total Saham Dipantau:</b> {len(watchlist)} Saham\n"
+            f"💾 <b>Database:</b> SQLite (Terkoneksi)\n"
+            f"⏰ <b>Zona Waktu:</b> Asia/Jakarta (WIB)\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<i>Gunakan /watchlist untuk melihat daftar saham lengkap.</i>"
+        )
+        await update.message.reply_html(status_text)
+
+    async def watchlist_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /watchlist untuk melihat daftar saham."""
+        cfg = load_config()
+        watchlist = cfg.get("watchlist", [])
+
+        if not watchlist:
+            await update.message.reply_text("Watchlist masih kosong di config.yaml.")
+            return
+
+        lines = ["📋 <b>DAFTAR SAHAM YANG DIPANTAU (WATCHLIST):</b>", "━━━━━━━━━━━━━━━━━━━━━━"]
+        for idx, ticker in enumerate(watchlist, 1):
+            # Ambil candle terakhir dari SQLite jika ada
+            df_last = self.storage.load_ohlcv(ticker, interval="1d", limit=1)
+            if not df_last.empty:
+                last_price = f"Rp {float(df_last['Close'].iloc[-1]):,.0f}"
+                last_date = df_last.index[-1].strftime("%d/%m")
+                lines.append(f"<b>{idx}.</b> <code>{ticker}</code>: {last_price} ({last_date})")
+            else:
+                lines.append(f"<b>{idx}.</b> <code>{ticker}</code>: (Belum ada data)")
+
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("<i>Diperbarui otomatis saat jam perdagangan bursa.</i>")
+        await update.message.reply_html("\n".join(lines))
+
+    async def lasthistory_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /lasthistory untuk melihat 5 riwayat sinyal terakhir."""
+        signals = self.storage.get_recent_signals(limit=5)
+
+        if not signals:
+            await update.message.reply_text("Belum ada riwayat sinyal yang tercatat di database.")
+            return
+
+        lines = ["📜 <b>5 RIWAYAT SINYAL TERAKHIR:</b>", "━━━━━━━━━━━━━━━━━━━━━━"]
+        for s in signals:
+            sig_type = s.get("signal_type", "HOLD")
+            emoji = "🟢" if sig_type == "BUY" else "🔴" if sig_type == "SELL" else "⚪"
+            ticker = s.get("ticker", "-")
+            price = f"Rp {float(s.get('price', 0)):,.0f}"
+            t_candle = s.get("candle_time", "-")
+            reasons = s.get("reasons", [])
+            reason_str = reasons[0] if reasons else "-"
+
+            lines.append(f"{emoji} <b>{sig_type}</b> - <code>{ticker}</code> @ {price}")
+            lines.append(f"   <i>Waktu: {t_candle}</i>")
+            lines.append(f"   <i>Pemicu: {html.escape(reason_str)}</i>")
+            lines.append("──────────────────────")
+
+        await update.message.reply_html("\n".join(lines))
+
+
+def build_telegram_application() -> Optional[Application]:
+    """Membuat dan mengonfigurasi aplikasi bot Telegram dengan seluruh CommandHandler."""
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    if not token or "your_telegram" in token:
+        logger.warning("Token Telegram belum disetel, bot listener tidak dapat dijalankan.")
+        return None
+
+    app = Application.builder().token(token).build()
+    cmd_handler = TelegramBotCommands()
+
+    app.add_handler(CommandHandler(["start", "help"], cmd_handler.start_command))
+    app.add_handler(CommandHandler("status", cmd_handler.status_command))
+    app.add_handler(CommandHandler("watchlist", cmd_handler.watchlist_command))
+    app.add_handler(CommandHandler("lasthistory", cmd_handler.lasthistory_command))
+
+    return app
+
+
+def run_telegram_bot_polling() -> None:
+    """Menjalankan bot polling listener secara independen."""
+    app = build_telegram_application()
+    if app:
+        logger.info("Memulai Telegram bot polling listener...")
+        app.run_polling()
+    else:
+        logger.error("Gagal menjalankan bot: Token Telegram tidak valid.")

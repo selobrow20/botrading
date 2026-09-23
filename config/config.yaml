@@ -1,0 +1,166 @@
+# ==========================================
+# KONFIGURASI BOT SINYAL TRADING SAHAM (IDX)
+# ==========================================
+
+# Daftar saham yang dipantau (Gunakan kode BEI + suffix .JK)
+watchlist:
+  - BBCA.JK
+  - BBRI.JK
+  - BMRI.JK
+  - TLKM.JK
+  - ASII.JK
+
+# Pengaturan Pengambilan Data
+data:
+  default_interval: "1d"         # 1d (harian), 15m, 30m, 1h
+  default_period: "2y"           # 1mo, 3mo, 6mo, 1y, 2y, 5y, max
+  intraday_interval: "15m"       # untuk pemantauan live day trading
+  intraday_period: "60d"         # batas maksimal yfinance untuk intraday 15m
+  retry_attempts: 3
+  retry_backoff_factor: 2.0      # Exponential backoff (detik)
+  timeout_seconds: 15
+
+# Pengaturan Trading Harian & Manajemen Risiko (Risk Management)
+trading:
+  # Mode: 'intraday' (trading cepat dalam hari) atau 'daily' (swing harian)
+  mode: "intraday"               
+  intraday:
+    interval: "15m"
+    take_profit_pct: 2.5         # Target Profit 2.5% per trade
+    stop_loss_pct: 1.5           # Stop Loss ketat 1.5%
+    trailing_stop_pct: 1.0       # Trailing Stop 1.0% jika sudah profit
+  daily:
+    interval: "1d"
+    take_profit_pct: 5.0         # Target Profit 5.0%
+    stop_loss_pct: 3.0           # Stop Loss 3.0%
+    trailing_stop_pct: 2.0
+
+# Parameter Indikator Teknikal
+indicators:
+  moving_averages:
+    periods: [20, 50, 200]
+  rsi:
+    period: 14
+    oversold_threshold: 30
+    overbought_threshold: 70
+  macd:
+    fast_period: 12
+    slow_period: 26
+    signal_period: 9
+  bollinger_bands:
+    period: 20
+    std_dev: 2.0
+  volume:
+    avg_period: 20
+    surge_threshold: 1.5         # 1.5x rata-rata volume 20 periode
+
+# Definisi Strategi Trading (Mendukung Day Trading & Swing Harian)
+strategies:
+  active: "DayTrading_Intraday_Momentum"
+  definitions:
+    # 1. Strategi Day Trading (Intraday 15m / 30m)
+    DayTrading_Intraday_Momentum:
+      description: "Strategi Day Trading Cepat Momentum Intraday (EMA 20 + RSI Momentum + Volume Breakout)"
+      buy_rules:
+        - indicator: "close"
+          operator: ">"
+          target: "ema_20"
+          description: "Harga menembus / di atas EMA 20 (Tren Jangka Pendek Bullish)"
+        - indicator: "rsi"
+          operator: ">"
+          value: 50.0
+          description: "RSI > 50 (Momentum Pembelian Kuat)"
+        - indicator: "rsi"
+          operator: "<"
+          value: 70.0
+          description: "RSI < 70 (Belum Overbought / Ruang Kenaikan Cukup)"
+        - indicator: "volume"
+          operator: ">"
+          target: "volume_sma_20"
+          multiplier: 1.2
+          description: "Volume Spike > 1.2x Rata-rata 20 Periode"
+      sell_rules:
+        - indicator: "close"
+          operator: "cross_under"
+          target: "ema_20"
+          description: "Harga tembus ke bawah EMA 20 (Kehilangan Momentum)"
+        - indicator: "rsi"
+          operator: ">"
+          value: 75.0
+          description: "RSI Ekstrem Overbought (> 75) Area Ambil Keuntungan"
+
+    # 2. Strategi Swing Trading Harian (Daily 1d)
+    Daily_Swing_Pullback:
+      description: "Strategi Swing Harian Membeli Saat Pullback di Atas EMA 50"
+      buy_rules:
+        - indicator: "close"
+          operator: ">"
+          target: "ema_50"
+          description: "Harga di atas EMA 50 (Tren Menengah Bullish)"
+        - indicator: "rsi"
+          operator: "<"
+          value: 45.0
+          description: "RSI Pullback / Koreksi Sehat (< 45)"
+        - indicator: "close"
+          operator: ">"
+          target: "ema_20"
+          description: "Harga Rebound di atas EMA 20"
+      sell_rules:
+        - indicator: "close"
+          operator: "cross_under"
+          target: "ema_20"
+          description: "Harga tembus ke bawah EMA 20"
+        - indicator: "rsi"
+          operator: ">"
+          value: 70.0
+          description: "RSI Overbought (> 70)"
+
+    # 3. Strategi Default (Reversal & Volume)
+    Default_RSI_EMA_Volume:
+      description: "Strategi Sinyal Reversal Momentum & Volume"
+      buy_rules:
+        - indicator: "rsi"
+          operator: "<"
+          value: 30.0
+          description: "RSI Oversold (< 30)"
+        - indicator: "close"
+          operator: ">"
+          target: "ema_50"
+          description: "Harga Close di atas EMA 50"
+        - indicator: "volume"
+          operator: ">"
+          target: "volume_sma_20"
+          multiplier: 1.5
+          description: "Volume konfirmasi > 1.5x rata-rata 20 periode"
+      sell_rules:
+        - indicator: "rsi"
+          operator: ">"
+          value: 70.0
+          description: "RSI Overbought (> 70)"
+        - indicator: "close"
+          operator: "cross_under"
+          target: "ema_20"
+          description: "Harga tembus ke bawah EMA 20"
+
+# Pengaturan Jadwal Bursa Efek Indonesia (WIB - Asia/Jakarta)
+scheduler:
+  interval_minutes: 15
+  timezone: "Asia/Jakarta"
+  check_market_hours: true
+  idx_market_hours:
+    mon_thu:
+      session_1: { start: "09:00", end: "11:30" }
+      session_2: { start: "13:30", end: "15:50" }
+    fri:
+      session_1: { start: "09:00", end: "11:30" }
+      session_2: { start: "14:00", end: "15:50" }
+
+# Database SQLite & File Penyimpanan
+storage:
+  db_path: "data/stock_data.db"
+
+# Pengaturan Logging
+logging:
+  level: "INFO"
+  log_dir: "logs"
+  retention_days: 14

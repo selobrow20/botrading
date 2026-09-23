@@ -1,0 +1,21 @@
+# Core Data & Numerics
+pandas>=2.2.0
+numpy>=1.26.0
+yfinance>=0.2.40
+
+# Configuration & Environment
+pyyaml>=6.0.1
+python-dotenv>=1.0.1
+
+# Scheduling & Automation
+APScheduler>=3.10.4
+
+# Notifications
+python-telegram-bot>=20.8
+
+# Visualization & Reporting
+matplotlib>=3.8.0
+tabulate>=0.9.0
+
+# Testing
+pytest>=8.0.0
