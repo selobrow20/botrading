@@ -7,12 +7,12 @@ from notify.telegram_bot import format_currency
 
 
 def test_xauusd_normalization():
-    """Memastikan berbagai varian nama emas dinormalisasi ke GC=F."""
-    assert DataFetcher.normalize_ticker("XAUUSD") == "GC=F"
-    assert DataFetcher.normalize_ticker("xau/usd") == "GC=F"
-    assert DataFetcher.normalize_ticker("GOLD") == "GC=F"
-    assert DataFetcher.normalize_ticker("emas") == "GC=F"
-    assert DataFetcher.normalize_ticker("GC=F") == "GC=F"
+    """Memastikan berbagai varian nama emas dinormalisasi ke XAUUSD (Spot Gold)."""
+    assert DataFetcher.normalize_ticker("XAUUSD") == "XAUUSD"
+    assert DataFetcher.normalize_ticker("xau/usd") == "XAUUSD"
+    assert DataFetcher.normalize_ticker("GOLD") == "XAUUSD"
+    assert DataFetcher.normalize_ticker("emas") == "XAUUSD"
+    assert DataFetcher.normalize_ticker("GC=F") == "XAUUSD"
     # Pastikan saham BEI tetap .JK
     assert DataFetcher.normalize_ticker("BBRI") == "BBRI.JK"
 

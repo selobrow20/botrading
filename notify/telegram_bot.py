@@ -622,7 +622,7 @@ class TelegramBotCommands:
         """Handler perintah /gold dan /xau untuk analisis teknikal & sinyal Emas Dunia (XAU/USD)."""
         if not await self.check_user_access(update, context):
             return
-        await update.message.reply_html("⏳ <i>Menganalisis pergerakan harga emas dunia XAU/USD (COMEX Gold)...</i>")
+        await update.message.reply_html("⏳ <i>Menganalisis pergerakan harga emas dunia Spot XAU/USD (TradingView / OANDA)...</i>")
         import asyncio
         from data.fetcher import DataFetcher
         from indicators.technical import TechnicalIndicators
@@ -631,16 +631,16 @@ class TelegramBotCommands:
 
         def _compute_gold():
             fetcher = DataFetcher(storage=self.storage)
-            df = fetcher.get_data("GC=F", interval="15m", period="5d")
+            df = fetcher.get_data("XAUUSD", interval="15m", period="5d", force_fetch=True)
             if df.empty or len(df) < 15:
-                df = fetcher.get_data("GC=F", interval="1h", period="1mo")
+                df = fetcher.get_data("XAUUSD", interval="1h", period="1mo", force_fetch=True)
             if df.empty or len(df) < 15:
                 return None
 
             df_ind = TechnicalIndicators.add_all_indicators(df)
             strategy = get_strategy("DayTrading_Intraday_Momentum") or DEFAULT_STRATEGY
             engine = SignalEngine([strategy])
-            sig = engine.evaluate_bar(df_ind, ticker="GC=F", strategy=strategy)
+            sig = engine.evaluate_bar(df_ind, ticker="XAUUSD", strategy=strategy)
 
             last_row = df_ind.iloc[-1]
             last_close = float(last_row["Close"])
@@ -750,7 +750,7 @@ class TelegramBotCommands:
         if not await self.check_user_access(update, context):
             return
 
-        ticker_arg = context.args[0].upper().strip() if context.args else "GC=F"
+        ticker_arg = context.args[0].upper().strip() if context.args else "XAUUSD"
         from data.fetcher import DataFetcher
         from indicators.technical import TechnicalIndicators
         import asyncio
@@ -765,9 +765,9 @@ class TelegramBotCommands:
         def _fetch_and_eval():
             interval = "15m"
             period = "5d" if is_gold else "60d"
-            df = fetcher.get_data(clean_ticker, interval=interval, period=period)
+            df = fetcher.get_data(clean_ticker, interval=interval, period=period, force_fetch=True if is_gold else False)
             if df.empty or len(df) < 15:
-                df = fetcher.get_data(clean_ticker, interval="1d", period="1y")
+                df = fetcher.get_data(clean_ticker, interval="1d", period="1y", force_fetch=True if is_gold else False)
             if df.empty or len(df) < 15:
                 return None
             df_ind = TechnicalIndicators.add_all_indicators(df)

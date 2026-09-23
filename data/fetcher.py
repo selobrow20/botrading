@@ -1,6 +1,7 @@
 import time
 from typing import Optional
 import pandas as pd
+import requests
 import yfinance as yf
 from config.settings import load_config, setup_logger
 from data.storage import StockStorage
@@ -9,7 +10,7 @@ logger = setup_logger("fetcher")
 
 
 class DataFetcher:
-    """Fetcher data saham IDX dari Yahoo Finance dengan mekanisme retry backoff dan caching SQLite."""
+    """Fetcher data saham IDX dari Yahoo Finance & Spot Gold XAU/USD dengan mekanisme retry backoff dan caching SQLite."""
 
     def __init__(self, storage: Optional[StockStorage] = None):
         self.config = load_config()
@@ -22,14 +23,14 @@ class DataFetcher:
     def normalize_ticker(ticker: str) -> str:
         """
         Menormalisasi kode ticker saham atau komoditas global.
-        - Memetakan XAUUSD, XAU/USD, GOLD, EMAS ke GC=F (COMEX Gold Futures).
+        - Memetakan XAUUSD, XAU/USD, GOLD, EMAS, GC=F ke XAUUSD (Spot Gold TradingView).
         - Menambahkan suffix .JK untuk saham Indonesia jika belum memiliki suffix bursa.
         """
         ticker_clean = ticker.strip().upper().replace(" ", "")
         
-        # Mapping khusus untuk Emas (XAU/USD)
-        if ticker_clean in ["XAUUSD", "XAU/USD", "XAU-USD", "XAUUSD=X", "GOLD", "EMAS"]:
-            return "GC=F"
+        # Mapping khusus untuk Emas Spot (XAU/USD)
+        if ticker_clean in ["XAUUSD", "XAU/USD", "XAU-USD", "XAUUSD=X", "GOLD", "EMAS", "GC=F"]:
+            return "XAUUSD"
 
         # Jika sudah memiliki suffix bursa (.JK, .US dll) atau simbol futures/forex (=F, =X, ^)
         if any(char in ticker_clean for char in [".", "=", "^", "-"]):
@@ -37,6 +38,51 @@ class DataFetcher:
 
         # Default saham Indonesia Bursa Efek Indonesia (BEI)
         return f"{ticker_clean}.JK"
+
+    def fetch_spot_gold(self, interval: str = "15m", limit: int = 100) -> pd.DataFrame:
+        """
+        Mengambil data real-time Spot Gold (XAU/USD) dari data feed OTC/Forex (identik dengan TradingView OANDA:XAUUSD).
+        """
+        try:
+            iv_map = {
+                "1m": "1m",
+                "5m": "5m",
+                "15m": "15m",
+                "30m": "30m",
+                "1h": "1h",
+                "60m": "1h",
+                "4h": "4h",
+                "1d": "1d",
+            }
+            mapped_iv = iv_map.get(interval, "15m")
+            url = f"https://biquote.io/api/XAUUSD/ohlc?interval={mapped_iv}&limit={limit}"
+            resp = requests.get(url, timeout=6)
+            if resp.status_code == 200:
+                data = resp.json().get("bars", [])
+                if data and len(data) >= 10:
+                    rows = []
+                    for b in reversed(data):  # Urutkan kronologis tertua ke terbaru
+                        rows.append({
+                            "Date": pd.to_datetime(b["openTime"]),
+                            "Open": float(b["open"]),
+                            "High": float(b["high"]),
+                            "Low": float(b["low"]),
+                            "Close": float(b["close"]),
+                            "Volume": float(b.get("tickVolume", 0) or b.get("volume", 0)),
+                        })
+                    df = pd.DataFrame(rows).set_index("Date")
+                    if df.index.tz is not None:
+                        df.index = df.index.tz_convert("Asia/Jakarta").tz_localize(None)
+                    clean_df = self._clean_dataframe(df)
+                    if not clean_df.empty:
+                        logger.info(
+                            f"Sukses mengambil {len(clean_df)} bar Spot Gold (XAU/USD) dari direct spot feed "
+                            f"({clean_df.index[0].strftime('%Y-%m-%d %H:%M')} s/d {clean_df.index[-1].strftime('%Y-%m-%d %H:%M')})"
+                        )
+                        return clean_df
+        except Exception as e:
+            logger.warning(f"Gagal mengambil data Spot Gold dari primary feed: {e}")
+        return pd.DataFrame()
 
     def fetch_ohlcv(
         self,
@@ -47,10 +93,10 @@ class DataFetcher:
         end: Optional[str] = None,
     ) -> pd.DataFrame:
         """
-        Mengambil data OHLCV dari yfinance dengan toleransi error dan retry backoff.
+        Mengambil data OHLCV dari yfinance atau direct spot feed dengan toleransi error dan retry backoff.
         
         Args:
-            ticker: Kode saham (misal BBCA atau BBCA.JK)
+            ticker: Kode saham (misal BBCA atau BBCA.JK) atau instrumen global (XAUUSD)
             interval: Interval candle ('1d', '15m', '30m', '1h', dll)
             period: Periode data ('1mo', '3mo', '6mo', '1y', '2y', '60d', dll)
             start: Tanggal mulai format 'YYYY-MM-DD' (opsional)
@@ -60,6 +106,15 @@ class DataFetcher:
             pd.DataFrame dengan kolom standar ['Open', 'High', 'Low', 'Close', 'Volume']
         """
         normalized_ticker = self.normalize_ticker(ticker)
+
+        # Jika instrumen adalah Emas Spot (XAUUSD), utamakan direct Spot Gold feed
+        if normalized_ticker == "XAUUSD":
+            spot_df = self.fetch_spot_gold(interval=interval, limit=100)
+            if not spot_df.empty and len(spot_df) >= 15:
+                return spot_df
+            logger.warning("Gagal fetch dari direct Spot Gold feed, fallback ke COMEX Gold Futures (GC=F)...")
+            normalized_ticker = "GC=F"
+
         if period is None and start is None:
             # Gunakan default dari config
             if "m" in interval or "h" in interval:

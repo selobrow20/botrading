@@ -44,7 +44,7 @@ watchlist:
   - ARTO.JK
 
   # 7. Komoditas Emas Dunia (XAU/USD - Aktif 24 Jam)
-  - GC=F
+  - XAUUSD
 
 # Pengaturan Pengambilan Data
 data:
