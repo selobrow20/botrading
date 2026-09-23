@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 
 from config.settings import load_config, setup_logger
 from data.storage import StockStorage
@@ -1194,6 +1194,124 @@ class TelegramBotCommands:
             else:
                 await update.message.reply_html(caption)
 
+    async def chat_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler pesan teks percakapan natural (bahasa gaul) & permintaan live chart instan."""
+        if not await self.check_user_access(update, context):
+            return
+
+        if not update.message or not update.message.text:
+            return
+
+        user_text = update.message.text.strip()
+        user_name = update.effective_user.first_name if update.effective_user else "Bor"
+
+        from notify.chat_agent import ChatAgent
+        classification = ChatAgent.classify_intent(user_text)
+        intent = classification.get("intent", "CHITCHAT")
+        target_ticker = classification.get("ticker")
+
+        # 1. Intent CHART: Pengguna meminta live chart suatu instrumen
+        if intent == "CHART":
+            target_ticker = target_ticker or "XAUUSD"
+            from data.fetcher import DataFetcher
+            from indicators.technical import TechnicalIndicators
+            from strategy.rules import get_strategy, DEFAULT_STRATEGY
+            from strategy.signal_engine import SignalEngine
+            from notify.chart_generator import ChartGenerator
+            import asyncio
+
+            fetcher = DataFetcher(storage=self.storage)
+            clean_ticker = fetcher.normalize_ticker(target_ticker)
+            is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+            disp_ticker = "XAU/USD (Gold Spot)" if is_gold else clean_ticker.replace(".JK", "")
+
+            await update.message.reply_html(f"Siap {user_name}! 🚀 Tunggu bentar, gue lagi ambilin live candle & bikinin chart buat <b>{disp_ticker}</b>...")
+
+            def _generate():
+                interval = "15m"
+                period = "5d" if is_gold else "60d"
+                df = fetcher.get_data(clean_ticker, interval=interval, period=period, force_fetch=True if is_gold else False)
+                if df.empty or len(df) < 15:
+                    df = fetcher.get_data(clean_ticker, interval="1d", period="1y", force_fetch=True if is_gold else False)
+                if df.empty or len(df) < 15:
+                    return None, None
+
+                df_ind = TechnicalIndicators.add_all_indicators(df)
+                strategy = get_strategy("DayTrading_Intraday_Momentum") or DEFAULT_STRATEGY
+                engine = SignalEngine([strategy])
+                sig = engine.evaluate_bar(df_ind, ticker=clean_ticker, strategy=strategy)
+
+                chart_path = ChartGenerator.generate_chart(
+                    df=df_ind,
+                    ticker_symbol=clean_ticker,
+                    interval=interval,
+                    signal_type=sig.signal,
+                    entry_price=sig.price,
+                    tp_price=sig.take_profit_price,
+                    sl_price=sig.stop_loss_price,
+                    setup_grade=sig.setup_grade,
+                    pdf_confluence_score=sig.pdf_confluence_score,
+                )
+                return chart_path, sig
+
+            chart_path, sig = await asyncio.to_thread(_generate)
+            if not chart_path or not Path(chart_path).exists():
+                await update.message.reply_text(f"Waduh bor, data chart untuk {disp_ticker} lagi ga bisa diakses nih dari bursa/feed. Coba beberapa saat lagi ya!")
+                return
+
+            caption = ChatAgent.generate_chart_caption(
+                ticker=clean_ticker,
+                price=sig.price,
+                tp_price=sig.take_profit_price,
+                sl_price=sig.stop_loss_price,
+                setup_grade=sig.setup_grade,
+                pdf_confluence_score=sig.pdf_confluence_score,
+                prediction=sig.market_direction_prediction,
+            )
+            if len(caption) > 1020:
+                caption = caption[:1020]
+
+            try:
+                with open(chart_path, "rb") as photo:
+                    await update.message.reply_photo(
+                        photo=photo,
+                        caption=caption,
+                        parse_mode=ParseMode.HTML,
+                    )
+            except Exception as e:
+                logger.error(f"Gagal kirim chart photo via chat: {e}")
+                await update.message.reply_html(caption)
+            return
+
+        # 2. Intent POTENSI: Pengguna meminta info saham/emas yang sedang berpotensi
+        if intent == "POTENSI":
+            await self.potensi_command(update, context)
+            return
+
+        # 3. Intent GOLD: Pengguna menanyakan seputar emas
+        if intent == "GOLD":
+            await self.gold_command(update, context)
+            return
+
+        # 4. Intent WINRATE: Pengguna menanyakan winrate / akurasi
+        if intent == "WINRATE":
+            await self.winrate_command(update, context)
+            return
+
+        # 5. Intent HARIAN: Pengguna menanyakan rekomendasi harian
+        if intent == "HARIAN":
+            await self.harian_command(update, context)
+            return
+
+        # 6. Intent WATCHLIST: Pengguna menanyakan daftar watchlist
+        if intent == "WATCHLIST":
+            await self.watchlist_command(update, context)
+            return
+
+        # 7. Intent STATUS, GREETING, THANKS, CHITCHAT
+        reply_text = ChatAgent.generate_chat_response(intent=intent, user_name=user_name)
+        await update.message.reply_html(reply_text)
+
 
 async def set_menu_commands(application: Application) -> None:
     """Mendaftarkan tombol Menu perintah interaktif di aplikasi Telegram."""
@@ -1242,6 +1360,8 @@ def build_telegram_application() -> Optional[Application]:
     app.add_handler(CommandHandler("reject", cmd_handler.reject_command))
     app.add_handler(CommandHandler("users", cmd_handler.users_command))
     app.add_handler(CallbackQueryHandler(cmd_handler.button_callback_handler))
+    # Handler pesan teks bebas (ngobrol santai & permintaan live chart otomatis)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_handler.chat_message_handler))
 
     return app
 
