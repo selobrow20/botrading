@@ -204,8 +204,11 @@ class TelegramNotifier:
             safe_caption = caption
             overflow_text = None
             if len(caption) > 1020:
-                safe_caption = caption[:1000] + "...\n<i>(Rincian lanjut di bawah)</i>"
-                overflow_text = caption
+                cut_idx = caption.rfind("\n", 0, 950)
+                if cut_idx == -1:
+                    cut_idx = 950
+                safe_caption = caption[:cut_idx] + "...\n<i>(Rincian lanjut di bawah)</i>"
+                overflow_text = caption[cut_idx:].strip()
 
             with open(photo_path, "rb") as photo:
                 await bot.send_photo(
@@ -1446,7 +1449,15 @@ class TelegramBotCommands:
 
         caption = "\n".join(lines)
         if chart_path and Path(chart_path).exists():
-            safe_cap = caption if len(caption) <= 1020 else caption[:1000] + "..."
+            safe_cap = caption
+            overflow_text = None
+            if len(caption) > 1020:
+                cut_idx = caption.rfind("\n", 0, 950)
+                if cut_idx == -1:
+                    cut_idx = 950
+                safe_cap = caption[:cut_idx] + "\n...\n<i>(Rincian proyeksi lanjut di bawah 👇)</i>"
+                overflow_text = caption[cut_idx:].strip()
+
             try:
                 with open(chart_path, "rb") as photo:
                     await update.message.reply_photo(
@@ -1454,6 +1465,8 @@ class TelegramBotCommands:
                         caption=safe_cap,
                         parse_mode=ParseMode.HTML,
                     )
+                if overflow_text:
+                    await update.message.reply_html(overflow_text)
                 return
             except Exception as e:
                 logger.error(f"Gagal kirim chart news: {e}")

@@ -218,13 +218,28 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         name="Analisis Saham Berkala IDX",
         replace_existing=True,
     )
+    scheduler.add_job(
+        runner.check_upcoming_news_job,
+        trigger=IntervalTrigger(minutes=1),
+        id="upcoming_news_check_job",
+        name="Pengecekan News XAU T-10 Menit",
+        replace_existing=True,
+    )
     scheduler.start()
-    logger.info(f"BackgroundScheduler aktif (interval: {interval_mins} menit).")
+    logger.info(f"BackgroundScheduler aktif (interval: {interval_mins} menit, news checker: 1 menit).")
 
-    # Jalankan initial run di thread terpisah agar tidak menahan startup listener Telegram
+    # Jalankan initial run & sync kalender di thread terpisah agar tidak menahan startup listener Telegram
+    def _initial_startup_tasks():
+        try:
+            from data.economic_calendar import EconomicCalendar
+            cal = EconomicCalendar(storage=runner.storage)
+            cal.sync_calendar()
+        except Exception as e:
+            logger.warning(f"Gagal sinkronisasi kalender ekonomi di startup: {e}")
+        runner.run_pipeline(force_run=False)
+
     t_init = threading.Thread(
-        target=runner.run_pipeline,
-        kwargs={"force_run": False},
+        target=_initial_startup_tasks,
         daemon=True,
         name="InitialScanThread",
     )
@@ -234,12 +249,17 @@ def cmd_run_all(args: argparse.Namespace) -> None:
     app = build_telegram_application()
     if app:
         logger.info("Telegram Bot Polling listener berjalan di main thread...")
-        try:
-            app.run_polling()
-        except (KeyboardInterrupt, SystemExit):
-            logger.info("Mematikan bot...")
-        finally:
-            scheduler.shutdown()
+        while True:
+            try:
+                app.run_polling(drop_pending_updates=True, stop_signals=None)
+                break
+            except (KeyboardInterrupt, SystemExit):
+                logger.info("Mematikan bot...")
+                break
+            except Exception as e:
+                logger.error(f"Error pada polling Telegram: {e}. Mencoba reconnect dalam 5 detik...")
+                time.sleep(5)
+        scheduler.shutdown()
     else:
         logger.warning("Token Telegram belum terkonfigurasi. Scheduler berjalan di background.")
         try:
