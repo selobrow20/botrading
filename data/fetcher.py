@@ -20,11 +20,23 @@ class DataFetcher:
 
     @staticmethod
     def normalize_ticker(ticker: str) -> str:
-        """Menambahkan suffix .JK untuk saham Indonesia jika belum ada."""
-        ticker_clean = ticker.strip().upper()
-        if not ticker_clean.endswith(".JK") and not "." in ticker_clean:
-            return f"{ticker_clean}.JK"
-        return ticker_clean
+        """
+        Menormalisasi kode ticker saham atau komoditas global.
+        - Memetakan XAUUSD, XAU/USD, GOLD, EMAS ke GC=F (COMEX Gold Futures).
+        - Menambahkan suffix .JK untuk saham Indonesia jika belum memiliki suffix bursa.
+        """
+        ticker_clean = ticker.strip().upper().replace(" ", "")
+        
+        # Mapping khusus untuk Emas (XAU/USD)
+        if ticker_clean in ["XAUUSD", "XAU/USD", "XAU-USD", "XAUUSD=X", "GOLD", "EMAS"]:
+            return "GC=F"
+
+        # Jika sudah memiliki suffix bursa (.JK, .US dll) atau simbol futures/forex (=F, =X, ^)
+        if any(char in ticker_clean for char in [".", "=", "^", "-"]):
+            return ticker_clean
+
+        # Default saham Indonesia Bursa Efek Indonesia (BEI)
+        return f"{ticker_clean}.JK"
 
     def fetch_ohlcv(
         self,

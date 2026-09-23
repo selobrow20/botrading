@@ -47,9 +47,12 @@ def test_stage_6():
     storage = StockStorage()
     runner = PipelineRunner(storage=storage)
 
+    import time
+    unique_ticker = f"DUMMY_{int(time.time() * 1000)}.JK"
+
     # Simulasikan Sinyal Baru
     sig_test = SignalResult(
-        ticker="DUMMY.JK",
+        ticker=unique_ticker,
         strategy_name="Test_Strategy",
         signal="BUY",
         price=1000.0,

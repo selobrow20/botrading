@@ -223,12 +223,35 @@ def register_strategy(strategy: Strategy) -> None:
 
 
 def get_strategy(name: str) -> Optional[Strategy]:
-    """Mendapatkan strategi berdasarkan nama."""
-    return _STRATEGY_REGISTRY.get(name)
+    """Mendapatkan strategi berdasarkan nama (otomatis memuat dari config.yaml jika belum ada)."""
+    if name in _STRATEGY_REGISTRY:
+        return _STRATEGY_REGISTRY[name]
+
+    try:
+        from config.settings import load_config
+        cfg = load_config()
+        strat_cfg = cfg.get("strategies", {}).get("definitions", {})
+        if name in strat_cfg:
+            strat = Strategy.from_dict(name, strat_cfg[name])
+            register_strategy(strat)
+            return strat
+    except Exception:
+        pass
+
+    return None
 
 
 def list_registered_strategies() -> List[str]:
     """Daftar nama strategi yang terdaftar."""
+    try:
+        from config.settings import load_config
+        cfg = load_config()
+        strat_cfg = cfg.get("strategies", {}).get("definitions", {})
+        for k, v in strat_cfg.items():
+            if k not in _STRATEGY_REGISTRY:
+                _STRATEGY_REGISTRY[k] = Strategy.from_dict(k, v)
+    except Exception:
+        pass
     return list(_STRATEGY_REGISTRY.keys())
 
 

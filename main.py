@@ -249,6 +249,26 @@ def cmd_run_all(args: argparse.Namespace) -> None:
             scheduler.shutdown()
 
 
+def cmd_learn_pdf(args: argparse.Namespace) -> None:
+    """Mengekstrak konsep dan menghasilkan konfigurasi strategi dari materi PDF."""
+    from strategy.pdf_learner import learn_from_pdf
+    pdf_path = args.path
+    print(f"\n📖 Membaca materi strategi trading dari PDF: {pdf_path}...")
+    try:
+        res = learn_from_pdf(pdf_path)
+        print("=" * 65)
+        print(f"📄 File: {res['filename']} ({res['total_pages']} halaman)")
+        print(f"🔍 Indikator Terdeteksi: {', '.join(res['indicators_found']) if res['indicators_found'] else '-'}")
+        print(f"⚙️ Nama Strategi: {res['strategy_name']}")
+        print("=" * 65)
+        print("\nKonfigurasi YAML yang Dihasilkan (Siap Dipakai di config.yaml):")
+        print(res["yaml_config"])
+        print("=" * 65)
+        print("💡 Tips: Anda dapat menyalin konfigurasi di atas ke config/config.yaml untuk di-backtest!")
+    except Exception as e:
+        print(f"❌ Error saat memproses PDF: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Bot Analisis & Sinyal Trading Saham Indonesia (IDX)",
@@ -291,6 +311,10 @@ def main():
     # Command: run-all
     subparsers.add_parser("run-all", help="Jalankan scheduler dan Telegram bot secara paralel")
 
+    # Command: learn-pdf
+    p_pdf = subparsers.add_parser("learn-pdf", help="Ekstrak aturan trading dari materi/buku PDF")
+    p_pdf.add_argument("path", type=str, help="Lokasi file PDF (contoh: materials/buku_trading.pdf)")
+
     args = parser.parse_args()
 
     if args.command == "scan":
@@ -307,6 +331,8 @@ def main():
         cmd_telegram(args)
     elif args.command == "run-all":
         cmd_run_all(args)
+    elif args.command == "learn-pdf":
+        cmd_learn_pdf(args)
     else:
         parser.print_help()
 

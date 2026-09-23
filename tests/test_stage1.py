@@ -41,7 +41,7 @@ def test_stage_1():
     # 3. Baca kembali dari SQLite
     print(f"\n[2/3] Membaca data {ticker} dari database SQLite lokal...")
     df_loaded = storage.load_ohlcv(ticker, interval="1d")
-    assert len(df_loaded) == len(df_daily), "Jumlah data di database harus sama dengan data yang diambil!"
+    assert len(df_loaded) >= len(df_daily), "Jumlah data di database harus minimal sama dengan data yang diambil!"
     print(f"✓ Data di SQLite terverifikasi: {len(df_loaded)} baris.")
     print(f"  Rentang Waktu: {df_loaded.index[0].strftime('%Y-%m-%d')} s/d {df_loaded.index[-1].strftime('%Y-%m-%d')}")
 

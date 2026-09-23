@@ -14,6 +14,16 @@ from strategy.signal_engine import SignalResult
 logger = setup_logger("telegram_bot")
 
 
+def format_currency(price: Optional[float], ticker: str = "") -> str:
+    """Helper untuk memformat harga mata uang (USD untuk Emas, Rp untuk IDX)."""
+    if price is None:
+        return "-"
+    ticker_upper = (ticker or "").upper()
+    if any(k in ticker_upper for k in ["GC=F", "XAUUSD", "XAU/USD", "GOLD", "EMAS"]):
+        return f"${price:,.2f}"
+    return f"Rp {price:,.0f}"
+
+
 class TelegramNotifier:
     """Modul pengirim notifikasi sinyal ke Telegram via Bot API."""
 
@@ -56,25 +66,29 @@ class TelegramNotifier:
 
         snap = sig.indicators_snapshot or {}
         rsi_val = f"{snap.get('rsi', 0.0):.1f}"
-        ema50_val = f"Rp {snap.get('ema_50', 0.0):,.0f}" if snap.get("ema_50") else "-"
+        ema50_val = format_currency(snap.get('ema_50'), sig.ticker) if snap.get("ema_50") else "-"
         vol_ratio_val = f"{snap.get('volume_ratio', 0.0):.2f}x" if snap.get("volume_ratio") else "-"
 
         trading_levels_html = ""
         if sig.take_profit_price and sig.stop_loss_price:
+            entry_str = format_currency(sig.price, sig.ticker)
+            tp_str = format_currency(sig.take_profit_price, sig.ticker)
+            sl_str = format_currency(sig.stop_loss_price, sig.ticker)
             trading_levels_html = (
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🎯 <b>Rencana Trading Harian (Plan):</b>\n"
-                f"  • Entry: <b>Rp {sig.price:,.0f}</b>\n"
-                f"  • Target Profit (TP): <b>Rp {sig.take_profit_price:,.0f}</b>\n"
-                f"  • Stop Loss (SL): <b>Rp {sig.stop_loss_price:,.0f}</b>\n"
+                f"🎯 <b>Rencana Trading (Plan):</b>\n"
+                f"  • Entry: <b>{entry_str}</b>\n"
+                f"  • Target Profit (TP): <b>{tp_str}</b>\n"
+                f"  • Stop Loss (SL): <b>{sl_str}</b>\n"
                 f"  • Risk/Reward Ratio: <b>1 : {sig.risk_reward_ratio or 1.5}</b>\n"
             )
 
+        asset_label = "Komoditas / Aset:" if any(k in sig.ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD"]) else "Saham:"
         msg = (
             f"<b>{action_emoji} NOTIFIKASI {action_title} {action_emoji}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🏷️ <b>Saham:</b> <code>{html.escape(sig.ticker)}</code>\n"
-            f"💰 <b>Harga Terkini:</b> <b>Rp {sig.price:,.0f}</b>\n"
+            f"🏷️ <b>{asset_label}</b> <code>{html.escape(sig.ticker)}</code>\n"
+            f"💰 <b>Harga Terkini:</b> <b>{format_currency(sig.price, sig.ticker)}</b>\n"
             f"📊 <b>Strategi:</b> <i>{html.escape(sig.strategy_name)}</i>\n"
             f"⏱️ <b>Waktu Candle:</b> {sig.candle_time}\n"
             f"{trading_levels_html}"
@@ -170,12 +184,13 @@ class TelegramBotCommands:
             f"Selamat datang di <b>IDX Stock Signal Bot</b> 🇮🇩\n\n"
             f"<b>Perintah yang tersedia:</b>\n"
             f"🎯 /harian - Rekomendasi sinyal trading harian (Entry, TP & SL)\n"
+            f"🥇 /gold - Analisis & sinyal emas dunia XAU/USD (24 Jam)\n"
             f"🔍 /scan - Pindai seluruh saham potensial sekarang juga (On-Demand)\n"
             f"📋 /watchlist - Lihat daftar saham potensial cuan & harga terkini\n"
             f"⚙️ /status - Cek status kesehatan & info sistem bot\n"
             f"📜 /lasthistory - Tampilkan 5 riwayat sinyal terakhir\n"
             f"ℹ️ /help - Bantuan & panduan bot\n\n"
-            f"<i>Bot ini berjalan secara otomatis pada jam bursa IDX.</i>"
+            f"<i>Bot ini berjalan otomatis untuk saham IDX & komoditas global.</i>"
         )
         await update.message.reply_html(welcome_text)
 
@@ -359,12 +374,138 @@ class TelegramBotCommands:
         lines.append("💡 <i>Ketik /scan untuk memindai ulang pasar secara langsung.</i>")
         await update.message.reply_html("\n".join(lines))
 
+    async def gold_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /gold dan /xau untuk analisis teknikal & sinyal Emas Dunia (XAU/USD)."""
+        await update.message.reply_html("⏳ <i>Menganalisis pergerakan harga emas dunia XAU/USD (COMEX Gold)...</i>")
+        import asyncio
+        from data.fetcher import DataFetcher
+        from indicators.technical import TechnicalIndicators
+        from strategy.rules import get_strategy, DEFAULT_STRATEGY
+        from strategy.signal_engine import SignalEngine
+
+        def _compute_gold():
+            fetcher = DataFetcher(storage=self.storage)
+            df = fetcher.get_data("GC=F", interval="15m", period="5d")
+            if df.empty or len(df) < 15:
+                df = fetcher.get_data("GC=F", interval="1h", period="1mo")
+            if df.empty or len(df) < 15:
+                return None
+
+            df_ind = TechnicalIndicators.add_all_indicators(df)
+            strategy = get_strategy("DayTrading_Intraday_Momentum") or DEFAULT_STRATEGY
+            engine = SignalEngine([strategy])
+            sig = engine.evaluate_bar(df_ind, ticker="GC=F", strategy=strategy)
+
+            last_row = df_ind.iloc[-1]
+            last_close = float(last_row["Close"])
+            dt_str = str(df_ind.index[-1])
+            time_str = dt_str[5:16] if len(dt_str) >= 16 else dt_str
+
+            tail_bars = df_ind.tail(min(96, len(df_ind)))
+            high_24h = float(tail_bars["High"].max())
+            low_24h = float(tail_bars["Low"].min())
+
+            snap = sig.indicators_snapshot or {}
+            rsi = snap.get("rsi", 50.0)
+            ema20 = snap.get("ema_20", last_close)
+            ema50 = snap.get("ema_50", last_close)
+            vol_ratio = snap.get("volume_ratio", 1.0)
+            bb_upper = float(last_row.get("BB_Upper", last_close * 1.01))
+            bb_lower = float(last_row.get("BB_Lower", last_close * 0.99))
+
+            # TP +0.6% & SL -0.35% untuk Gold Intraday
+            tp_calc = last_close * 1.006
+            sl_calc = last_close * 0.9965
+            rrr = round((tp_calc - last_close) / (last_close - sl_calc), 2)
+
+            return {
+                "close": last_close,
+                "time": time_str,
+                "high_24h": high_24h,
+                "low_24h": low_24h,
+                "rsi": rsi,
+                "ema20": ema20,
+                "ema50": ema50,
+                "bb_upper": bb_upper,
+                "bb_lower": bb_lower,
+                "vol_ratio": vol_ratio,
+                "signal": sig.signal,
+                "reasons": sig.reasons,
+                "tp": tp_calc,
+                "sl": sl_calc,
+                "rrr": rrr,
+            }
+
+        data = await asyncio.to_thread(_compute_gold)
+        if not data:
+            await update.message.reply_text("Maaf, data pasar XAU/USD (Gold) saat ini sedang tidak dapat diakses dari feed. Coba beberapa saat lagi.")
+            return
+
+        rsi = data["rsi"]
+        if rsi < 30:
+            rsi_desc = "Oversold / Jenuh Jual 🟢 Potensi Rebound"
+        elif rsi > 70:
+            rsi_desc = "Overbought / Jenuh Beli 🔴 Rawan Koreksi"
+        elif rsi >= 50:
+            rsi_desc = "Netral Bullish 🟢"
+        else:
+            rsi_desc = "Netral Bearish ⚪"
+
+        close = data["close"]
+        ema20 = data["ema20"]
+        ema50 = data["ema50"]
+        if close > ema20 > ema50:
+            trend_desc = "🟢 Kuat Naik (Strong Uptrend)"
+        elif close > ema20:
+            trend_desc = "🟢 Bullish (Di atas EMA 20)"
+        elif close < ema20 < ema50:
+            trend_desc = "🔴 Kuat Turun (Strong Downtrend)"
+        else:
+            trend_desc = "⚪ Sideways / Konsolidasi"
+
+        sig_type = data["signal"]
+        if sig_type == "BUY":
+            sig_badge = "🟢 <b>BUY (SIAP ENTRY)</b>"
+        elif sig_type == "SELL":
+            sig_badge = "🔴 <b>SELL / EXIT</b>"
+        elif rsi < 35:
+            sig_badge = "👀 <b>RADAR PANTAUAN (Dekat Titik Pantul)</b>"
+        else:
+            sig_badge = "⚪ <b>WAIT / WAIT & SEE (Netral)</b>"
+
+        msg_lines = [
+            "🥇 <b>ANALISIS PASAR XAU/USD (GOLD)</b> 🌎",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"💵 <b>Harga Terkini:</b> <code>${close:,.2f}</code>",
+            f"⏰ <b>Waktu Candle:</b> {data['time']}",
+            f"📊 <b>Rentang 24 Jam:</b> ${data['low_24h']:,.2f} - ${data['high_24h']:,.2f}",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "📈 <b>INDIKATOR TEKNIKAL (15m):</b>",
+            f"• <b>RSI (14):</b> {rsi:.1f} ({rsi_desc})",
+            f"• <b>EMA 20:</b> ${ema20:,.2f}",
+            f"• <b>EMA 50:</b> ${ema50:,.2f}",
+            f"• <b>Tren MA:</b> {trend_desc}",
+            f"• <b>Bollinger Bands:</b> Upper ${data['bb_upper']:,.2f} | Lower ${data['bb_lower']:,.2f}",
+            f"• <b>Volume 15m:</b> {data['vol_ratio']:.1f}x rata-rata",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"🎯 <b>STATUS SINYAL:</b> {sig_badge}",
+            f"  • Entry Ref: <b>${close:,.2f}</b>",
+            f"  • Target Profit (TP): <b>${data['tp']:,.2f}</b> (+0.6%)",
+            f"  • Stop Loss (SL): <b>${data['sl']:,.2f}</b> (-0.35%)",
+            f"  • Risk/Reward Ratio: <b>1 : {data['rrr']}</b>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "💡 <i>Pasar emas global aktif 23 jam sehari (Senin-Jumat). Kelola leverage secara bijak!</i>",
+        ]
+
+        await update.message.reply_html("\n".join(msg_lines))
+
 
 async def set_menu_commands(application: Application) -> None:
     """Mendaftarkan tombol Menu perintah interaktif di aplikasi Telegram."""
     from telegram import BotCommand
     commands = [
         BotCommand("harian", "🎯 Rekomendasi Sinyal Trading Harian (TP & SL)"),
+        BotCommand("gold", "🥇 Analisis Sinyal Emas Dunia (XAU/USD)"),
         BotCommand("scan", "🔍 Pindai Sinyal Pasar Sekarang"),
         BotCommand("watchlist", "📋 Saham Potensial Cuan & Harga"),
         BotCommand("status", "⚙️ Status Bot & Strategi Aktif"),
@@ -389,6 +530,7 @@ def build_telegram_application() -> Optional[Application]:
 
     app.add_handler(CommandHandler(["start", "help"], cmd_handler.start_command))
     app.add_handler(CommandHandler(["harian", "tradingharian", "daytrade"], cmd_handler.harian_command))
+    app.add_handler(CommandHandler(["gold", "xau", "emas"], cmd_handler.gold_command))
     app.add_handler(CommandHandler("status", cmd_handler.status_command))
     app.add_handler(CommandHandler("scan", cmd_handler.scan_command))
     app.add_handler(CommandHandler("watchlist", cmd_handler.watchlist_command))

@@ -19,3 +19,6 @@ tabulate>=0.9.0
 
 # Testing
 pytest>=8.0.0
+
+# Document & Strategy Learning
+pypdf>=5.0.0
