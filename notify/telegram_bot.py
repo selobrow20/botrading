@@ -169,11 +169,12 @@ class TelegramBotCommands:
             f"👋 Halo <b>{html.escape(user_name)}</b>!\n\n"
             f"Selamat datang di <b>IDX Stock Signal Bot</b> 🇮🇩\n\n"
             f"<b>Perintah yang tersedia:</b>\n"
-            f"🔹 /scan - Pindai seluruh saham potensial sekarang juga (On-Demand)\n"
-            f"🔹 /watchlist - Lihat daftar saham potensial cuan & harga terkini\n"
-            f"🔹 /status - Cek status kesehatan & info sistem bot\n"
-            f"🔹 /lasthistory - Tampilkan 5 riwayat sinyal terakhir\n"
-            f"🔹 /help - Bantuan & panduan bot\n\n"
+            f"🎯 /harian - Rekomendasi sinyal trading harian (Entry, TP & SL)\n"
+            f"🔍 /scan - Pindai seluruh saham potensial sekarang juga (On-Demand)\n"
+            f"📋 /watchlist - Lihat daftar saham potensial cuan & harga terkini\n"
+            f"⚙️ /status - Cek status kesehatan & info sistem bot\n"
+            f"📜 /lasthistory - Tampilkan 5 riwayat sinyal terakhir\n"
+            f"ℹ️ /help - Bantuan & panduan bot\n\n"
             f"<i>Bot ini berjalan secara otomatis pada jam bursa IDX.</i>"
         )
         await update.message.reply_html(welcome_text)
@@ -244,6 +245,37 @@ class TelegramBotCommands:
             lines.append(f"{emoji} <b>{sig_type}</b> - <code>{ticker}</code> @ {price}")
             lines.append(f"   <i>Waktu: {t_candle}</i>")
             lines.append(f"   <i>Pemicu: {html.escape(reason_str)}</i>")
+            lines.append("──────────────────────")
+
+        await update.message.reply_html("\n".join(lines))
+
+    async def scan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /scan untuk menjalankan pemindaian on-demand."""
+        await update.message.reply_html("🔍 <i>Sedang memindai saham potensial di watchlist, mohon tunggu sebentar...</i>")
+        import asyncio
+        from scheduler.run_scheduler import PipelineRunner
+
+        runner = PipelineRunner(storage=self.storage)
+        res = await asyncio.to_thread(runner.run_pipeline, force_run=True)
+        signals_triggered = res.get("signals_triggered", 0)
+        processed = res.get("processed", 0)
+
+        reply_lines = [
+            f"✅ <b>Pemindaian Selesai!</b>",
+            f"• Saham Diproses: <b>{processed}</b>",
+            f"• Sinyal Aktif: <b>{signals_triggered}</b>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+        ]
+        for d in res.get("details", []):
+            if d.get("signal") in ["BUY", "SELL"]:
+                emoji = "🟢" if d.get("signal") == "BUY" else "🔴"
+                reply_lines.append(f"{emoji} <b>{d.get('signal')}</b>: <code>{d.get('ticker')}</code> @ Rp {float(d.get('price', 0)):,.0f}")
+
+        if signals_triggered == 0:
+            reply_lines.append("<i>Semua saham saat ini dalam status netral (HOLD).</i>")
+
+        await update.message.reply_html("\n".join(reply_lines))
+
     async def harian_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /harian untuk melihat rekomendasi sinyal trading harian lengkap dengan TP & SL."""
         await update.message.reply_html("⏳ <i>Menganalisis saham potensial untuk Trading Harian (Day Trading & Swing)...</i>")
