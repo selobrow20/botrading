@@ -22,7 +22,7 @@ def test_stage_5():
     print("=" * 75)
 
     storage = StockStorage()
-    notifier = TelegramNotifier(storage=storage)
+    notifier = TelegramNotifier(token="mock_test_token", chat_id="12345678", storage=storage)
 
     # 1. Simulasikan Sinyal BUY Baru
     print("\n[1/3] Menguji Pembuatan Kartu Notifikasi Sinyal BUY...")

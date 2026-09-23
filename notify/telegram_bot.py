@@ -56,6 +56,7 @@ class TelegramNotifier:
         is_placeholder = (
             not self.token
             or "your_telegram" in self.token
+            or "mock" in self.token.lower()
             or not self.chat_id
             or "your_telegram" in self.chat_id
         )
