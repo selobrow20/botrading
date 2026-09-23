@@ -1,8 +1,8 @@
 import os
 import sqlite3
 import json
-from datetime import datetime
 from pathlib import Path
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
 import pandas as pd
@@ -134,6 +134,28 @@ class StockStorage:
                     requested_at TEXT NOT NULL,
                     approved_at TEXT
                 );
+            """)
+
+            # Tabel 5: Kalender Ekonomi (Forex Factory & High-Impact News)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS economic_calendar (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    country TEXT NOT NULL,
+                    date_utc TEXT NOT NULL,
+                    date_wib TEXT NOT NULL,
+                    impact TEXT NOT NULL,
+                    forecast TEXT,
+                    previous TEXT,
+                    news_type TEXT NOT NULL,
+                    alert_sent INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(title, date_utc)
+                );
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_calendar_time 
+                ON economic_calendar (date_utc, news_type, alert_sent);
             """)
             conn.commit()
             logger.debug(f"Database dan tabel berhasil diinisialisasi di {self.db_path}")
@@ -685,4 +707,92 @@ class StockStorage:
                 ORDER BY requested_at DESC
             """)
             return [dict(r) for r in cursor.fetchall()]
+
+    def save_economic_events(self, events: List[Dict[str, Any]]) -> int:
+        """Menyimpan atau memperbarui daftar event kalender ekonomi."""
+        if not events:
+            return 0
+        saved_count = 0
+        query = """
+            INSERT INTO economic_calendar
+            (title, country, date_utc, date_wib, impact, forecast, previous, news_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(title, date_utc) DO UPDATE SET
+                forecast = excluded.forecast,
+                previous = excluded.previous,
+                impact = excluded.impact,
+                date_wib = excluded.date_wib
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for ev in events:
+                try:
+                    cursor.execute(
+                        query,
+                        (
+                            ev["title"],
+                            ev["country"],
+                            ev["date_utc"],
+                            ev["date_wib"],
+                            ev["impact"],
+                            ev.get("forecast", ""),
+                            ev.get("previous", ""),
+                            ev.get("news_type", "OTHER"),
+                        ),
+                    )
+                    saved_count += 1
+                except Exception as e:
+                    logger.debug(f"Gagal menyimpan event {ev.get('title')}: {e}")
+            conn.commit()
+        return saved_count
+
+    def get_upcoming_news(self, within_minutes: int = 15) -> List[Dict[str, Any]]:
+        """
+        Mengambil event berita penting yang akan rilis dalam X menit ke depan
+        dan notifikasi 10 menitnya belum terkirim (alert_sent = 0).
+        """
+        now_utc = datetime.now(timezone.utc)
+        now_str = now_utc.strftime("%Y-%m-%d %H:%M:%S")
+        end_utc = now_utc + timedelta(minutes=within_minutes)
+        end_str = end_utc.strftime("%Y-%m-%d %H:%M:%S")
+
+        query = """
+            SELECT * FROM economic_calendar
+            WHERE date_utc >= ? AND date_utc <= ? AND alert_sent = 0
+            AND news_type IN ('FOMC', 'CPI', 'NFP')
+            ORDER BY date_utc ASC
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (now_str, end_str))
+            return [dict(r) for r in cursor.fetchall()]
+
+    def get_this_week_news(self, limit: int = 15, high_only: bool = True) -> List[Dict[str, Any]]:
+        """Mendapatkan daftar berita ekonomi pekan ini."""
+        now_utc = datetime.now(timezone.utc)
+        start_str = (now_utc - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+        end_str = (now_utc + timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+
+        query = """
+            SELECT * FROM economic_calendar
+            WHERE date_utc >= ? AND date_utc <= ?
+        """
+        params = [start_str, end_str]
+        if high_only:
+            query += " AND (impact = 'High' OR news_type IN ('FOMC', 'CPI', 'NFP'))"
+        query += " ORDER BY date_utc ASC LIMIT ?"
+        params.append(limit)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            return [dict(r) for r in cursor.fetchall()]
+
+    def mark_news_alert_sent(self, event_id: int) -> None:
+        """Menandai bahwa notifikasi 10 menit sebelum berita rilis sudah terkirim."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE economic_calendar SET alert_sent = 1 WHERE id = ?", (event_id,))
+            conn.commit()
+
 

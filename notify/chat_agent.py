@@ -126,7 +126,19 @@ class ChatAgent:
                 "ticker": None,
             }
 
-        # 4. Deteksi Pertanyaan Khusus Gold / Emas
+        # 4. Deteksi Pertanyaan High-Impact News (FOMC, CPI, NFP, Berita Ekonomi)
+        news_keywords = [
+            "news", "fomc", "cpi", "nfp", "inflasi", "suku bunga", "the fed",
+            "non farm", "nonfarm", "unemployment", "kalender", "berita ekonomi",
+            "jadwal news", "prediksi news", "kapan news", "berita",
+        ]
+        if any(k in text_lower for k in news_keywords):
+            return {
+                "intent": "NEWS",
+                "ticker": "XAUUSD",
+            }
+
+        # 5. Deteksi Pertanyaan Khusus Gold / Emas
         gold_keywords = ["emas", "gold", "xau", "xauusd", "xau/usd"]
         if any(k in text_lower for k in gold_keywords):
             return {
@@ -134,7 +146,7 @@ class ChatAgent:
                 "ticker": "XAUUSD",
             }
 
-        # 5. Deteksi Pertanyaan Win Rate / Akurasi
+        # 6. Deteksi Pertanyaan Win Rate / Akurasi
         winrate_keywords = [
             "winrate", "win rate", "akurasi", "banyak win apa lose",
             "performa", "rekam jejak", "win lose", "lose rate",

@@ -295,11 +295,62 @@ class PipelineRunner:
             except Exception as e:
                 logger.error(f"Error memproses pipeline untuk {ticker}: {e}")
 
+        # Periksa apakah ada berita besar (FOMC, CPI, NFP) dalam 10-15 menit ke depan
+        self.check_upcoming_news_job()
+
         logger.info(
             f"=== Pipeline Selesai: {results['processed']} saham diproses, "
             f"{results['signals_triggered']} sinyal aktif, {results['signals_notified']} notifikasi terkirim ==="
         )
         return results
+
+    def check_upcoming_news_job(self) -> int:
+        """
+        Memeriksa apakah ada berita besar (FOMC, CPI, NFP) yang akan rilis
+        dalam waktu 10-15 menit ke depan. Jika ada dan belum dinotifikasikan:
+        1. Lakukan analisis pre-news XAU/USD.
+        2. Buat visual grafik pre-news setup.
+        3. Kirim notifikasi prioritas tinggi ke Telegram.
+        4. Tandai alert_sent = 1 di database.
+        """
+        try:
+            from data.economic_calendar import EconomicCalendar
+            from strategy.news_predictor import NewsPredictor
+
+            cal = EconomicCalendar(storage=self.storage)
+            upcoming = cal.get_upcoming_high_impact_news(within_minutes=15)
+            if not upcoming:
+                return 0
+
+            df_gold = self.fetcher.get_data("XAUUSD", interval="15m", period="5d", force_fetch=True)
+            live_price = float(df_gold["Close"].iloc[-1]) if not df_gold.empty else None
+
+            notified_count = 0
+            for event in upcoming:
+                ev_id = event.get("id")
+                news_type = event.get("news_type", "OTHER")
+                logger.info(f"🚨 Terdeteksi High-Impact News {news_type} rilis sebentar lagi ({event.get('date_wib')} WIB)!")
+
+                analysis = NewsPredictor.analyze_pre_news(
+                    news_event=event,
+                    live_gold_price=live_price,
+                    df_gold=df_gold,
+                )
+
+                chart_path = NewsPredictor.generate_pre_news_chart(
+                    analysis=analysis,
+                    df=df_gold,
+                )
+
+                self.notifier.send_news_alert(analysis, photo_path=chart_path)
+                if ev_id:
+                    self.storage.mark_news_alert_sent(ev_id)
+                notified_count += 1
+
+            return notified_count
+        except Exception as e:
+            logger.error(f"Error pada check_upcoming_news_job: {e}")
+            return 0
 
     def _check_duplicate(self, sig: SignalResult) -> Tuple[bool, str]:
         """
@@ -376,12 +427,21 @@ def start_scheduler() -> None:
     runner = PipelineRunner()
 
     scheduler = BlockingScheduler()
-    # Jadwalkan eksekusi berkala
+    # Jadwalkan eksekusi berkala analisa saham & gold
     scheduler.add_job(
         runner.run_pipeline,
         trigger=IntervalTrigger(minutes=interval_mins),
         id="idx_stock_analysis_job",
         name="Analisis Saham Berkala IDX",
+        replace_existing=True,
+    )
+
+    # Jadwalkan pengecekan berita besar (FOMC, CPI, NFP) tiap 1 menit untuk alert T-10 menit
+    scheduler.add_job(
+        runner.check_upcoming_news_job,
+        trigger=IntervalTrigger(minutes=1),
+        id="pre_news_checker_job",
+        name="Pengecekan High-Impact News 10 Menit",
         replace_existing=True,
     )
 

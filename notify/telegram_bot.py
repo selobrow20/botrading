@@ -258,6 +258,63 @@ class TelegramNotifier:
                 success = False
         return success
 
+    def format_news_alert_message(self, analysis: Dict[str, Any]) -> str:
+        """Menyusun pesan notifikasi 10 menit sebelum berita rilis."""
+        bull = analysis["bullish_scenario"]
+        bear = analysis["bearish_scenario"]
+        plan = analysis["straddle_plan"]
+        news_type = analysis["news_type"]
+
+        lines = [
+            f"🚨 <b>ALERT 10 MENIT SEBELUM HIGH-IMPACT NEWS!</b> ⚠️",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"📢 <b>Event:</b> {html.escape(analysis['news_title'])} (<b>{news_type}</b>)",
+            f"⏰ <b>Waktu Rilis:</b> <code>{analysis['date_wib']} WIB</code> (<b>~10 Menit Lagi!</b>)",
+            f"📊 <b>Konsensus:</b> Forecast: <code>{analysis['forecast']}</code> | Prev: <code>{analysis['previous']}</code>",
+            f"💵 <b>Harga Emas Saat Ini:</b> <code>${analysis['current_price']:,.2f}</code>",
+            f"💥 <b>Estimasi Volatilitas:</b> ±{analysis['expected_volatility_pct']}% (±${analysis['expected_volatility_dollars']})",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"🎯 <b>PROYEKSI 2 SKENARIO XAU/USD (GOLD):</b>",
+            "",
+            f"🟢 <b>1. SKENARIO PUMP (USD DROP):</b>",
+            f"• <i>Kondisi:</i> {bull['condition']}",
+            f"• 🎯 Target TP1: <code>${bull['target_tp1']:,.2f}</code> (+{bull['gain_tp1_pct']}%)",
+            f"• 🎯 Target TP2: <code>${bull['target_tp2']:,.2f}</code> (+{bull['gain_tp2_pct']}%)",
+            "",
+            f"🔴 <b>2. SKENARIO DUMP (USD PUMP):</b>",
+            f"• <i>Kondisi:</i> {bear['condition']}",
+            f"• 🎯 Target TP1: <code>${bear['target_tp1']:,.2f}</code> (-{bear['loss_tp1_pct']}%)",
+            f"• 🎯 Target TP2: <code>${bear['target_tp2']:,.2f}</code> (-{bear['loss_tp2_pct']}%)",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"⚡ <b>PANDUAN STRADDLE BREAKOUT PRE-NEWS:</b>",
+            f"• 🟢 <b>Buy Stop:</b> <code>${plan['buy_stop']:,.2f}</code> (SL: ${plan['buy_sl']:,.2f})",
+            f"• 🔴 <b>Sell Stop:</b> <code>${plan['sell_stop']:,.2f}</code> (SL: ${plan['sell_sl']:,.2f})",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"💡 <i>Gunakan lot 50% lebih kecil karena spread berpotensi melebar saat rilis news!</i>",
+        ]
+        return "\n".join(lines)
+
+    def send_news_alert(self, analysis: Dict[str, Any], photo_path: Optional[str] = None) -> bool:
+        """Mengirimkan alert 10 menit sebelum berita rilis ke seluruh pengguna terotorisasi."""
+        msg = self.format_news_alert_message(analysis)
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        success = True
+        for cid in approved_ids:
+            try:
+                if photo_path and Path(photo_path).exists():
+                    res = asyncio.run(self._async_send_photo(photo_path, msg, target_chat_id=cid))
+                else:
+                    res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
+                if not res:
+                    success = False
+            except Exception as e:
+                logger.error(f"Error saat broadcast news alert ke {cid}: {e}")
+                success = False
+        return success
+
     def send_message(self, text: str) -> bool:
         """Mengirim pesan teks biasa ke Telegram."""
         try:
@@ -1308,9 +1365,100 @@ class TelegramBotCommands:
             await self.watchlist_command(update, context)
             return
 
-        # 7. Intent STATUS, GREETING, THANKS, CHITCHAT
+        # 7. Intent NEWS: Pengguna menanyakan jadwal news atau prediksi FOMC/CPI/NFP
+        if intent == "NEWS":
+            await self.news_command(update, context)
+            return
+
+        # 8. Intent STATUS, GREETING, THANKS, CHITCHAT
         reply_text = ChatAgent.generate_chat_response(intent=intent, user_name=user_name)
         await update.message.reply_html(reply_text)
+
+    async def news_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /news untuk melihat jadwal berita besar (FOMC, CPI, NFP) & proyeksi XAU/USD."""
+        if not await self.check_user_access(update, context):
+            return
+
+        from data.economic_calendar import EconomicCalendar
+        from strategy.news_predictor import NewsPredictor
+        from data.fetcher import DataFetcher
+        import asyncio
+
+        await update.message.reply_html("📅 <i>Memeriksa kalender ekonomi & jadwal rilis FOMC, CPI, NFP...</i>")
+
+        def _fetch_news():
+            cal = EconomicCalendar(storage=self.storage)
+            cal.sync_calendar()
+            events = cal.get_this_week_schedule()
+
+            fetcher = DataFetcher(storage=self.storage)
+            df_gold = fetcher.get_data("XAUUSD", interval="15m", period="5d", force_fetch=True)
+            live_price = float(df_gold["Close"].iloc[-1]) if not df_gold.empty else 4300.0
+
+            closest_analysis = None
+            chart_path = None
+            if events:
+                closest_ev = events[0]
+                closest_analysis = NewsPredictor.analyze_pre_news(closest_ev, live_gold_price=live_price, df_gold=df_gold)
+                chart_path = NewsPredictor.generate_pre_news_chart(closest_analysis, df=df_gold)
+
+            return events, closest_analysis, chart_path, live_price
+
+        events, closest_analysis, chart_path, live_price = await asyncio.to_thread(_fetch_news)
+
+        if not events:
+            await update.message.reply_html(
+                "📅 <b>JADWAL HIGH-IMPACT NEWS:</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Tidak ada jadwal berita High Impact (FOMC, CPI, NFP) dalam beberapa hari ke depan.\n"
+                "Pasar cenderung bergerak dengan dominasi analisa teknikal murni."
+            )
+            return
+
+        lines = [
+            "📅 <b>JADWAL 3 BERITA BESAR BULANAN (FOMC / CPI / NFP)</b> 🌎",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"💵 <b>Harga Live XAU/USD:</b> <code>${live_price:,.2f}</code>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+        ]
+
+        for idx, ev in enumerate(events[:5], 1):
+            ntype = ev.get("news_type", "NEWS")
+            badge = "🔴 FOMC" if ntype == "FOMC" else "🟠 CPI" if ntype == "CPI" else "🟣 NFP" if ntype == "NFP" else "⚪ NEWS"
+            t_wib = ev.get("date_wib", "-")
+            fc = ev.get("forecast") or "-"
+            pv = ev.get("previous") or "-"
+            lines.append(f"<b>{idx}. {badge}</b>: <b>{html.escape(ev.get('title', ''))}</b>")
+            lines.append(f"   ⏰ Waktu: <code>{t_wib} WIB</code>")
+            lines.append(f"   📊 Forecast: <code>{fc}</code> | Prev: <code>{pv}</code>")
+            lines.append("──────────────────────")
+
+        if closest_analysis:
+            bull = closest_analysis["bullish_scenario"]
+            bear = closest_analysis["bearish_scenario"]
+            lines.extend([
+                f"🎯 <b>PROYEKSI EVENT TERDEKAT ({closest_analysis['news_type']}):</b>",
+                f"• 🟢 <b>Bullish Gold:</b> Target ${bull['target_tp1']:,.2f} s/d ${bull['target_tp2']:,.2f}",
+                f"• 🔴 <b>Bearish Gold:</b> Target ${bear['target_tp1']:,.2f} s/d ${bear['target_tp2']:,.2f}",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+                "⚡ <i>Sistem otomatis membunyikan Alert & Live Chart 10 menit sebelum rilis!</i>",
+            ])
+
+        caption = "\n".join(lines)
+        if chart_path and Path(chart_path).exists():
+            safe_cap = caption if len(caption) <= 1020 else caption[:1000] + "..."
+            try:
+                with open(chart_path, "rb") as photo:
+                    await update.message.reply_photo(
+                        photo=photo,
+                        caption=safe_cap,
+                        parse_mode=ParseMode.HTML,
+                    )
+                return
+            except Exception as e:
+                logger.error(f"Gagal kirim chart news: {e}")
+
+        await update.message.reply_html(caption)
 
 
 async def set_menu_commands(application: Application) -> None:
@@ -1319,6 +1467,7 @@ async def set_menu_commands(application: Application) -> None:
     commands = [
         BotCommand("chart", "📈 Live Candlestick Chart (Gold / Saham)"),
         BotCommand("potensi", "🔥 Radar Live Chart Paling Berpotensi"),
+        BotCommand("news", "📰 Jadwal & Prediksi Pre-News (FOMC/CPI/NFP)"),
         BotCommand("harian", "🎯 Rekomendasi Sinyal Trading Harian (TP & SL)"),
         BotCommand("winrate", "📊 Statistik Akurasi Win / Lose Rate Bot"),
         BotCommand("candle", "🕯️ Bedah Pola Candlestick & Price Action"),
@@ -1348,6 +1497,7 @@ def build_telegram_application() -> Optional[Application]:
     app.add_handler(CommandHandler(["start", "help"], cmd_handler.start_command))
     app.add_handler(CommandHandler(["chart", "grafik", "livechart"], cmd_handler.chart_command))
     app.add_handler(CommandHandler(["potensi", "radar", "topsetup"], cmd_handler.potensi_command))
+    app.add_handler(CommandHandler(["news", "fomc", "cpi", "nfp", "kalender"], cmd_handler.news_command))
     app.add_handler(CommandHandler(["harian", "tradingharian", "daytrade"], cmd_handler.harian_command))
     app.add_handler(CommandHandler(["winrate", "performance", "akurasi"], cmd_handler.winrate_command))
     app.add_handler(CommandHandler(["candle", "candlestick", "pola"], cmd_handler.candle_command))
