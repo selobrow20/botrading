@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 import pandas as pd
+import numpy as np
 import pytest
 
 from data.storage import StockStorage
@@ -41,7 +42,6 @@ def test_economic_calendar_storage_and_schedule():
         assert saved >= 30
 
         # 3. Test upcoming news within 15 minutes
-        # Insert a mock event 10 minutes in the future
         now_utc = datetime.now(timezone.utc)
         ev_time = now_utc + timedelta(minutes=10)
         time_str = ev_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -82,6 +82,13 @@ def test_news_predictor_calculations():
     assert analysis["news_type"] == "FOMC"
     assert analysis["current_price"] == 4300.0
 
+    # Explicit Recommendation
+    assert analysis["primary_recommendation"] in ["STRONG BUY", "BUY", "STRONG SELL", "SELL", "WAIT / STRADDLE"]
+    assert analysis["confidence_pct"] >= 50
+    assert "trade_setup" in analysis
+    assert analysis["trade_setup"]["tp1"] > 0
+    assert analysis["trade_setup"]["sl"] > 0
+
     # Bullish scenario TP > current price
     bull = analysis["bullish_scenario"]
     assert bull["target_tp1"] > 4300.0
@@ -100,23 +107,66 @@ def test_news_predictor_calculations():
     assert plan["sell_sl"] > plan["sell_stop"]
 
 
+def test_fundamental_bias_cpi_and_nfp():
+    # CPI forecast < previous -> USD weak -> Gold Bullish
+    bias_cpi_bull = NewsPredictor.calculate_fundamental_bias("CPI", "CPI m/m", "0.2%", "0.3%")
+    assert bias_cpi_bull["sentiment"] == "BULLISH"
+    assert bias_cpi_bull["score"] > 0
+
+    # CPI forecast > previous -> USD strong -> Gold Bearish
+    bias_cpi_bear = NewsPredictor.calculate_fundamental_bias("CPI", "CPI m/m", "0.4%", "0.2%")
+    assert bias_cpi_bear["sentiment"] == "BEARISH"
+    assert bias_cpi_bear["score"] < 0
+
+    # NFP forecast < previous -> USD weak -> Gold Bullish
+    bias_nfp_bull = NewsPredictor.calculate_fundamental_bias("NFP", "Non-Farm Employment Change", "140K", "175K")
+    assert bias_nfp_bull["sentiment"] == "BULLISH"
+    assert bias_nfp_bull["score"] > 0
+
+    # NFP forecast > previous -> USD strong -> Gold Bearish
+    bias_nfp_bear = NewsPredictor.calculate_fundamental_bias("NFP", "Non-Farm Employment Change", "180K", "142K")
+    assert bias_nfp_bear["sentiment"] == "BEARISH"
+    assert bias_nfp_bear["score"] < 0
+
+
+def test_pdf_technical_confluence():
+    # Create synthetic gold dataframe
+    n = 35
+    dates = pd.date_range("2026-09-20 09:00", periods=n, freq="15min")
+    prices = np.linspace(4250.0, 4310.0, n)
+    df = pd.DataFrame({
+        "Open": prices - 1.0,
+        "High": prices + 3.0,
+        "Low": prices - 2.0,
+        "Close": prices + 1.0,
+        "Volume": [1000] * n,
+    }, index=dates)
+
+    tech = NewsPredictor.calculate_pdf_technical_confluence(df)
+    assert "score" in tech
+    assert "sentiment" in tech
+    assert "reasons" in tech
+    assert len(tech["reasons"]) >= 1
+    assert "fib_levels" in tech
+
+
 def test_telegram_news_alert_formatter():
     mock_event = {
         "title": "Non-Farm Employment Change & Unemployment Rate",
         "news_type": "NFP",
         "date_wib": "2026-10-02 19:30:00 WIB",
-        "forecast": "160K",
-        "previous": "142K",
+        "forecast": "140K",
+        "previous": "170K",
     }
     analysis = NewsPredictor.analyze_pre_news(mock_event, live_gold_price=4300.0)
     notifier = TelegramNotifier()
     msg = notifier.format_news_alert_message(analysis)
 
-    assert "ALERT 10 MENIT SEBELUM HIGH-IMPACT NEWS" in msg
+    assert "ALERT PRE-NEWS: REKOMENDASI TRADING XAU/USD" in msg
     assert "NFP" in msg
-    assert "SKENARIO PUMP" in msg
-    assert "SKENARIO DUMP" in msg
-    assert "STRADDLE BREAKOUT" in msg
+    assert "SARAN UTAMA BOT (PDF & WEB DATA)" in msg
+    assert "REKOMENDASI:" in msg
+    assert "STRADDLE" in msg
     assert "$4,300.00" in msg
 
 

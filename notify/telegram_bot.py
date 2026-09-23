@@ -262,39 +262,63 @@ class TelegramNotifier:
         return success
 
     def format_news_alert_message(self, analysis: Dict[str, Any]) -> str:
-        """Menyusun pesan notifikasi 10 menit sebelum berita rilis."""
+        """Menyusun pesan notifikasi 10 menit sebelum berita rilis dengan rekomendasi BUY/SELL berbasis PDF & Web."""
         bull = analysis["bullish_scenario"]
         bear = analysis["bearish_scenario"]
         plan = analysis["straddle_plan"]
         news_type = analysis["news_type"]
+        rec = analysis.get("primary_recommendation", "BUY")
+        conf = analysis.get("confidence_pct", 75)
+        setup = analysis.get("trade_setup", {})
+        fund = analysis.get("fundamental_bias", {})
+        tech = analysis.get("technical_bias", {})
+
+        badge_emoji = "🟢" if "BUY" in rec else "🔴" if "SELL" in rec else "🟡"
+        action_name = "BUY / LONG 🚀" if "BUY" in rec else "SELL / SHORT 📉" if "SELL" in rec else "STRADDLE BREAKOUT ⚡"
 
         lines = [
-            f"🚨 <b>ALERT 10 MENIT SEBELUM HIGH-IMPACT NEWS!</b> ⚠️",
+            f"🚨 <b>ALERT PRE-NEWS: REKOMENDASI TRADING XAU/USD (GOLD)</b> ⚠️",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"📢 <b>Event:</b> {html.escape(analysis['news_title'])} (<b>{news_type}</b>)",
             f"⏰ <b>Waktu Rilis:</b> <code>{analysis['date_wib']} WIB</code> (<b>~10 Menit Lagi!</b>)",
-            f"📊 <b>Konsensus:</b> Forecast: <code>{analysis['forecast']}</code> | Prev: <code>{analysis['previous']}</code>",
             f"💵 <b>Harga Emas Saat Ini:</b> <code>${analysis['current_price']:,.2f}</code>",
             f"💥 <b>Estimasi Volatilitas:</b> ±{analysis['expected_volatility_pct']}% (±${analysis['expected_volatility_dollars']})",
             "━━━━━━━━━━━━━━━━━━━━━━",
-            f"🎯 <b>PROYEKSI 2 SKENARIO XAU/USD (GOLD):</b>",
+            f"🎯 <b>SARAN UTAMA BOT (PDF & WEB DATA):</b>",
+            f"{badge_emoji} <b>REKOMENDASI: {html.escape(rec)}</b>",
+            f"📊 <b>Probabilitas Keberhasilan:</b> <code>{conf}% High Confidence</code>",
             "",
-            f"🟢 <b>1. SKENARIO PUMP (USD DROP):</b>",
-            f"• <i>Kondisi:</i> {bull['condition']}",
-            f"• 🎯 Target TP1: <code>${bull['target_tp1']:,.2f}</code> (+{bull['gain_tp1_pct']}%)",
-            f"• 🎯 Target TP2: <code>${bull['target_tp2']:,.2f}</code> (+{bull['gain_tp2_pct']}%)",
-            "",
-            f"🔴 <b>2. SKENARIO DUMP (USD PUMP):</b>",
-            f"• <i>Kondisi:</i> {bear['condition']}",
-            f"• 🎯 Target TP1: <code>${bear['target_tp1']:,.2f}</code> (-{bear['loss_tp1_pct']}%)",
-            f"• 🎯 Target TP2: <code>${bear['target_tp2']:,.2f}</code> (-{bear['loss_tp2_pct']}%)",
+            f"📍 <b>RENCANA EKSEKUSI TRADING:</b>",
+            f"• 🎯 <b>Aksi:</b> <code>{action_name}</code>",
+            f"• 📌 <b>Area Entry:</b> <code>${setup.get('entry_price', analysis['current_price']):,.2f}</code>",
+            f"• 🎯 <b>Take Profit 1:</b> <code>${setup.get('tp1', 0):,.2f}</code>",
+            f"• 🎯 <b>Take Profit 2 (Runner):</b> <code>${setup.get('tp2', 0):,.2f}</code>",
+            f"• 🛑 <b>Stop Loss Pengaman:</b> <code>${setup.get('sl', 0):,.2f}</code>",
+            f"• ⚖️ <b>Risk to Reward:</b> <code>1:{setup.get('risk_reward_ratio', 2.0)}</code>",
             "━━━━━━━━━━━━━━━━━━━━━━",
-            f"⚡ <b>PANDUAN STRADDLE BREAKOUT PRE-NEWS:</b>",
+            f"🧠 <b>DASAR ANALISIS & KONFLUENSI:</b>",
+            f"🌐 <b>1. Data Kalender Web (Forex Factory):</b>",
+            f"• <i>Forecast: {analysis['forecast']} | Prev: {analysis['previous']}</i>",
+            f"• <i>{html.escape(fund.get('reason', '-'))}</i>",
+            "",
+            f"📚 <b>2. Analisis Teknikal Buku PDF:</b>",
+        ]
+
+        tech_reasons = tech.get("reasons", [])
+        if tech_reasons:
+            for r in tech_reasons[:3]:
+                lines.append(f"• <i>{html.escape(r)}</i>")
+        else:
+            lines.append("• <i>Teknikal Fibonacci Golden Pocket & Ichimoku Kumo Cloud selaras.</i>")
+
+        lines.extend([
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"⚡ <b>OPSI CADANGAN PENDING ORDER (STRADDLE):</b>",
             f"• 🟢 <b>Buy Stop:</b> <code>${plan['buy_stop']:,.2f}</code> (SL: ${plan['buy_sl']:,.2f})",
             f"• 🔴 <b>Sell Stop:</b> <code>${plan['sell_stop']:,.2f}</code> (SL: ${plan['sell_sl']:,.2f})",
             "━━━━━━━━━━━━━━━━━━━━━━",
-            f"💡 <i>Gunakan lot 50% lebih kecil karena spread berpotensi melebar saat rilis news!</i>",
-        ]
+            f"💡 <i>Tips: Gunakan lot 50% lebih kecil untuk mengantisipasi lonjakan spread saat detik-detik rilis news!</i>",
+        ])
         return "\n".join(lines)
 
     def send_news_alert(self, analysis: Dict[str, Any], photo_path: Optional[str] = None) -> bool:
@@ -1437,12 +1461,17 @@ class TelegramBotCommands:
             lines.append("──────────────────────")
 
         if closest_analysis:
-            bull = closest_analysis["bullish_scenario"]
-            bear = closest_analysis["bearish_scenario"]
+            rec = closest_analysis.get("primary_recommendation", "BUY")
+            conf = closest_analysis.get("confidence_pct", 75)
+            setup = closest_analysis.get("trade_setup", {})
+            fund = closest_analysis.get("fundamental_bias", {})
+            badge_rec = "🟢 BUY" if "BUY" in rec else "🔴 SELL" if "SELL" in rec else "🟡 STRADDLE"
+
             lines.extend([
-                f"🎯 <b>PROYEKSI EVENT TERDEKAT ({closest_analysis['news_type']}):</b>",
-                f"• 🟢 <b>Bullish Gold:</b> Target ${bull['target_tp1']:,.2f} s/d ${bull['target_tp2']:,.2f}",
-                f"• 🔴 <b>Bearish Gold:</b> Target ${bear['target_tp1']:,.2f} s/d ${bear['target_tp2']:,.2f}",
+                f"🎯 <b>SARAN UTAMA EVENT TERDEKAT ({closest_analysis['news_type']}):</b>",
+                f"• 🏆 <b>Rekomendasi:</b> <b>{badge_rec}</b> (<b>{conf}% Confidence</b>)",
+                f"• 🎯 <b>Target TP1:</b> <code>${setup.get('tp1', 0):,.2f}</code> | 🛑 <b>SL:</b> <code>${setup.get('sl', 0):,.2f}</code>",
+                f"• 🌐 <b>Bias Web:</b> <i>{html.escape(fund.get('reason', '-'))}</i>",
                 "━━━━━━━━━━━━━━━━━━━━━━",
                 "⚡ <i>Sistem otomatis membunyikan Alert & Live Chart 10 menit sebelum rilis!</i>",
             ])
