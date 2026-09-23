@@ -1,6 +1,8 @@
 import os
 import asyncio
 import html
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from telegram import Bot, Update
@@ -68,12 +70,12 @@ class TelegramNotifier:
 
         price_str = format_currency(sig.price, sig.ticker)
 
-        # Waktu candle WIB
-        t_str = str(sig.candle_time or "")
-        if len(t_str) >= 16:
-            time_wib = f"{t_str[11:16]} WIB"
-        else:
-            time_wib = f"{t_str} WIB" if t_str else "WIB"
+        # Waktu pengiriman sinyal real-time WIB (sama persis dengan jam handphone/komputer)
+        try:
+            tz = ZoneInfo("Asia/Jakarta")
+            time_wib = datetime.now(tz).strftime("%H:%M WIB")
+        except Exception:
+            time_wib = "WIB"
 
         snap = sig.indicators_snapshot or {}
         rsi_val = f"{snap.get('rsi', 0.0):.1f}"
@@ -95,59 +97,70 @@ class TelegramNotifier:
 
         return "\n".join(lines)
 
-    async def _async_send_text(self, text: str) -> bool:
-        """Mengirim pesan teks secara asinkron."""
+    async def _async_send_text(self, text: str, target_chat_id: Optional[str] = None) -> bool:
+        """Mengirim pesan teks secara asinkron ke chat ID target atau default."""
         if not self.is_configured:
             logger.info(f"[SIMULASI TELEGRAM]\n{text}")
             return True
 
         bot = Bot(token=self.token)
+        cid = str(target_chat_id or self.chat_id).strip()
         try:
             await bot.send_message(
-                chat_id=self.chat_id,
+                chat_id=cid,
                 text=text,
                 parse_mode=ParseMode.HTML,
             )
-            logger.info("Pesan berhasil terkirim ke Telegram.")
+            logger.info(f"Pesan berhasil terkirim ke Telegram ({cid}).")
             return True
         except Exception as e:
-            logger.error(f"Gagal mengirim pesan ke Telegram: {e}")
+            logger.error(f"Gagal mengirim pesan ke Telegram ({cid}): {e}")
             return False
 
-    async def _async_send_photo(self, photo_path: str, caption: str) -> bool:
+    async def _async_send_photo(self, photo_path: str, caption: str, target_chat_id: Optional[str] = None) -> bool:
         """Mengirim file foto beserta caption ke Telegram."""
         if not self.is_configured:
             logger.info(f"[SIMULASI TELEGRAM PHOTO] {photo_path}\n{caption}")
             return True
 
         bot = Bot(token=self.token)
+        cid = str(target_chat_id or self.chat_id).strip()
         try:
             with open(photo_path, "rb") as photo:
                 await bot.send_photo(
-                    chat_id=self.chat_id,
+                    chat_id=cid,
                     photo=photo,
                     caption=caption,
                     parse_mode=ParseMode.HTML,
                 )
-            logger.info(f"Foto {photo_path} berhasil terkirim ke Telegram.")
+            logger.info(f"Foto {photo_path} berhasil terkirim ke Telegram ({cid}).")
             return True
         except Exception as e:
-            logger.error(f"Gagal mengirim foto ke Telegram: {e}")
+            logger.error(f"Gagal mengirim foto ke Telegram ({cid}): {e}")
             return False
 
     def send_signal(self, sig: SignalResult, photo_path: Optional[str] = None) -> bool:
         """
-        Wrapper sinkron untuk mengirim kartu sinyal (bisa dipanggil dari scheduler / synchronous code).
+        Mengirim kartu sinyal ke seluruh pengguna yang telah disetujui (Admin + Whitelist).
         """
         msg = self.format_signal_message(sig)
-        try:
-            if photo_path and Path(photo_path).exists():
-                return asyncio.run(self._async_send_photo(photo_path, msg))
-            else:
-                return asyncio.run(self._async_send_text(msg))
-        except Exception as e:
-            logger.error(f"Error saat mengeksekusi send_signal: {e}")
-            return False
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        success = True
+        for cid in approved_ids:
+            try:
+                if photo_path and Path(photo_path).exists():
+                    res = asyncio.run(self._async_send_photo(photo_path, msg, target_chat_id=cid))
+                else:
+                    res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
+                if not res:
+                    success = False
+            except Exception as e:
+                logger.error(f"Error saat broadcast sinyal ke {cid}: {e}")
+                success = False
+        return success
 
     def send_message(self, text: str) -> bool:
         """Mengirim pesan teks biasa ke Telegram."""
@@ -159,14 +172,151 @@ class TelegramNotifier:
 
 
 class TelegramBotCommands:
-    """Handler perintah interaktif bot Telegram (/status, /watchlist, /lasthistory)."""
+    """Handler perintah interaktif bot Telegram (/status, /watchlist, /lasthistory, dll)."""
 
     def __init__(self, storage: Optional[StockStorage] = None):
         self.storage = storage or StockStorage()
         self.config = load_config()
+        self.admin_id = os.getenv("TELEGRAM_CHAT_ID", "8754997836").strip()
+
+    async def check_user_access(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+        """
+        Memeriksa hak akses pengguna.
+        Jika belum diizinkan, catat sebagai pending dan kirim notifikasi izin ke Admin.
+        """
+        if not update.effective_user or not update.message:
+            return False
+
+        user_id = str(update.effective_user.id).strip()
+        user_name = update.effective_user.username or "-"
+        full_name = update.effective_user.full_name or "Trader"
+
+        # 1. Super Admin otomatis lolos
+        if user_id == self.admin_id:
+            return True
+
+        # 2. Cek apakah sudah disetujui di database
+        if self.storage.is_user_authorized(user_id, admin_id=self.admin_id):
+            return True
+
+        # 3. User belum terdaftar / berstatus pending
+        status = self.storage.register_or_get_user(
+            chat_id=user_id,
+            username=user_name,
+            full_name=full_name,
+        )
+
+        if status == "rejected":
+            await update.message.reply_html(
+                "🚫 <b>Akses Ditolak</b>\n\n"
+                "Maaf, akses Anda ke bot ini telah ditolak oleh Admin."
+            )
+            return False
+
+        # Status 'pending'
+        await update.message.reply_html(
+            "🔒 <b>Akses Bot Dibatasi (Privat)</b>\n\n"
+            "Halo! Bot ini memerlukan persetujuan dari Admin sebelum dapat digunakan.\n"
+            "Permintaan akses Anda telah dikirimkan ke <b>Admin (@selobrow)</b>.\n\n"
+            "⏳ <i>Mohon tunggu hingga Admin menyetujui akses Anda.</i>"
+        )
+
+        # Kirim alert izin ke Admin
+        if self.admin_id:
+            admin_msg = (
+                f"🔔 <b>PERMINTAAN AKSES PENGGUNA BARU:</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 <b>Nama:</b> {html.escape(full_name)}\n"
+                f"💬 <b>Username:</b> @{html.escape(user_name)}\n"
+                f"🆔 <b>Chat ID:</b> <code>{user_id}</code>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👉 Izinkan: <code>/approve {user_id}</code>\n"
+                f"👉 Tolak: <code>/reject {user_id}</code>"
+            )
+            try:
+                await context.bot.send_message(
+                    chat_id=self.admin_id,
+                    text=admin_msg,
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception as e:
+                logger.error(f"Gagal kirim notif izin ke Admin: {e}")
+
+        return False
+
+    async def approve_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /approve <chat_id> khusus Admin."""
+        if not update.effective_user or str(update.effective_user.id).strip() != self.admin_id:
+            await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
+            return
+
+        if not context.args:
+            await update.message.reply_html("⚠️ Format salah. Gunakan: <code>/approve &lt;chat_id&gt;</code>")
+            return
+
+        target_id = context.args[0].strip()
+        success = self.storage.approve_user(target_id)
+        if success:
+            await update.message.reply_html(f"✅ <b>Pengguna {target_id} berhasil disetujui!</b>")
+            try:
+                await context.bot.send_message(
+                    chat_id=target_id,
+                    text="🎉 <b>Selamat! Akses Anda telah disetujui oleh Admin.</b>\nKetik /start untuk mulai menggunakan bot!",
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception as e:
+                logger.warning(f"Gagal notif ke {target_id}: {e}")
+        else:
+            await update.message.reply_text(f"Gagal menyetujui Chat ID {target_id}.")
+
+    async def reject_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /reject <chat_id> khusus Admin."""
+        if not update.effective_user or str(update.effective_user.id).strip() != self.admin_id:
+            await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
+            return
+
+        if not context.args:
+            await update.message.reply_html("⚠️ Format salah. Gunakan: <code>/reject &lt;chat_id&gt;</code>")
+            return
+
+        target_id = context.args[0].strip()
+        self.storage.reject_user(target_id)
+        await update.message.reply_html(f"🚫 <b>Pengguna {target_id} telah ditolak/dicabut.</b>")
+        try:
+            await context.bot.send_message(
+                chat_id=target_id,
+                text="🚫 <b>Akses Ditolak</b>\nAdmin telah menolak atau mencabut akses Anda ke bot ini.",
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception:
+            pass
+
+    async def users_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /users untuk melihat daftar pengguna (khusus Admin)."""
+        if not update.effective_user or str(update.effective_user.id).strip() != self.admin_id:
+            await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
+            return
+
+        users = self.storage.list_all_users()
+        if not users:
+            await update.message.reply_text("Belum ada pengguna lain yang meminta akses.")
+            return
+
+        lines = ["👥 <b>DAFTAR PENGGUNA BOT:</b>", "━━━━━━━━━━━━━━━━━━━━━━"]
+        for u in users:
+            st = u.get("status", "pending")
+            emoji = "🟢" if st == "approved" else "🔴" if st == "rejected" else "🟡"
+            cid = u.get("chat_id", "-")
+            name = u.get("full_name") or u.get("username") or "-"
+            lines.append(f"{emoji} <b>{html.escape(name)}</b> (<code>{cid}</code>) - <i>{st.upper()}</i>")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("👉 Ketik <code>/approve &lt;id&gt;</code> atau <code>/reject &lt;id&gt;</code>")
+        await update.message.reply_html("\n".join(lines))
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /start dan /help"""
+        if not await self.check_user_access(update, context):
+            return
         user_name = update.effective_user.first_name if update.effective_user else "Trader"
         welcome_text = (
             f"👋 Halo <b>{html.escape(user_name)}</b>!\n\n"
@@ -185,6 +335,8 @@ class TelegramBotCommands:
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /status untuk cek kondisi bot."""
+        if not await self.check_user_access(update, context):
+            return
         cfg = load_config()
         strat_active = cfg.get("strategies", {}).get("active", "Default")
         interval = cfg.get("scheduler", {}).get("interval_minutes", 15)
@@ -205,6 +357,8 @@ class TelegramBotCommands:
 
     async def watchlist_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /watchlist untuk melihat daftar saham."""
+        if not await self.check_user_access(update, context):
+            return
         cfg = load_config()
         watchlist = cfg.get("watchlist", [])
 
@@ -230,6 +384,8 @@ class TelegramBotCommands:
 
     async def lasthistory_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /lasthistory untuk melihat 5 riwayat sinyal terakhir."""
+        if not await self.check_user_access(update, context):
+            return
         signals = self.storage.get_recent_signals(limit=5)
 
         if not signals:
@@ -255,6 +411,8 @@ class TelegramBotCommands:
 
     async def scan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /scan untuk menjalankan pemindaian on-demand."""
+        if not await self.check_user_access(update, context):
+            return
         await update.message.reply_html("🔍 <i>Sedang memindai saham potensial di watchlist, mohon tunggu sebentar...</i>")
         import asyncio
         from scheduler.run_scheduler import PipelineRunner
@@ -282,6 +440,8 @@ class TelegramBotCommands:
 
     async def harian_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /harian untuk melihat rekomendasi sinyal trading harian lengkap dengan TP & SL."""
+        if not await self.check_user_access(update, context):
+            return
         await update.message.reply_html("⏳ <i>Menganalisis saham potensial untuk Trading Harian (Day Trading & Swing)...</i>")
 
         from data.fetcher import DataFetcher
@@ -365,6 +525,8 @@ class TelegramBotCommands:
 
     async def gold_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /gold dan /xau untuk analisis teknikal & sinyal Emas Dunia (XAU/USD)."""
+        if not await self.check_user_access(update, context):
+            return
         await update.message.reply_html("⏳ <i>Menganalisis pergerakan harga emas dunia XAU/USD (COMEX Gold)...</i>")
         import asyncio
         from data.fetcher import DataFetcher
@@ -524,6 +686,9 @@ def build_telegram_application() -> Optional[Application]:
     app.add_handler(CommandHandler("scan", cmd_handler.scan_command))
     app.add_handler(CommandHandler("watchlist", cmd_handler.watchlist_command))
     app.add_handler(CommandHandler("lasthistory", cmd_handler.lasthistory_command))
+    app.add_handler(CommandHandler("approve", cmd_handler.approve_command))
+    app.add_handler(CommandHandler("reject", cmd_handler.reject_command))
+    app.add_handler(CommandHandler("users", cmd_handler.users_command))
 
     return app
 

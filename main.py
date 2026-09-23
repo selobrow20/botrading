@@ -224,7 +224,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
     # Jalankan initial run di thread terpisah agar tidak menahan startup listener Telegram
     t_init = threading.Thread(
         target=runner.run_pipeline,
-        kwargs={"force_run": True},
+        kwargs={"force_run": False},
         daemon=True,
         name="InitialScanThread",
     )

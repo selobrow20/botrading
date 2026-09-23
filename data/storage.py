@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
@@ -97,6 +98,18 @@ class StockStorage:
                     profit_factor REAL,
                     max_drawdown REAL NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            # Tabel 4: Pengguna Terotorisasi (Access Control / Whitelist)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS authorized_users (
+                    chat_id TEXT PRIMARY KEY,
+                    username TEXT,
+                    full_name TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    requested_at TEXT NOT NULL,
+                    approved_at TEXT
                 );
             """)
             conn.commit()
@@ -377,3 +390,84 @@ class StockStorage:
             )
             conn.commit()
             return cursor.lastrowid
+
+    # ----------------------------------------------------
+    # SISTEM HAK AKSES & OTORISASI PENGGUNA (WHITELIST)
+    # ----------------------------------------------------
+
+    def register_or_get_user(self, chat_id: str, username: str = "", full_name: str = "") -> str:
+        """Mendaftarkan pengguna baru (status pending) atau mengembalikan status jika sudah ada."""
+        chat_id_str = str(chat_id).strip()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status FROM authorized_users WHERE chat_id = ?", (chat_id_str,))
+            row = cursor.fetchone()
+            if row:
+                return str(row["status"])
+
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute("""
+                INSERT INTO authorized_users (chat_id, username, full_name, status, requested_at)
+                VALUES (?, ?, ?, 'pending', ?)
+            """, (chat_id_str, username or "", full_name or "", now_str))
+            return "pending"
+
+    def is_user_authorized(self, chat_id: str, admin_id: Optional[str] = None) -> bool:
+        """Memeriksa apakah pengguna diizinkan menggunakan bot."""
+        chat_id_str = str(chat_id).strip()
+        if admin_id and chat_id_str == str(admin_id).strip():
+            return True
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status FROM authorized_users WHERE chat_id = ?", (chat_id_str,))
+            row = cursor.fetchone()
+            if row and row["status"] == "approved":
+                return True
+        return False
+
+    def approve_user(self, chat_id: str) -> bool:
+        """Menyetujui akses pengguna."""
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE authorized_users 
+                SET status = 'approved', approved_at = ? 
+                WHERE chat_id = ?
+            """, (now_str, str(chat_id).strip()))
+            return cursor.rowcount > 0
+
+    def reject_user(self, chat_id: str) -> bool:
+        """Menolak atau mencabut akses pengguna."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE authorized_users 
+                SET status = 'rejected' 
+                WHERE chat_id = ?
+            """, (str(chat_id).strip(),))
+            return cursor.rowcount > 0
+
+    def get_approved_chat_ids(self, admin_id: Optional[str] = None) -> List[str]:
+        """Daftar chat ID yang aktif diizinkan menerima sinyal."""
+        approved = set()
+        if admin_id and str(admin_id).strip():
+            approved.add(str(admin_id).strip())
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT chat_id FROM authorized_users WHERE status = 'approved'")
+            for r in cursor.fetchall():
+                approved.add(str(r["chat_id"]).strip())
+        return list(approved)
+
+    def list_all_users(self) -> List[Dict[str, Any]]:
+        """Daftar seluruh pengguna yang pernah meminta akses bot."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT chat_id, username, full_name, status, requested_at, approved_at 
+                FROM authorized_users 
+                ORDER BY requested_at DESC
+            """)
+            return [dict(r) for r in cursor.fetchall()]
+

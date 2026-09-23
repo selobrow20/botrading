@@ -5,6 +5,7 @@ from datetime import datetime, time as dtime
 from typing import Optional, Tuple, Dict, Any, List
 from pathlib import Path
 from zoneinfo import ZoneInfo
+import pandas as pd
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -234,7 +235,8 @@ class PipelineRunner:
                 sig_result = self.signal_engine.evaluate_bar(df_ind, ticker=ticker, bar_idx=-1)
 
                 is_duplicate, dup_reason = self._check_duplicate(sig_result)
-                should_notify = (sig_result.signal in ["BUY", "SELL"]) and (not is_duplicate)
+                is_fresh, fresh_reason = self._is_candle_fresh(sig_result, item_interval)
+                should_notify = (sig_result.signal in ["BUY", "SELL"]) and (not is_duplicate) and is_fresh
 
                 if sig_result.signal in ["BUY", "SELL"]:
                     results["signals_triggered"] += 1
@@ -250,11 +252,13 @@ class PipelineRunner:
                     is_notified=should_notify,
                 )
 
-                # Kirim Notifikasi jika sinyal valid dan bukan duplikat
+                # Kirim Notifikasi jika sinyal valid, bukan duplikat, dan candle segar
                 if should_notify:
                     logger.info(f"🚨 Sinyal Baru Terdeteksi: {sig_result.signal} {sig_result.ticker} @ {sig_result.price}")
                     self.notifier.send_signal(sig_result)
                     results["signals_notified"] += 1
+                elif not is_fresh and (sig_result.signal in ["BUY", "SELL"]):
+                    logger.info(f"Sinyal {sig_result.signal} untuk {ticker} tidak dinotifikasikan ({fresh_reason}).")
                 elif is_duplicate:
                     logger.debug(f"Sinyal {sig_result.signal} untuk {ticker} dilewati (Duplikat: {dup_reason}).")
 
@@ -306,6 +310,39 @@ class PipelineRunner:
 
         return False, "Sinyal baru / perubahan status sinyal."
 
+    def _is_candle_fresh(self, sig: SignalResult, interval: str) -> Tuple[bool, str]:
+        """
+        Memeriksa apakah candle sinyal cukup segar untuk dinotifikasikan secara live.
+        Mencegah pengiriman sinyal lama (stale) saat bot baru direstart di luar jam aktif.
+        """
+        if interval == "1d":
+            return True, "Candle harian valid."
+
+        try:
+            ts = pd.to_datetime(sig.candle_time)
+            tz_wib = ZoneInfo("Asia/Jakarta")
+            now_wib = datetime.now(tz_wib)
+
+            if ts.tzinfo is not None:
+                ts_wib = ts.tz_convert(tz_wib)
+            else:
+                ts_wib = ts.tz_localize(tz_wib)
+
+            age_seconds = (now_wib - ts_wib).total_seconds()
+            if age_seconds < 0:
+                return True, "Candle waktu berjalan."
+
+            # Batas toleransi: 45 menit untuk 15m/30m, 75 menit untuk 1h
+            max_age = 75 * 60 if interval == "1h" else 45 * 60
+            if age_seconds > max_age:
+                age_mins = int(age_seconds // 60)
+                return False, f"Candle kedaluwarsa ({age_mins}m lalu > batas {max_age // 60}m)"
+
+            return True, "Candle segar."
+        except Exception as e:
+            logger.debug(f"Gagal memeriksa kesegaran candle {sig.candle_time}: {e}")
+            return True, "Pengecekan kesegaran dilewati."
+
 
 def start_scheduler() -> None:
     """Menjalankan background scheduler secara berkala sesuai konfigurasi."""
@@ -326,9 +363,9 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
-    # Jalankan 1 kali secara instan saat bot pertama dinyalakan
+    # Jalankan 1 kali saat startup jika jam pasar buka
     logger.info("Menjalankan pipeline inisial pertama kali saat startup...")
-    runner.run_pipeline(force_run=True)
+    runner.run_pipeline(force_run=False)
 
     print("\n" + "=" * 75)
     print(f"🚀 SCHEDULER BOT AKTIF! Memantau tiap {interval_mins} menit.")
