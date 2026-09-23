@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import pandas as pd
 from config.settings import load_config, setup_logger
 from indicators.technical import TechnicalIndicators
@@ -22,6 +22,11 @@ class SignalResult:
     take_profit_price: Optional[float] = None
     stop_loss_price: Optional[float] = None
     risk_reward_ratio: Optional[float] = None
+    # Validasi & Telaah 7 Buku PDF untuk Sinyal Masuk (BUY)
+    pdf_confluence_score: float = 0.0
+    setup_grade: str = ""
+    pdf_confluence_details: List[str] = field(default_factory=list)
+    market_direction_prediction: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -35,6 +40,10 @@ class SignalResult:
             "take_profit_price": self.take_profit_price,
             "stop_loss_price": self.stop_loss_price,
             "risk_reward_ratio": self.risk_reward_ratio,
+            "pdf_confluence_score": self.pdf_confluence_score,
+            "setup_grade": self.setup_grade,
+            "pdf_confluence_details": self.pdf_confluence_details,
+            "market_direction_prediction": self.market_direction_prediction,
         }
 
 
@@ -64,12 +73,122 @@ class SignalEngine:
 
         return loaded_strategies
 
+    @staticmethod
+    def validate_pdf_entry_confluence(
+        curr_row: pd.Series,
+        prev_row: Optional[pd.Series] = None,
+        snapshot: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[bool, float, str, List[str], str]:
+        """
+        Memvalidasi sinyal masuk (BUY) berdasarkan kaidah & teori 7 Buku PDF Trading:
+        1. Bob Volman: Pullback ke Support Dinamis 20 EMA, Rejection Wick, pencegahan overextended.
+        2. Mega Profit: Candlestick Rejection (Pinbar hammer / Bullish Engulfing).
+        3. Fibonacci 99%: Menguji area Golden Pocket (50.0% - 61.8%).
+        4. Ichimoku: Struktur tren di atas Awan Kumo (Bullish Cloud).
+        5. John J. Murphy: Konfirmasi Volume buyer aktif (>= 1.05x).
+        6. Martin J. Pring: Tren Mayor Bullish (>= EMA 50) & Ruang Momentum RSI Sehat (<= 65).
+        7. Wave Principle: Pencegahan entry di pucuk gelombang impulsif.
+
+        Returns:
+            (is_approved, score_pct, setup_grade, validation_checks, market_direction_prediction)
+        """
+        score = 0.0
+        checks = []
+
+        close = float(curr_row.get("Close", 0.0))
+        ema20 = float(curr_row.get("ema_20", close))
+        ema50 = float(curr_row.get("ema_50", close))
+        rsi = float(curr_row.get("rsi", 50.0))
+        vol_ratio = float(curr_row.get("volume_ratio", 1.0))
+        wick_ratio = float(curr_row.get("rejection_wick_ratio", 0.0))
+        pinbar = bool(curr_row.get("pattern_pinbar", 0))
+        engulfing = bool(curr_row.get("pattern_engulfing", 0))
+        volman_pb = bool(curr_row.get("volman_pullback", 0))
+        fib_gz = bool(curr_row.get("fib_in_golden_zone", 0))
+        ichi_cloud = bool(curr_row.get("ichimoku_above_cloud", 0))
+
+        # 1. Martin J. Pring & John Murphy: Tren Mayor Bullish (Close >= EMA 50)
+        if close >= ema50:
+            score += 20.0
+            checks.append("✅ Martin Pring: Tren Mayor Bullish (Harga di atas EMA 50)")
+        else:
+            checks.append("⚠️ Martin Pring: Harga masih di bawah EMA 50 (Rentan koreksi)")
+
+        # 2. Bob Volman: Area Nilai Support Dinamis 20 EMA (Tidak mengejar pucuk)
+        dist_ema20_pct = abs(close - ema20) / max(ema20, 1.0) * 100.0
+        if volman_pb or dist_ema20_pct <= 2.0:
+            score += 20.0
+            pb_text = "Pullback Support 20 EMA" if volman_pb else f"Dekat Dinamis EMA 20 ({dist_ema20_pct:.1f}%)"
+            checks.append(f"✅ Bob Volman: Area Nilai Terpenuhi ({pb_text})")
+        else:
+            checks.append("⚠️ Bob Volman: Harga terlalu jauh dari 20 EMA (Overextended)")
+
+        # 3. Mega Profit & Bob Volman: Candlestick Rejection / Trigger
+        if pinbar:
+            score += 20.0
+            checks.append(f"✅ Mega Profit: Pola Pinbar Rejection Kuat (Ekor {wick_ratio*100:.0f}%)")
+        elif engulfing:
+            score += 20.0
+            checks.append("✅ Mega Profit: Pola Bullish Engulfing Terkonfirmasi")
+        elif wick_ratio >= 0.30:
+            score += 15.0
+            checks.append(f"✅ Bob Volman: Ekor Rejection Bawah Signifikan ({wick_ratio*100:.0f}%)")
+        else:
+            checks.append("⚠️ Candlestick: Belum ada ekor rejection / pinbar yang meyakinkan")
+
+        # 4. John J. Murphy: Konfirmasi Volume Buyer
+        if vol_ratio >= 1.05:
+            score += 15.0
+            checks.append(f"✅ John Murphy: Volume Buyer Mengonfirmasi ({vol_ratio:.1f}x)")
+        elif vol_ratio >= 0.90:
+            score += 10.0
+            checks.append(f"ℹ️ John Murphy: Volume Cukup Stabil ({vol_ratio:.1f}x)")
+        else:
+            checks.append(f"⚠️ John Murphy: Volume Rendah ({vol_ratio:.1f}x), Waspada Fakeout")
+
+        # 5. Martin Pring & Wave Principle: Ruang Momentum RSI
+        if 40.0 <= rsi <= 65.0:
+            score += 15.0
+            checks.append(f"✅ Martin Pring: RSI Ideal ({rsi:.1f}) - Masih Memiliki Ruang Naik")
+        elif rsi < 40.0:
+            score += 10.0
+            checks.append(f"ℹ️ RSI Rendah ({rsi:.1f}) - Potensi Rebound dari Oversold")
+        else:
+            checks.append(f"⚠️ Wave Principle: RSI Tinggi ({rsi:.1f}) - Rawan Pembalikan Arah")
+
+        # 6. Bonus Confluence: Fibonacci Golden Pocket atau Ichimoku Cloud
+        bonus_score = 0.0
+        if fib_gz:
+            bonus_score += 10.0
+            checks.append("🎯 Fibonacci: Memantul Presisi di Golden Pocket (50% - 61.8%)")
+        if ichi_cloud:
+            bonus_score += 5.0
+            checks.append("☁️ Ichimoku: Struktur Bullish di Atas Awan Kumo")
+        score = min(100.0, score + bonus_score)
+
+        # Penentuan Grade dan Keputusan
+        if score >= 75.0:
+            setup_grade = "Grade A+ (Setup Sempurna ⭐⭐⭐⭐⭐)"
+            prediction = "Arah market diprediksi kuat melanjutkan tren naik (Bullish Continuation / Breakout)."
+            is_approved = True
+        elif score >= 55.0:
+            setup_grade = "Grade A (Setup Kuat ⭐⭐⭐⭐)"
+            prediction = "Arah market diprediksi memantul ke atas (Technical Rebound) dari support dinamis."
+            is_approved = True
+        else:
+            setup_grade = "Grade B / Menunggu Konfluensi (⭐⭐)"
+            prediction = "Arah market masih konsolidasi / belum ada konfirmasi kuat dari buku trading."
+            is_approved = False
+
+        return is_approved, score, setup_grade, checks, prediction
+
     def evaluate_bar(
         self,
         df: pd.DataFrame,
         ticker: str,
         strategy: Optional[Strategy] = None,
         bar_idx: int = -1,
+        apply_pdf_filter: bool = True,
     ) -> SignalResult:
         """
         Mengevaluasi bar/candle tertentu (default candle terkini -1) terhadap strategi.
@@ -177,12 +296,25 @@ class SignalEngine:
             risk_dist = max(curr_price - sl_price, 1.0)
             rrr = round((tp_price - curr_price) / risk_dist, 2)
 
-        # 4. Keputusan Sinyal & Alasan
+        # 4. Keputusan Sinyal & Alasan (Didukung Telaah 7 Buku PDF)
+        pdf_approved, pdf_score, setup_grade, pdf_checks, direction_pred = self.validate_pdf_entry_confluence(
+            curr_row, prev_row, snapshot
+        )
+
         if is_buy:
-            signal = "BUY"
-            reasons = list(buy_reasons)
-            if patterns_detected:
-                reasons.append(f"Konfirmasi: {', '.join(patterns_detected[:2])}")
+            if apply_pdf_filter and not pdf_approved:
+                # Sinyal BUY ditahan jika konfluensi 7 buku belum cukup kuat
+                signal = "HOLD"
+                reasons = [
+                    f"Sinyal beli ditahan (Filter 7 Buku PDF). Skor konfluensi {pdf_score:.0f}% < 55%. "
+                    f"Menunggu konfirmasi arah market yang lebih pasti."
+                ]
+            else:
+                signal = "BUY"
+                reasons = list(buy_reasons)
+                reasons.append(f"Telaah 7 Buku: {setup_grade} ({pdf_score:.0f}%)")
+                if patterns_detected:
+                    reasons.append(f"Pola: {', '.join(patterns_detected[:2])}")
         elif is_sell:
             signal = "SELL"
             reasons = list(sell_reasons)
@@ -211,6 +343,10 @@ class SignalEngine:
             take_profit_price=tp_price if signal == "BUY" else None,
             stop_loss_price=sl_price if signal == "BUY" else None,
             risk_reward_ratio=rrr if signal == "BUY" else None,
+            pdf_confluence_score=pdf_score,
+            setup_grade=setup_grade,
+            pdf_confluence_details=pdf_checks,
+            market_direction_prediction=direction_pred,
         )
 
     def evaluate_all_strategies(

@@ -94,19 +94,44 @@ class TelegramNotifier:
         rsi_val = f"{snap.get('rsi', 0.0):.1f}"
         vol_ratio = f"{snap.get('volume_ratio', 1.0):.1f}x"
 
-        lines = [f"{action_emoji} <b>{sig.signal}: {display_ticker}</b> @ <b>{price_str}</b>"]
+        if sig.signal == "BUY":
+            lines = [f"🟢 <b>SINYAL ENTRY (MASUK): {display_ticker}</b> @ <b>{price_str}</b>"]
+            if sig.take_profit_price and sig.stop_loss_price:
+                tp_str = format_currency(sig.take_profit_price, sig.ticker)
+                sl_str = format_currency(sig.stop_loss_price, sig.ticker)
+                rrr = sig.risk_reward_ratio or 1.5
+                lines.append(f"🎯 TP: <b>{tp_str}</b> | 🛑 SL: <b>{sl_str}</b> (RRR 1:{rrr})")
 
-        if sig.take_profit_price and sig.stop_loss_price:
-            tp_str = format_currency(sig.take_profit_price, sig.ticker)
-            sl_str = format_currency(sig.stop_loss_price, sig.ticker)
-            rrr = sig.risk_reward_ratio or 1.5
-            lines.append(f"🎯 TP: <b>{tp_str}</b> | 🛑 SL: <b>{sl_str}</b> (RRR 1:{rrr})")
+            lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
 
-        lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
+            # Telaah 7 Buku PDF untuk Sinyal Masuk
+            pdf_details = getattr(sig, "pdf_confluence_details", [])
+            if pdf_details:
+                grade_str = getattr(sig, "setup_grade", "") or "Grade A"
+                score_val = getattr(sig, "pdf_confluence_score", 0.0)
+                lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+                lines.append(f"📚 <b>TELAAH 7 BUKU PDF ({grade_str} - {score_val:.0f}%):</b>")
+                for chk in pdf_details[:4]:
+                    lines.append(f"• {html.escape(chk)}")
 
-        if sig.reasons:
-            clean_reason = sig.reasons[0].split("(")[0].strip()
-            lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
+                pred = getattr(sig, "market_direction_prediction", "")
+                if pred:
+                    lines.append(f"🎯 <b>Prediksi Arah:</b> <i>{html.escape(pred)}</i>")
+            elif sig.reasons:
+                clean_reason = sig.reasons[0].split("(")[0].strip()
+                lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
+        else:
+            lines = [f"{action_emoji} <b>{sig.signal}: {display_ticker}</b> @ <b>{price_str}</b>"]
+            if sig.take_profit_price and sig.stop_loss_price:
+                tp_str = format_currency(sig.take_profit_price, sig.ticker)
+                sl_str = format_currency(sig.stop_loss_price, sig.ticker)
+                rrr = sig.risk_reward_ratio or 1.5
+                lines.append(f"🎯 TP: <b>{tp_str}</b> | 🛑 SL: <b>{sl_str}</b> (RRR 1:{rrr})")
+
+            lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
+            if sig.reasons:
+                clean_reason = sig.reasons[0].split("(")[0].strip()
+                lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
 
         return "\n".join(lines)
 

@@ -97,3 +97,70 @@ def test_master_confluence_strategy():
     sig = engine.evaluate_bar(df_ind, ticker="TEST.JK", strategy=strat)
     assert sig is not None
     assert sig.signal in ["BUY", "SELL", "HOLD"]
+
+
+def test_pdf_confluence_entry_validator():
+    """Menguji validator konfluensi 7 buku PDF sebelum mengizinkan sinyal masuk (BUY)."""
+    # 1. Kasus Setup Ideal (Grade A+)
+    row_ideal = pd.Series({
+        "Close": 105.0,
+        "ema_20": 104.5,
+        "ema_50": 100.0,
+        "rsi": 52.0,
+        "volume_ratio": 1.30,
+        "rejection_wick_ratio": 0.45,
+        "pattern_pinbar": 1,
+        "pattern_engulfing": 0,
+        "volman_pullback": 1,
+        "fib_in_golden_zone": 1,
+        "ichimoku_above_cloud": 1,
+    })
+    approved, score, grade, checks, pred = SignalEngine.validate_pdf_entry_confluence(row_ideal, None, {})
+    assert approved is True
+    assert score >= 75.0
+    assert "Grade A+" in grade
+    assert len(checks) >= 5
+    assert "Bullish" in pred
+
+    # 2. Kasus Setup Lemah / Menipu (Grade B - Ditolak)
+    row_weak = pd.Series({
+        "Close": 90.0,
+        "ema_20": 102.0,
+        "ema_50": 110.0,
+        "rsi": 78.0,
+        "volume_ratio": 0.25,
+        "rejection_wick_ratio": 0.05,
+        "pattern_pinbar": 0,
+        "pattern_engulfing": 0,
+        "volman_pullback": 0,
+        "fib_in_golden_zone": 0,
+        "ichimoku_above_cloud": 0,
+    })
+    approved_w, score_w, grade_w, checks_w, pred_w = SignalEngine.validate_pdf_entry_confluence(row_weak, None, {})
+    assert approved_w is False
+    assert score_w < 55.0
+    assert "Grade B" in grade_w
+
+    # 3. Format pesan notifikasi sinyal masuk (BUY) memuat telaah 7 buku
+    from notify.telegram_bot import TelegramNotifier
+    from strategy.signal_engine import SignalResult
+    notifier = TelegramNotifier()
+    sig_buy = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="Master_Confluence_Strategy",
+        signal="BUY",
+        price=4306.0,
+        candle_time="2026-09-23 20:30:00",
+        take_profit_price=4330.0,
+        stop_loss_price=4290.0,
+        risk_reward_ratio=1.5,
+        pdf_confluence_score=score,
+        setup_grade=grade,
+        pdf_confluence_details=checks,
+        market_direction_prediction=pred,
+    )
+    msg = notifier.format_signal_message(sig_buy)
+    assert "SINYAL ENTRY (MASUK)" in msg
+    assert "TELAAH 7 BUKU PDF" in msg
+    assert "Prediksi Arah" in msg
+
