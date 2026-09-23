@@ -2,13 +2,46 @@
 # KONFIGURASI BOT SINYAL TRADING SAHAM (IDX)
 # ==========================================
 
-# Daftar saham yang dipantau (Gunakan kode BEI + suffix .JK)
+# Daftar saham berpotensi cuan tertinggi di Indonesia (Likuiditas & Volatilitas Terbaik)
 watchlist:
+  # 1. Perbankan & Bluechips Utama (Likuiditas Tinggi & Penggerak IHSG)
   - BBCA.JK
   - BBRI.JK
   - BMRI.JK
-  - TLKM.JK
+  - BBNI.JK
+  - BRIS.JK
   - ASII.JK
+  - TLKM.JK
+
+  # 2. Komoditas Energi & Tambang (Volatilitas Lebar, Favorit Trader)
+  - ADRO.JK
+  - MEDC.JK
+  - PTBA.JK
+  - AKRA.JK
+  - PGAS.JK
+
+  # 3. Emas, Nikel & Mineral (Momentum Cuan Harian Tinggi)
+  - ANTM.JK
+  - MDKA.JK
+  - INCO.JK
+  - TINS.JK
+  - BRMS.JK
+
+  # 4. Konglomerasi & High-Beta (Pergerakan Harian Paling Cepat di IDX)
+  - BREN.JK
+  - BRPT.JK
+  - AMMN.JK
+  - CUAN.JK
+
+  # 5. Konsumer & Retail Aktif
+  - ICBP.JK
+  - AMRT.JK
+  - MYOR.JK
+  - ACES.JK
+
+  # 6. Teknologi & Finansial Digital
+  - GOTO.JK
+  - ARTO.JK
 
 # Pengaturan Pengambilan Data
 data:

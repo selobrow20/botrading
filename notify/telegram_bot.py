@@ -169,8 +169,9 @@ class TelegramBotCommands:
             f"👋 Halo <b>{html.escape(user_name)}</b>!\n\n"
             f"Selamat datang di <b>IDX Stock Signal Bot</b> 🇮🇩\n\n"
             f"<b>Perintah yang tersedia:</b>\n"
+            f"🔹 /scan - Pindai seluruh saham potensial sekarang juga (On-Demand)\n"
+            f"🔹 /watchlist - Lihat daftar saham potensial cuan & harga terkini\n"
             f"🔹 /status - Cek status kesehatan & info sistem bot\n"
-            f"🔹 /watchlist - Lihat daftar saham yang sedang dipantau\n"
             f"🔹 /lasthistory - Tampilkan 5 riwayat sinyal terakhir\n"
             f"🔹 /help - Bantuan & panduan bot\n\n"
             f"<i>Bot ini berjalan secara otomatis pada jam bursa IDX.</i>"
@@ -206,19 +207,20 @@ class TelegramBotCommands:
             await update.message.reply_text("Watchlist masih kosong di config.yaml.")
             return
 
-        lines = ["📋 <b>DAFTAR SAHAM YANG DIPANTAU (WATCHLIST):</b>", "━━━━━━━━━━━━━━━━━━━━━━"]
+        lines = ["📋 <b>DAFTAR SAHAM POTENSIAL CUAN (WATCHLIST):</b>", "━━━━━━━━━━━━━━━━━━━━━━"]
         for idx, ticker in enumerate(watchlist, 1):
-            # Ambil candle terakhir dari SQLite jika ada
-            df_last = self.storage.load_ohlcv(ticker, interval="1d", limit=1)
-            if not df_last.empty:
-                last_price = f"Rp {float(df_last['Close'].iloc[-1]):,.0f}"
-                last_date = df_last.index[-1].strftime("%d/%m")
-                lines.append(f"<b>{idx}.</b> <code>{ticker}</code>: {last_price} ({last_date})")
+            row = self.storage.get_latest_price_any_interval(ticker)
+            if row:
+                last_price = f"Rp {float(row['close']):,.0f}"
+                dt_str = str(row["datetime"])
+                # Format: DD/MM HH:MM
+                last_date = dt_str[5:16] if len(dt_str) >= 16 else dt_str
+                lines.append(f"<b>{idx}.</b> <code>{ticker}</code>: <b>{last_price}</b> ({last_date})")
             else:
-                lines.append(f"<b>{idx}.</b> <code>{ticker}</code>: (Belum ada data)")
+                lines.append(f"<b>{idx}.</b> <code>{ticker}</code>: (Sedang dianalisis...)")
 
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append("<i>Diperbarui otomatis saat jam perdagangan bursa.</i>")
+        lines.append("<i>Diperbarui otomatis tiap 15 menit saat jam bursa BEI.</i>")
         await update.message.reply_html("\n".join(lines))
 
     async def lasthistory_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -242,9 +244,30 @@ class TelegramBotCommands:
             lines.append(f"{emoji} <b>{sig_type}</b> - <code>{ticker}</code> @ {price}")
             lines.append(f"   <i>Waktu: {t_candle}</i>")
             lines.append(f"   <i>Pemicu: {html.escape(reason_str)}</i>")
-            lines.append("──────────────────────")
+    async def scan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /scan untuk menjalankan pemindaian on-demand."""
+        await update.message.reply_html("🔍 <i>Sedang memindai saham potensial di watchlist, mohon tunggu sebentar...</i>")
+        from scheduler.run_scheduler import PipelineRunner
+        runner = PipelineRunner(storage=self.storage)
+        res = runner.run_pipeline(force_run=True)
+        signals_triggered = res.get("signals_triggered", 0)
+        processed = res.get("processed", 0)
 
-        await update.message.reply_html("\n".join(lines))
+        reply_lines = [
+            f"✅ <b>Pemindaian Selesai!</b>",
+            f"• Saham Diproses: <b>{processed}</b>",
+            f"• Sinyal Aktif: <b>{signals_triggered}</b>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+        ]
+        for d in res.get("details", []):
+            if d["signal"] in ["BUY", "SELL"]:
+                emoji = "🟢" if d["signal"] == "BUY" else "🔴"
+                reply_lines.append(f"{emoji} <b>{d['signal']}</b>: <code>{d['ticker']}</code> @ Rp {d['price']:,.0f}")
+
+        if signals_triggered == 0:
+            reply_lines.append("<i>Semua saham saat ini dalam status netral (HOLD).</i>")
+
+        await update.message.reply_html("\n".join(reply_lines))
 
 
 def build_telegram_application() -> Optional[Application]:
@@ -259,6 +282,7 @@ def build_telegram_application() -> Optional[Application]:
 
     app.add_handler(CommandHandler(["start", "help"], cmd_handler.start_command))
     app.add_handler(CommandHandler("status", cmd_handler.status_command))
+    app.add_handler(CommandHandler("scan", cmd_handler.scan_command))
     app.add_handler(CommandHandler("watchlist", cmd_handler.watchlist_command))
     app.add_handler(CommandHandler("lasthistory", cmd_handler.lasthistory_command))
 

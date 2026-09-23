@@ -230,6 +230,28 @@ class StockStorage:
         )
         return df
 
+    def get_latest_price_any_interval(self, ticker: str) -> Optional[Dict[str, Any]]:
+        """Mendapatkan harga dan tanggal candle terakhir untuk suatu saham dari interval apa pun."""
+        ticker_clean = ticker.upper()
+        if not ticker_clean.endswith(".JK") and not "." in ticker_clean:
+            ticker_clean = f"{ticker_clean}.JK"
+
+        query = """
+            SELECT datetime, close, interval, volume
+            FROM ohlcv_data
+            WHERE ticker = ?
+            ORDER BY datetime DESC
+            LIMIT 1
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (ticker_clean,))
+            row = cursor.fetchone()
+
+        if row:
+            return dict(row)
+        return None
+
     def save_signal(
         self,
         ticker: str,
