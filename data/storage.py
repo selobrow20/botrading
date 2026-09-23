@@ -84,7 +84,8 @@ class StockStorage:
                     outcome TEXT DEFAULT 'OPEN',
                     exit_price REAL,
                     exit_time TEXT,
-                    pnl_pct REAL
+                    pnl_pct REAL,
+                    outcome_note TEXT
                 );
             """)
             cursor.execute("""
@@ -100,6 +101,7 @@ class StockStorage:
                 ("exit_price", "REAL"),
                 ("exit_time", "TEXT"),
                 ("pnl_pct", "REAL"),
+                ("outcome_note", "TEXT"),
             ]:
                 try:
                     cursor.execute(f"ALTER TABLE signals ADD COLUMN {col_name} {col_def};")
@@ -355,18 +357,18 @@ class StockStorage:
         logger.info(f"Sinyal {signal_type} untuk {ticker} tersimpan (ID: {signal_id}).")
         return signal_id
 
-    def update_open_signals_outcome(self, ticker: str, df: pd.DataFrame) -> int:
+    def resolve_open_signals(self, ticker: str, df: pd.DataFrame) -> List[Dict[str, Any]]:
         """
         Mengevaluasi sinyal terbuka (outcome = 'OPEN') terhadap bar-bar candle terbaru.
         Jika harga menyentuh TP -> WIN, jika menyentuh SL -> LOSE.
-        Mengembalikan jumlah sinyal yang diselesaikan (resolved).
+        Menghasilkan keterangan/evaluasi mendalam dan mengembalikan daftar sinyal yang terselesaikan.
         """
         if df.empty or "High" not in df.columns or "Low" not in df.columns:
-            return 0
+            return []
 
         clean_ticker = ticker.upper()
         query = """
-            SELECT id, ticker, signal_type, price, candle_time, take_profit_price, stop_loss_price
+            SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time, take_profit_price, stop_loss_price
             FROM signals
             WHERE ticker = ? AND outcome = 'OPEN' AND signal_type IN ('BUY', 'SELL')
             AND take_profit_price IS NOT NULL AND stop_loss_price IS NOT NULL
@@ -377,9 +379,9 @@ class StockStorage:
             open_signals = [dict(r) for r in cursor.fetchall()]
 
         if not open_signals:
-            return 0
+            return []
 
-        resolved_count = 0
+        resolved_signals = []
         is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
 
         df_eval = df.copy()
@@ -441,12 +443,55 @@ class StockStorage:
 
                     if outcome:
                         exit_time_str = bar_time.strftime("%Y-%m-%d %H:%M:%S")
+
+                        # Generate keterangan evaluasi hasil
+                        if outcome == "WIN":
+                            if is_gold:
+                                if sig_type == "BUY":
+                                    note = f"Target Take Profit tercapai (+{pnl_pct:.2f}%). Harga bergerak sesuai proyeksi ekspansi Wave 3 & Fibonacci Golden Pocket ke target resisten. Profit berhasil diamankan!"
+                                else:
+                                    note = f"Target Take Profit Short Gold tercapai (+{pnl_pct:.2f}%). Rejection di resisten 20 EMA & Awan Kumo menekan harga ke target TP. Profit sukses diamankan!"
+                            else:
+                                if sig_type == "BUY":
+                                    note = f"Target Take Profit tercapai (+{pnl_pct:.2f}%). Akumulasi volume buyer & pullback dinamis 20 EMA berhasil mengantarkan harga menyentuh target keuntungan!"
+                                else:
+                                    note = f"Target Exit pengaman tercapai (+{pnl_pct:.2f}%). Posisi diamankan sebelum koreksi lebih dalam."
+                        else:
+                            if is_gold:
+                                if sig_type == "BUY":
+                                    note = f"Batas Stop Loss pengaman tersentuh ({pnl_pct:+.2f}%). Tekanan seller menembus support dinamis. Disiplin SL berhasil membatasi risiko agar modal tetap terlindungi."
+                                else:
+                                    note = f"Batas Stop Loss pengaman tersentuh ({pnl_pct:+.2f}%). Terjadi lonjakan buyer melampaui batas toleransi risiko. Eksekusi SL disiplin memotong kerugian minimal."
+                            else:
+                                if sig_type == "BUY":
+                                    note = f"Batas Stop Loss tersentuh ({pnl_pct:+.2f}%). Support terlewati akibat volatilitas pasar. Eksekusi cut loss disiplin melindungi portofolio."
+                                else:
+                                    note = f"Batas Stop Loss pengaman tersentuh ({pnl_pct:+.2f}%). Sinyal ditutup disiplin sesuai risk management."
+
                         cursor.execute("""
                             UPDATE signals
-                            SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?
+                            SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?
                             WHERE id = ?
-                        """, (outcome, exit_price, exit_time_str, pnl_pct, sig_id))
-                        resolved_count += 1
+                        """, (outcome, exit_price, exit_time_str, pnl_pct, note, sig_id))
+
+                        resolved_dict = {
+                            "id": sig_id,
+                            "ticker": clean_ticker,
+                            "strategy_name": sig.get("strategy_name", ""),
+                            "signal_type": sig_type,
+                            "price": entry_price,
+                            "entry_price": entry_price,
+                            "take_profit_price": tp,
+                            "stop_loss_price": sl,
+                            "candle_time": sig.get("candle_time", ""),
+                            "outcome": outcome,
+                            "exit_price": exit_price,
+                            "exit_time": exit_time_str,
+                            "pnl_pct": pnl_pct,
+                            "outcome_note": note,
+                            "is_gold": is_gold,
+                        }
+                        resolved_signals.append(resolved_dict)
                         logger.info(
                             f"🎯 Sinyal #{sig_id} {sig_type} {clean_ticker} terselesaikan: "
                             f"{outcome} @ {exit_price} (PnL: {pnl_pct:+.2f}%) pada {exit_time_str}"
@@ -455,7 +500,45 @@ class StockStorage:
 
             conn.commit()
 
-        return resolved_count
+        return resolved_signals
+
+    def update_open_signals_outcome(self, ticker: str, df: pd.DataFrame) -> int:
+        """
+        Mengevaluasi sinyal terbuka (outcome = 'OPEN') terhadap bar-bar candle terbaru.
+        Jika harga menyentuh TP -> WIN, jika menyentuh SL -> LOSE.
+        Mengembalikan jumlah sinyal yang diselesaikan (resolved).
+        """
+        return len(self.resolve_open_signals(ticker, df))
+
+    def get_recent_completed_signals(
+        self, limit: int = 5, ticker: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Mengambil daftar sinyal yang telah terselesaikan (WIN / LOSE) beserta catatan keterangannya.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if ticker:
+                cursor.execute("""
+                    SELECT id, ticker, strategy_name, signal_type, price, candle_time,
+                           take_profit_price, stop_loss_price, outcome, exit_price, exit_time,
+                           pnl_pct, outcome_note
+                    FROM signals
+                    WHERE ticker = ? AND outcome IN ('WIN', 'LOSE')
+                    ORDER BY exit_time DESC, id DESC
+                    LIMIT ?
+                """, (ticker.upper(), limit))
+            else:
+                cursor.execute("""
+                    SELECT id, ticker, strategy_name, signal_type, price, candle_time,
+                           take_profit_price, stop_loss_price, outcome, exit_price, exit_time,
+                           pnl_pct, outcome_note
+                    FROM signals
+                    WHERE outcome IN ('WIN', 'LOSE')
+                    ORDER BY exit_time DESC, id DESC
+                    LIMIT ?
+                """, (limit,))
+            return [dict(r) for r in cursor.fetchall()]
 
     def get_win_rate_stats(self, ticker: Optional[str] = None) -> Dict[str, Any]:
         """

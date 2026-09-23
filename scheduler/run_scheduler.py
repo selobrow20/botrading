@@ -228,8 +228,17 @@ class PipelineRunner:
                     logger.warning(f"Data tidak mencukupi untuk {ticker}, dilewati.")
                     continue
 
-                # Evaluasi penyelesaian sinyal terbuka (TP / SL hit check)
-                self.storage.update_open_signals_outcome(ticker, df)
+                # Evaluasi penyelesaian sinyal terbuka (TP / SL hit check & laporan evaluasi)
+                resolved_signals = self.storage.resolve_open_signals(ticker, df)
+                for res_sig in resolved_signals:
+                    logger.info(
+                        f"🎯 Laporan TP/SL: {res_sig['ticker']} {res_sig['signal_type']} "
+                        f"-> {res_sig['outcome']} ({res_sig['pnl_pct']:+.2f}%)"
+                    )
+                    try:
+                        self.notifier.send_tp_sl_report(res_sig)
+                    except Exception as e:
+                        logger.error(f"Gagal mengirim laporan TP/SL {res_sig['ticker']} ke Telegram: {e}")
 
                 # Hitung Indikator
                 df_ind = TechnicalIndicators.add_all_indicators(df)

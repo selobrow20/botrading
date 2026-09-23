@@ -125,3 +125,12 @@ def test_update_open_signals_outcome_and_winrate():
         assert stats["win_rate_pct"] == 100.0
         assert stats["open_count"] == 0
 
+        # Verify completed signals with outcome_note (keterangan evaluasi)
+        comp_sigs = storage.get_recent_completed_signals(limit=5)
+        assert len(comp_sigs) == 2
+        for cs in comp_sigs:
+            assert cs["outcome"] == "WIN"
+            assert cs["outcome_note"] is not None
+            assert len(cs["outcome_note"]) > 10
+            assert "Take Profit" in cs["outcome_note"]
+

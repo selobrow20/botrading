@@ -186,3 +186,65 @@ def test_telegram_signal_formatter_shows_7_pdf_details():
     assert "Fibonacci" in msg
     assert "Ichimoku" in msg
     assert "Risk/Reward Ratio:</b> 1 : 2.0" in msg
+
+
+def test_format_tp_sl_report():
+    """Menguji penyusunan laporan hasil sinyal saat mencapai TP atau SL beserta keterangannya."""
+    notifier = TelegramNotifier()
+
+    # 1. Kasus Take Profit Tercapai (WIN) pada Emas
+    win_sig = {
+        "ticker": "XAUUSD",
+        "signal_type": "BUY",
+        "price": 4300.0,
+        "entry_price": 4300.0,
+        "take_profit_price": 4334.4,
+        "stop_loss_price": 4282.8,
+        "exit_price": 4334.4,
+        "pnl_pct": 0.80,
+        "candle_time": "2026-09-23 20:00:00",
+        "exit_time": "2026-09-23 21:15:00",
+        "outcome": "WIN",
+        "outcome_note": "Target Take Profit tercapai (+0.80%). Harga bergerak sesuai proyeksi Wave 3 & Golden Pocket. Profit berhasil diamankan!",
+    }
+    mock_stats = {
+        "win_rate": 85.0,
+        "win_count": 17,
+        "lose_count": 3,
+        "total_pnl": 34.5,
+    }
+
+    win_msg = notifier.format_tp_sl_report(win_sig, current_stats=mock_stats)
+    assert "[LAPORAN HASIL] TAKE PROFIT TERCAPAI!" in win_msg
+    assert "XAU/USD (Gold)" in win_msg
+    assert "WIN / PROFIT" in win_msg
+    assert "+0.80%" in win_msg
+    assert "$4,300.00" in win_msg
+    assert "$4,334.40" in win_msg
+    assert "KETERANGAN & EVALUASI" in win_msg
+    assert "Golden Pocket" in win_msg
+    assert "Win Rate Sekarang:</b> <code>85.0%</code>" in win_msg
+
+    # 2. Kasus Stop Loss Tersentuh (LOSE) pada Saham IDX
+    lose_sig = {
+        "ticker": "BBCA.JK",
+        "signal_type": "BUY",
+        "price": 10000.0,
+        "entry_price": 10000.0,
+        "take_profit_price": 10300.0,
+        "stop_loss_price": 9850.0,
+        "exit_price": 9850.0,
+        "pnl_pct": -1.50,
+        "candle_time": "2026-09-23 10:00:00",
+        "exit_time": "2026-09-23 13:45:00",
+        "outcome": "LOSE",
+        "outcome_note": "Batas Stop Loss tersentuh (-1.50%). Support terlewati akibat volatilitas pasar. Eksekusi cut loss disiplin melindungi portofolio.",
+    }
+
+    lose_msg = notifier.format_tp_sl_report(lose_sig, current_stats=mock_stats)
+    assert "[LAPORAN HASIL] STOP LOSS TERSENTUH!" in lose_msg
+    assert "BBCA" in lose_msg
+    assert "LOSE / PROTEKSI MODAL" in lose_msg
+    assert "-1.50%" in lose_msg
+    assert "cut loss disiplin melindungi portofolio" in lose_msg
+

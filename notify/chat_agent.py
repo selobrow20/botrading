@@ -146,10 +146,12 @@ class ChatAgent:
                 "ticker": "XAUUSD",
             }
 
-        # 6. Deteksi Pertanyaan Win Rate / Akurasi
+        # 6. Deteksi Pertanyaan Win Rate / Akurasi / Laporan Hasil TP/SL
         winrate_keywords = [
             "winrate", "win rate", "akurasi", "banyak win apa lose",
             "performa", "rekam jejak", "win lose", "lose rate",
+            "laporan", "evaluasi", "hasil rekomendasi", "pantau hasil", "hasil sinyal",
+            "udah tp", "udah sl", "kena tp", "kena sl", "riwayat tp", "riwayat sl",
         ]
         if any(k in text_lower for k in winrate_keywords):
             return {

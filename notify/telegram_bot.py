@@ -282,6 +282,104 @@ class TelegramNotifier:
                 success = False
         return success
 
+    def format_tp_sl_report(
+        self, res_sig: Dict[str, Any], current_stats: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Menyusun pesan laporan Telegram ketika sinyal menyentuh Take Profit (TP) atau Stop Loss (SL),
+        lengkap dengan evaluasi, rincian PnL, dan statistik akurasi Win Rate terkini.
+        """
+        ticker = res_sig.get("ticker", "UNKNOWN")
+        is_gold = any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        display_ticker = "XAU/USD (Gold)" if is_gold else ticker.replace(".JK", "")
+
+        outcome = res_sig.get("outcome", "WIN")
+        is_win = (outcome == "WIN")
+        sig_type = res_sig.get("signal_type", "BUY")
+
+        entry_p = float(res_sig.get("price") or res_sig.get("entry_price") or 0.0)
+        exit_p = float(res_sig.get("exit_price") or 0.0)
+        tp_p = float(res_sig.get("take_profit_price") or 0.0)
+        sl_p = float(res_sig.get("stop_loss_price") or 0.0)
+        pnl_pct = float(res_sig.get("pnl_pct") or 0.0)
+
+        entry_str = format_currency(entry_p, ticker)
+        exit_str = format_currency(exit_p, ticker)
+        tp_str = format_currency(tp_p, ticker) if tp_p else "-"
+        sl_str = format_currency(sl_p, ticker) if sl_p else "-"
+
+        candle_time = res_sig.get("candle_time", "-")
+        exit_time = res_sig.get("exit_time", "-")
+        note = res_sig.get("outcome_note", "")
+
+        stats = current_stats or self.storage.get_win_rate_stats()
+        wr = stats.get("win_rate", 0.0)
+        win_c = stats.get("win_count", 0)
+        lose_c = stats.get("lose_count", 0)
+        total_pnl = stats.get("total_pnl", 0.0)
+
+        if is_win:
+            header = "🎯 <b>[LAPORAN HASIL] TAKE PROFIT TERCAPAI!</b> 🚀"
+            outcome_badge = "🟢 <b>HASIL: WIN / PROFIT MAKSIMAL</b>"
+            pnl_badge = f"💰 <b>Keuntungan (PnL):</b> <code>+{abs(pnl_pct):.2f}%</code>"
+        else:
+            header = "🛑 <b>[LAPORAN HASIL] STOP LOSS TERSENTUH!</b> ⚠️"
+            outcome_badge = "🔴 <b>HASIL: LOSE / PROTEKSI MODAL</b>"
+            pnl_badge = f"📉 <b>Kerugian (PnL):</b> <code>-{abs(pnl_pct):.2f}%</code>"
+
+        action_label = "BUY / LONG" if sig_type == "BUY" else "SELL / SHORT" if is_gold else "SELL / EXIT"
+
+        lines = [
+            header,
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"📊 <b>Instrumen:</b> <code>{display_ticker}</code>",
+            f"⚡ <b>Aksi Sinyal:</b> <b>{action_label}</b>",
+            outcome_badge,
+            pnl_badge,
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "📌 <b>RINCIAN LEVEL HARGA:</b>",
+            f"• <b>Harga Entry:</b> <code>{entry_str}</code>",
+            f"• <b>Harga Keluar / Hit:</b> <code>{exit_str}</code>",
+            f"• <b>Target TP:</b> <code>{tp_str}</code>",
+            f"• <b>Stop Loss:</b> <code>{sl_str}</code>",
+            f"• <b>Waktu Entry:</b> {candle_time}",
+            f"• <b>Waktu Tercapai:</b> {exit_time}",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "📝 <b>KETERANGAN & EVALUASI:</b>",
+            f"<i>{html.escape(note)}</i>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "📊 <b>UPDATE STATISTIK AKURASI (WIN RATE):</b>",
+            f"🎯 <b>Win Rate Sekarang:</b> <code>{wr:.1f}%</code> ({win_c}W / {lose_c}L)",
+            f"💰 <b>Total Akumulasi PnL:</b> <code>{total_pnl:+.2f}%</code>",
+        ]
+
+        if is_win:
+            lines.append("🏆 <i>Setup konfluensi 7 buku PDF terbukti akurat mengunci profit!</i>")
+        else:
+            lines.append("🛡️ <i>Disiplin Stop Loss berhasil mencegah risiko kerugian lebih besar. Modal tetap aman!</i>")
+
+        return "\n".join(lines)
+
+    def send_tp_sl_report(self, res_sig: Dict[str, Any]) -> bool:
+        """
+        Mengirimkan kartu laporan hasil TP/SL ke seluruh pengguna Telegram yang disetujui.
+        """
+        msg = self.format_tp_sl_report(res_sig)
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        success = True
+        for cid in approved_ids:
+            try:
+                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
+                if not res:
+                    success = False
+            except Exception as e:
+                logger.error(f"Error saat broadcast laporan TP/SL ke {cid}: {e}")
+                success = False
+        return success
+
     def format_news_alert_message(self, analysis: Dict[str, Any]) -> str:
         """Menyusun pesan notifikasi 10 menit sebelum berita rilis dengan rekomendasi BUY/SELL berbasis PDF & Web."""
         bull = analysis["bullish_scenario"]
@@ -1079,6 +1177,8 @@ class TelegramBotCommands:
         idx_stats = stats.get("idx_stats", {})
         stars = "⭐" * min(5, max(1, int(wr / 20))) if comp > 0 else ""
 
+        recent_trades = self.storage.get_recent_completed_signals(limit=4)
+
         lines = [
             "📊 <b>STATISTIK AKURASI SINYAL (WIN / LOSE RATE)</b> 🏆",
             "━━━━━━━━━━━━━━━━━━━━━━",
@@ -1101,6 +1201,22 @@ class TelegramBotCommands:
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"💡 <i>{eval_note}</i>",
         ]
+
+        if recent_trades:
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append("📋 <b>LAPORAN HASIL REKOMENDASI TERAKHIR (TP / SL):</b>")
+            for rt in recent_trades:
+                c_out = rt.get("outcome", "WIN")
+                c_icon = "🟢 TP" if c_out == "WIN" else "🔴 SL"
+                c_tick = rt.get("ticker", "")
+                c_disp = "XAU/USD" if any(k in c_tick.upper() for k in ["GC=F", "XAUUSD", "GOLD"]) else c_tick.replace(".JK", "")
+                c_type = rt.get("signal_type", "BUY")
+                c_pnl = float(rt.get("pnl_pct") or 0.0)
+                c_note = rt.get("outcome_note") or "Selesai mencapai level target."
+                c_time = rt.get("exit_time") or rt.get("candle_time") or "-"
+                lines.append(f"• <b>[{c_icon}] {c_disp} ({c_type}):</b> <code>{c_pnl:+.2f}%</code> ({c_time})")
+                lines.append(f"  <i>Ket: {html.escape(c_note)}</i>")
+
         await update.message.reply_html("\n".join(lines))
 
     async def chart_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1533,6 +1649,7 @@ async def set_menu_commands(application: Application) -> None:
         BotCommand("news", "📰 Jadwal & Prediksi Pre-News (FOMC/CPI/NFP)"),
         BotCommand("harian", "🎯 Rekomendasi Sinyal Trading Harian (TP & SL)"),
         BotCommand("winrate", "📊 Statistik Akurasi Win / Lose Rate Bot"),
+        BotCommand("laporan", "📋 Laporan Hasil Rekomendasi (TP/SL) & Akurasi"),
         BotCommand("candle", "🕯️ Bedah Pola Candlestick & Price Action"),
         BotCommand("gold", "🥇 Analisis Sinyal Emas Dunia (XAU/USD)"),
         BotCommand("scan", "🔍 Pindai Sinyal Pasar Sekarang"),
@@ -1578,7 +1695,7 @@ def build_telegram_application() -> Optional[Application]:
     app.add_handler(CommandHandler(["potensi", "radar", "topsetup"], cmd_handler.potensi_command))
     app.add_handler(CommandHandler(["news", "fomc", "cpi", "nfp", "kalender"], cmd_handler.news_command))
     app.add_handler(CommandHandler(["harian", "tradingharian", "daytrade"], cmd_handler.harian_command))
-    app.add_handler(CommandHandler(["winrate", "performance", "akurasi"], cmd_handler.winrate_command))
+    app.add_handler(CommandHandler(["winrate", "performance", "akurasi", "laporan", "evaluasi"], cmd_handler.winrate_command))
     app.add_handler(CommandHandler(["candle", "candlestick", "pola"], cmd_handler.candle_command))
     app.add_handler(CommandHandler(["gold", "xau", "emas"], cmd_handler.gold_command))
     app.add_handler(CommandHandler("status", cmd_handler.status_command))
