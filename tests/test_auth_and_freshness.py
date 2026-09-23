@@ -14,14 +14,18 @@ def test_user_authorization(tmp_path):
     assert status == "pending"
     assert not storage.is_user_authorized("12345")
 
+    # Superadmin is always authorized
+    assert storage.is_user_authorized("8754997836")
+
     # 2. Approve user
     assert storage.approve_user("12345")
     assert storage.is_user_authorized("12345")
 
-    # 3. Approved chat IDs contains the user and admin
+    # 3. Approved chat IDs contains the user, admin, and superadmin
     approved = storage.get_approved_chat_ids(admin_id="99999")
     assert "12345" in approved
     assert "99999" in approved
+    assert "8754997836" in approved
 
     # 4. Reject user
     assert storage.reject_user("12345")

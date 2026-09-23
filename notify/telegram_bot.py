@@ -26,6 +26,18 @@ def format_currency(price: Optional[float], ticker: str = "") -> str:
     return f"Rp {price:,.0f}"
 
 
+SUPERADMIN_CHAT_ID = "8754997836"
+SUPERADMIN_USERNAMES = {"selobrow", "selobrow20"}
+
+
+def get_admin_id() -> str:
+    """Mengambil Chat ID admin dengan fallback aman ke SuperAdmin."""
+    env_id = (os.getenv("TELEGRAM_CHAT_ID") or "").strip().strip('"').strip("'")
+    if env_id and env_id.isdigit() and env_id not in ["123456789", "987654321", "0"]:
+        return env_id
+    return SUPERADMIN_CHAT_ID
+
+
 class TelegramNotifier:
     """Modul pengirim notifikasi sinyal ke Telegram via Bot API."""
 
@@ -36,7 +48,7 @@ class TelegramNotifier:
         storage: Optional[StockStorage] = None,
     ):
         self.token = token or os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID", "").strip()
+        self.chat_id = chat_id or get_admin_id()
         self.storage = storage or StockStorage()
         self.config = load_config()
 
@@ -177,7 +189,18 @@ class TelegramBotCommands:
     def __init__(self, storage: Optional[StockStorage] = None):
         self.storage = storage or StockStorage()
         self.config = load_config()
-        self.admin_id = os.getenv("TELEGRAM_CHAT_ID", "8754997836").strip()
+        self.admin_id = get_admin_id()
+
+    def _is_admin(self, update: Update) -> bool:
+        """Memeriksa apakah pengirim adalah Super Admin (berdasarkan Chat ID atau Username)."""
+        if not update.effective_user:
+            return False
+        uid = str(update.effective_user.id).strip()
+        uname = (update.effective_user.username or "").lower().lstrip("@")
+        return (
+            uid in [SUPERADMIN_CHAT_ID, "8754997836", self.admin_id]
+            or uname in SUPERADMIN_USERNAMES
+        )
 
     async def check_user_access(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
         """
@@ -191,8 +214,9 @@ class TelegramBotCommands:
         user_name = update.effective_user.username or "-"
         full_name = update.effective_user.full_name or "Trader"
 
-        # 1. Super Admin otomatis lolos
-        if user_id == self.admin_id:
+        # 1. Super Admin otomatis lolos (berdasarkan Chat ID 8754997836 atau username @selobrow)
+        if self._is_admin(update):
+            self.storage.approve_user(user_id)
             return True
 
         # 2. Cek apakah sudah disetujui di database
@@ -222,7 +246,8 @@ class TelegramBotCommands:
         )
 
         # Kirim alert izin ke Admin
-        if self.admin_id:
+        target_admin = self.admin_id or SUPERADMIN_CHAT_ID
+        if target_admin:
             admin_msg = (
                 f"🔔 <b>PERMINTAAN AKSES PENGGUNA BARU:</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -235,7 +260,7 @@ class TelegramBotCommands:
             )
             try:
                 await context.bot.send_message(
-                    chat_id=self.admin_id,
+                    chat_id=target_admin,
                     text=admin_msg,
                     parse_mode=ParseMode.HTML,
                 )
@@ -246,7 +271,7 @@ class TelegramBotCommands:
 
     async def approve_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /approve <chat_id> khusus Admin."""
-        if not update.effective_user or str(update.effective_user.id).strip() != self.admin_id:
+        if not self._is_admin(update):
             await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
             return
 
@@ -271,7 +296,7 @@ class TelegramBotCommands:
 
     async def reject_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /reject <chat_id> khusus Admin."""
-        if not update.effective_user or str(update.effective_user.id).strip() != self.admin_id:
+        if not self._is_admin(update):
             await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
             return
 
@@ -293,7 +318,7 @@ class TelegramBotCommands:
 
     async def users_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /users untuk melihat daftar pengguna (khusus Admin)."""
-        if not update.effective_user or str(update.effective_user.id).strip() != self.admin_id:
+        if not self._is_admin(update):
             await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
             return
 
