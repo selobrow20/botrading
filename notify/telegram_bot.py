@@ -5,9 +5,9 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Optional, List, Dict, Any
 from pathlib import Path
-from telegram import Bot, Update
+from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 
 from config.settings import load_config, setup_logger
 from data.storage import StockStorage
@@ -245,7 +245,7 @@ class TelegramBotCommands:
             "⏳ <i>Mohon tunggu hingga Admin menyetujui akses Anda.</i>"
         )
 
-        # Kirim alert izin ke Admin
+        # Kirim alert izin ke Admin beserta tombol klik langsung
         target_admin = self.admin_id or SUPERADMIN_CHAT_ID
         if target_admin:
             admin_msg = (
@@ -255,19 +255,72 @@ class TelegramBotCommands:
                 f"💬 <b>Username:</b> @{html.escape(user_name)}\n"
                 f"🆔 <b>Chat ID:</b> <code>{user_id}</code>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"👉 Izinkan: <code>/approve {user_id}</code>\n"
-                f"👉 Tolak: <code>/reject {user_id}</code>"
+                f"<i>Klik salah satu tombol di bawah:</i>"
             )
+            keyboard = [
+                [
+                    InlineKeyboardButton("✅ Izinkan (Approve)", callback_data=f"approve_{user_id}"),
+                    InlineKeyboardButton("🚫 Tolak (Reject)", callback_data=f"reject_{user_id}"),
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
             try:
                 await context.bot.send_message(
                     chat_id=target_admin,
                     text=admin_msg,
                     parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup,
                 )
             except Exception as e:
                 logger.error(f"Gagal kirim notif izin ke Admin: {e}")
 
         return False
+
+    async def button_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler klik tombol interaktif (Izinkan / Tolak) khusus Admin."""
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+
+        if not self._is_admin(update):
+            await query.answer("⛔ Hanya Admin yang berhak memproses akses.", show_alert=True)
+            return
+
+        data = query.data or ""
+        msg_text = query.message.text or ""
+
+        if data.startswith("approve_"):
+            target_id = data.replace("approve_", "").strip()
+            self.storage.approve_user(target_id)
+            await query.edit_message_text(
+                text=f"{msg_text}\n\n✅ <b>STATUS: DISETUJUI OLEH ADMIN</b> 🎉\nPengguna sekarang memiliki akses penuh ke bot.",
+                parse_mode=ParseMode.HTML,
+            )
+            try:
+                await context.bot.send_message(
+                    chat_id=target_id,
+                    text="🎉 <b>Selamat! Permintaan akses Anda telah disetujui oleh Admin.</b>\nKetik /start untuk mulai menggunakan bot!",
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception as e:
+                logger.warning(f"Gagal kirim pesan approved ke {target_id}: {e}")
+
+        elif data.startswith("reject_"):
+            target_id = data.replace("reject_", "").strip()
+            self.storage.reject_user(target_id)
+            await query.edit_message_text(
+                text=f"{msg_text}\n\n🚫 <b>STATUS: DITOLAK OLEH ADMIN</b>\nAkses pengguna ini telah diblokir.",
+                parse_mode=ParseMode.HTML,
+            )
+            try:
+                await context.bot.send_message(
+                    chat_id=target_id,
+                    text="🚫 <b>Akses Ditolak</b>\nMaaf, permintaan akses Anda ke bot ini ditolak oleh Admin.",
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception:
+                pass
 
     async def approve_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /approve <chat_id> khusus Admin."""
@@ -798,6 +851,7 @@ def build_telegram_application() -> Optional[Application]:
     app.add_handler(CommandHandler("approve", cmd_handler.approve_command))
     app.add_handler(CommandHandler("reject", cmd_handler.reject_command))
     app.add_handler(CommandHandler("users", cmd_handler.users_command))
+    app.add_handler(CallbackQueryHandler(cmd_handler.button_callback_handler))
 
     return app
 
