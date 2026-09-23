@@ -270,6 +270,9 @@ def run_telegram_bot_polling() -> None:
     app = build_telegram_application()
     if app:
         logger.info("Memulai Telegram bot polling listener...")
-        app.run_polling()
+        try:
+            app.run_polling(stop_signals=None)
+        except Exception:
+            app.run_polling()
     else:
         logger.error("Gagal menjalankan bot: Token Telegram tidak valid.")

@@ -197,11 +197,56 @@ def cmd_telegram(args: argparse.Namespace) -> None:
 
 
 def cmd_run_all(args: argparse.Namespace) -> None:
-    """Menjalankan Scheduler dan Bot Telegram bersamaan."""
-    print("Menjalankan Scheduler & Bot Telegram secara paralel...")
-    t_bot = threading.Thread(target=run_telegram_bot_polling, daemon=True)
-    t_bot.start()
-    start_scheduler()
+    """Menjalankan Scheduler dan Bot Telegram bersamaan secara optimal."""
+    import time
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.triggers.interval import IntervalTrigger
+    from notify.telegram_bot import build_telegram_application
+    from scheduler.run_scheduler import PipelineRunner
+
+    print("🚀 Menjalankan Scheduler & Bot Telegram secara paralel...")
+    cfg = load_config()
+    sched_cfg = cfg.get("scheduler", {})
+    interval_mins = int(sched_cfg.get("interval_minutes", 15))
+
+    runner = PipelineRunner()
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(
+        runner.run_pipeline,
+        trigger=IntervalTrigger(minutes=interval_mins),
+        id="idx_stock_analysis_job",
+        name="Analisis Saham Berkala IDX",
+        replace_existing=True,
+    )
+    scheduler.start()
+    logger.info(f"BackgroundScheduler aktif (interval: {interval_mins} menit).")
+
+    # Jalankan initial run di thread terpisah agar tidak menahan startup listener Telegram
+    t_init = threading.Thread(
+        target=runner.run_pipeline,
+        kwargs={"force_run": True},
+        daemon=True,
+        name="InitialScanThread",
+    )
+    t_init.start()
+
+    # Jalankan Telegram Bot Polling di main thread
+    app = build_telegram_application()
+    if app:
+        logger.info("Telegram Bot Polling listener berjalan di main thread...")
+        try:
+            app.run_polling()
+        except (KeyboardInterrupt, SystemExit):
+            logger.info("Mematikan bot...")
+        finally:
+            scheduler.shutdown()
+    else:
+        logger.warning("Token Telegram belum terkonfigurasi. Scheduler berjalan di background.")
+        try:
+            while True:
+                time.sleep(1)
+        except (KeyboardInterrupt, SystemExit):
+            scheduler.shutdown()
 
 
 def main():
