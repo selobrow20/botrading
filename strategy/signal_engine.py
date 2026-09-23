@@ -78,16 +78,17 @@ class SignalEngine:
         curr_row: pd.Series,
         prev_row: Optional[pd.Series] = None,
         snapshot: Optional[Dict[str, Any]] = None,
+        signal_type: str = "BUY",
     ) -> Tuple[bool, float, str, List[str], str]:
         """
-        Memvalidasi sinyal masuk (BUY) berdasarkan kaidah & teori 7 Buku PDF Trading:
-        1. Bob Volman: Pullback ke Support Dinamis 20 EMA, Rejection Wick, pencegahan overextended.
-        2. Mega Profit: Candlestick Rejection (Pinbar hammer / Bullish Engulfing).
-        3. Fibonacci 99%: Menguji area Golden Pocket (50.0% - 61.8%).
-        4. Ichimoku: Struktur tren di atas Awan Kumo (Bullish Cloud).
-        5. John J. Murphy: Konfirmasi Volume buyer aktif (>= 1.05x).
-        6. Martin J. Pring: Tren Mayor Bullish (>= EMA 50) & Ruang Momentum RSI Sehat (<= 65).
-        7. Wave Principle: Pencegahan entry di pucuk gelombang impulsif.
+        Memvalidasi sinyal masuk (BUY / SELL) berdasarkan kaidah & teori lengkap 7 Buku PDF Trading:
+        1. Fibonachi 99% Profit: Area pantulan Golden Pocket (50.0% - 61.8%).
+        2. Ichimoku - Forex: Posisi tren Awan Kumo (Bullish/Bearish Cloud) & TK Cross.
+        3. Under Standing Price Action (Bob Volman): Area Nilai 20 EMA, Rejection Wick, & Kompresi Buildup.
+        4. Mega Profit - Forex: Trigger Candlestick Reversal (Pinbar Hammer / Engulfing / Shooting Star).
+        5. Technical Analysis Explained (Martin J. Pring): Tren Mayor 50/200 EMA & Ruang Momentum RSI.
+        6. Technical Analysis Of Financial Markets (John J. Murphy): Konfirmasi Volume Buyer/Seller (>= 1.1x).
+        7. Wave Principle - Forex: Identifikasi gelombang impulsif sehat & pencegahan entry di pucuk Wave 5.
 
         Returns:
             (is_approved, score_pct, setup_grade, validation_checks, market_direction_prediction)
@@ -96,88 +97,175 @@ class SignalEngine:
         checks = []
 
         close = float(curr_row.get("Close", 0.0))
+        high = float(curr_row.get("High", close))
+        low = float(curr_row.get("Low", close))
+        open_p = float(curr_row.get("Open", close))
         ema20 = float(curr_row.get("ema_20", close))
         ema50 = float(curr_row.get("ema_50", close))
+        ema200 = float(curr_row.get("ema_200", close))
         rsi = float(curr_row.get("rsi", 50.0))
         vol_ratio = float(curr_row.get("volume_ratio", 1.0))
         wick_ratio = float(curr_row.get("rejection_wick_ratio", 0.0))
+        candle_range = max(high - low, 0.001)
+        upper_wick_ratio = max(0.0, (high - max(open_p, close)) / candle_range)
+
         pinbar = bool(curr_row.get("pattern_pinbar", 0))
         engulfing = bool(curr_row.get("pattern_engulfing", 0))
+        shooting_star = bool(curr_row.get("pattern_shooting_star", 0)) or upper_wick_ratio >= 0.35
         volman_pb = bool(curr_row.get("volman_pullback", 0))
+        volman_buildup = bool(curr_row.get("volman_buildup", 0))
         fib_gz = bool(curr_row.get("fib_in_golden_zone", 0))
+        fib_500 = float(curr_row.get("fib_500", close))
+        fib_618 = float(curr_row.get("fib_618", close))
         ichi_cloud = bool(curr_row.get("ichimoku_above_cloud", 0))
+        ichi_green = bool(curr_row.get("ichimoku_cloud_green", 0))
+        ichi_tk = bool(curr_row.get("ichimoku_tk_cross", 0))
 
-        # 1. Martin J. Pring & John Murphy: Tren Mayor Bullish (Close >= EMA 50)
-        if close >= ema50:
-            score += 20.0
-            checks.append("✅ Martin Pring: Tren Mayor Bullish (Harga di atas EMA 50)")
+        if signal_type == "BUY":
+            # 1. Martin J. Pring: Tren Mayor Bullish (Close >= EMA 50)
+            if close >= ema50:
+                score += 20.0
+                bonus_ma = " (+ Tren Kuat di atas EMA 200)" if close >= ema200 else ""
+                checks.append(f"✅ Martin Pring: Tren Mayor Bullish (Harga di atas EMA 50{bonus_ma})")
+            else:
+                checks.append("⚠️ Martin Pring: Harga di bawah EMA 50 (Rentan koreksi tren turun)")
+
+            # 2. Bob Volman: Area Nilai Dinamis 20 EMA & Buildup (Tidak mengejar pucuk)
+            dist_ema20_pct = abs(close - ema20) / max(ema20, 1.0) * 100.0
+            if volman_pb or dist_ema20_pct <= 2.0:
+                score += 20.0
+                buildup_text = " + Kompresi Buildup Siap Breakout" if volman_buildup else ""
+                pb_text = "Pullback Support 20 EMA" if volman_pb else f"Dekat Dinamis EMA 20 ({dist_ema20_pct:.1f}%)"
+                checks.append(f"✅ Bob Volman: Area Nilai Terpenuhi ({pb_text}{buildup_text})")
+            else:
+                checks.append(f"⚠️ Bob Volman: Harga terlalu jauh dari 20 EMA ({dist_ema20_pct:.1f}% > 2.0% - Overextended)")
+
+            # 3. Mega Profit: Candlestick Reversal Bawah
+            if pinbar:
+                score += 20.0
+                checks.append(f"✅ Mega Profit: Pola Pinbar Rejection Bawah Kuat (Ekor {wick_ratio*100:.0f}%)")
+            elif engulfing:
+                score += 20.0
+                checks.append("✅ Mega Profit: Pola Bullish Engulfing Terkonfirmasi")
+            elif wick_ratio >= 0.30:
+                score += 15.0
+                checks.append(f"✅ Mega Profit: Ekor Rejection Bawah Signifikan ({wick_ratio*100:.0f}%)")
+            else:
+                checks.append("⚠️ Candlestick: Belum ada ekor rejection / pinbar yang meyakinkan")
+
+            # 4. Fibonacci 99% Profit: Golden Pocket (50% - 61.8%)
+            if fib_gz or (close >= min(fib_500, fib_618) * 0.998 and close <= max(fib_500, fib_618) * 1.008):
+                score += 15.0
+                checks.append("🎯 Fibonacci: Memantul Presisi di Golden Pocket (50% - 61.8%)")
+            elif close >= max(fib_500, fib_618):
+                score += 10.0
+                checks.append("ℹ️ Fibonacci: Struktur di Atas Area Golden Pocket")
+            else:
+                checks.append("⚠️ Fibonacci: Harga tertekan di bawah batas Golden Pocket 61.8%")
+
+            # 5. Ichimoku - Forex: Awan Kumo & TK Cross
+            if ichi_cloud:
+                score += 15.0
+                tk_note = " + Tenkan/Kijun Golden Cross" if ichi_tk else ""
+                cloud_note = " (Awan Hijau)" if ichi_green else ""
+                checks.append(f"☁️ Ichimoku: Struktur Bullish di Atas Awan Kumo{cloud_note}{tk_note}")
+            else:
+                checks.append("⚠️ Ichimoku: Candlestick masih berada di bawah Awan Kumo")
+
+            # 6. John J. Murphy: Konfirmasi Volume Buyer
+            if vol_ratio >= 1.10:
+                score += 15.0
+                checks.append(f"🛡️ John Murphy: Volume Buyer Mengonfirmasi Breakout ({vol_ratio:.1f}x)")
+            elif vol_ratio >= 0.95:
+                score += 10.0
+                checks.append(f"ℹ️ John Murphy: Volume Relatif Sehat ({vol_ratio:.1f}x)")
+            else:
+                checks.append(f"⚠️ John Murphy: Volume Rendah ({vol_ratio:.1f}x), Waspada Fakeout")
+
+            # 7. Wave Principle & RSI Momentum
+            if 40.0 <= rsi <= 62.0:
+                score += 15.0
+                checks.append(f"🌊 Wave Principle: Momentum Sehat ({rsi:.1f}) - Awal Gelombang Impulsif 3")
+            elif rsi < 40.0:
+                score += 10.0
+                checks.append(f"ℹ️ RSI Rendah ({rsi:.1f}) - Potensi Rebound dari Oversold")
+            elif rsi > 70.0:
+                score -= 15.0
+                checks.append(f"⚠️ Wave Principle: RSI Overbought ({rsi:.1f}) - Pucuk Wave 5 / Rawan Koreksi")
+            else:
+                score += 5.0
+                checks.append(f"ℹ️ RSI Moderat ({rsi:.1f})")
+
         else:
-            checks.append("⚠️ Martin Pring: Harga masih di bawah EMA 50 (Rentan koreksi)")
+            # Evaluasi untuk sinyal SELL / SHORT Gold / Exit Saham
+            # 1. Martin Pring: Tren Bearish (Close <= EMA 50)
+            if close <= ema50:
+                score += 20.0
+                checks.append("✅ Martin Pring: Tren Bearish Terkonfirmasi (Harga di bawah EMA 50)")
+            else:
+                checks.append("⚠️ Martin Pring: Harga masih di atas EMA 50")
 
-        # 2. Bob Volman: Area Nilai Support Dinamis 20 EMA (Tidak mengejar pucuk)
-        dist_ema20_pct = abs(close - ema20) / max(ema20, 1.0) * 100.0
-        if volman_pb or dist_ema20_pct <= 2.0:
-            score += 20.0
-            pb_text = "Pullback Support 20 EMA" if volman_pb else f"Dekat Dinamis EMA 20 ({dist_ema20_pct:.1f}%)"
-            checks.append(f"✅ Bob Volman: Area Nilai Terpenuhi ({pb_text})")
-        else:
-            checks.append("⚠️ Bob Volman: Harga terlalu jauh dari 20 EMA (Overextended)")
+            # 2. Bob Volman: Rejection dari Resisten Dinamis 20 EMA
+            if close <= ema20 * 1.005:
+                score += 20.0
+                checks.append("✅ Bob Volman: Rejection Resisten Dinamis 20 EMA")
+            else:
+                checks.append("⚠️ Bob Volman: Harga masih berada di atas EMA 20")
 
-        # 3. Mega Profit & Bob Volman: Candlestick Rejection / Trigger
-        if pinbar:
-            score += 20.0
-            checks.append(f"✅ Mega Profit: Pola Pinbar Rejection Kuat (Ekor {wick_ratio*100:.0f}%)")
-        elif engulfing:
-            score += 20.0
-            checks.append("✅ Mega Profit: Pola Bullish Engulfing Terkonfirmasi")
-        elif wick_ratio >= 0.30:
-            score += 15.0
-            checks.append(f"✅ Bob Volman: Ekor Rejection Bawah Signifikan ({wick_ratio*100:.0f}%)")
-        else:
-            checks.append("⚠️ Candlestick: Belum ada ekor rejection / pinbar yang meyakinkan")
+            # 3. Mega Profit: Candlestick Reversal Atas
+            if shooting_star:
+                score += 20.0
+                checks.append(f"✅ Mega Profit: Pola Shooting Star / Upper Wick ({upper_wick_ratio*100:.0f}%)")
+            elif upper_wick_ratio >= 0.30:
+                score += 15.0
+                checks.append("✅ Mega Profit: Rejection Atas Signifikan")
+            else:
+                checks.append("⚠️ Candlestick: Belum ada sinyal rejection atas kuat")
 
-        # 4. John J. Murphy: Konfirmasi Volume Buyer
-        if vol_ratio >= 1.05:
-            score += 15.0
-            checks.append(f"✅ John Murphy: Volume Buyer Mengonfirmasi ({vol_ratio:.1f}x)")
-        elif vol_ratio >= 0.90:
-            score += 10.0
-            checks.append(f"ℹ️ John Murphy: Volume Cukup Stabil ({vol_ratio:.1f}x)")
-        else:
-            checks.append(f"⚠️ John Murphy: Volume Rendah ({vol_ratio:.1f}x), Waspada Fakeout")
+            # 4. Fibonacci: Breakdown Golden Pocket
+            if close < min(fib_500, fib_618):
+                score += 15.0
+                checks.append("🎯 Fibonacci: Breakdown di Bawah Level Kritis 61.8%")
+            else:
+                checks.append("⚠️ Fibonacci: Harga masih bertahan di atas Golden Pocket")
 
-        # 5. Martin Pring & Wave Principle: Ruang Momentum RSI
-        if 40.0 <= rsi <= 65.0:
-            score += 15.0
-            checks.append(f"✅ Martin Pring: RSI Ideal ({rsi:.1f}) - Masih Memiliki Ruang Naik")
-        elif rsi < 40.0:
-            score += 10.0
-            checks.append(f"ℹ️ RSI Rendah ({rsi:.1f}) - Potensi Rebound dari Oversold")
-        else:
-            checks.append(f"⚠️ Wave Principle: RSI Tinggi ({rsi:.1f}) - Rawan Pembalikan Arah")
+            # 5. Ichimoku: Di bawah Awan Kumo
+            if not ichi_cloud:
+                score += 15.0
+                checks.append("☁️ Ichimoku: Struktur Bearish di Bawah Awan Kumo")
+            else:
+                checks.append("⚠️ Ichimoku: Candlestick masih berada di atas Awan Kumo")
 
-        # 6. Bonus Confluence: Fibonacci Golden Pocket atau Ichimoku Cloud
-        bonus_score = 0.0
-        if fib_gz:
-            bonus_score += 10.0
-            checks.append("🎯 Fibonacci: Memantul Presisi di Golden Pocket (50% - 61.8%)")
-        if ichi_cloud:
-            bonus_score += 5.0
-            checks.append("☁️ Ichimoku: Struktur Bullish di Atas Awan Kumo")
-        score = min(100.0, score + bonus_score)
+            # 6. John Murphy: Volume Seller
+            if vol_ratio >= 1.05:
+                score += 15.0
+                checks.append(f"🛡️ John Murphy: Volume Seller Meningkat ({vol_ratio:.1f}x)")
+            else:
+                checks.append(f"ℹ️ John Murphy: Volume Seller Standar ({vol_ratio:.1f}x)")
 
-        # Penentuan Grade dan Keputusan
-        if score >= 75.0:
+            # 7. Wave Principle: Siklus Koreksi Impulsif
+            if rsi >= 65.0 or rsi <= 40.0:
+                score += 15.0
+                checks.append(f"🌊 Wave Principle: Tekanan Gelombang Koreksi Kuat (RSI {rsi:.1f})")
+            else:
+                score += 5.0
+
+        score = max(0.0, min(100.0, score))
+
+        # Penentuan Grade dan Keputusan Masuk Pasar (Gatekeeper Akurasi Tinggi)
+        is_buy = (signal_type == "BUY")
+        direction_name = "Bullish" if is_buy else "Bearish"
+        if score >= 80.0:
             setup_grade = "Grade A+ (Setup Sempurna ⭐⭐⭐⭐⭐)"
-            prediction = "Arah market diprediksi kuat melanjutkan tren naik (Bullish Continuation / Breakout)."
+            prediction = f"Arah market diprediksi {direction_name} kuat melanjutkan tren (Probabilitas Akurasi Sangat Tinggi)."
             is_approved = True
-        elif score >= 55.0:
+        elif score >= 65.0:
             setup_grade = "Grade A (Setup Kuat ⭐⭐⭐⭐)"
-            prediction = "Arah market diprediksi memantul ke atas (Technical Rebound) dari support dinamis."
+            prediction = f"Arah market diprediksi {direction_name} bergerak searah dengan konfluensi 3+ buku trading."
             is_approved = True
         else:
-            setup_grade = "Grade B / Menunggu Konfluensi (⭐⭐)"
-            prediction = "Arah market masih konsolidasi / belum ada konfirmasi kuat dari buku trading."
+            setup_grade = "Grade B / C (Konfluensi Belum Matang ⭐⭐)"
+            prediction = f"Arah market masih konsolidasi / belum memenuhi syarat konfluensi ketat ({direction_name} tertahan)."
             is_approved = False
 
         return is_approved, score, setup_grade, checks, prediction
@@ -275,12 +363,12 @@ class SignalEngine:
         if snapshot["ichimoku_above_cloud"]:
             patterns_detected.append("Ichimoku Kumo Cloud")
 
-        # 3. Hitung Manajemen Risiko Trading Harian (TP / SL / RRR)
+        # 3. Hitung Manajemen Risiko Trading Harian (TP / SL / RRR minimal 1:2.0)
         is_gold = any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
         if is_gold:
-            tp_pct = 0.6
-            sl_pct = 0.35
-            # Jika SELL (Short Gold): TP di bawah entry (-0.6%), SL di atas entry (+0.35%)
+            tp_pct = 0.8
+            sl_pct = 0.40
+            # RRR 1:2.0
             if is_sell and not is_buy:
                 tp_price = round(curr_price * (1.0 - (tp_pct / 100.0)), 2)
                 sl_price = round(curr_price * (1.0 + (sl_pct / 100.0)), 2)
@@ -295,8 +383,8 @@ class SignalEngine:
             trading_cfg = self.config.get("trading", {})
             trading_mode = trading_cfg.get("mode", "intraday")
             mode_cfg = trading_cfg.get(trading_mode, {})
-            tp_pct = float(mode_cfg.get("take_profit_pct", 2.5 if trading_mode == "intraday" else 5.0))
-            sl_pct = float(mode_cfg.get("stop_loss_pct", 1.5 if trading_mode == "intraday" else 3.0))
+            tp_pct = float(mode_cfg.get("take_profit_pct", 3.0 if trading_mode == "intraday" else 5.0))
+            sl_pct = float(mode_cfg.get("stop_loss_pct", 1.5 if trading_mode == "intraday" else 2.5))
 
             if is_sell and not is_buy:
                 tp_price = round(curr_price * (1.0 - (tp_pct / 100.0)), 0)
@@ -309,18 +397,19 @@ class SignalEngine:
                 risk_dist = max(curr_price - sl_price, 1.0)
                 rrr = round((tp_price - curr_price) / risk_dist, 2)
 
-        # 4. Keputusan Sinyal & Alasan (Didukung Telaah 7 Buku PDF)
+        # 4. Keputusan Sinyal & Alasan (Didukung Telaah Lengkap 7 Buku PDF)
+        target_sig_type = "BUY" if is_buy else "SELL" if is_sell else "BUY"
         pdf_approved, pdf_score, setup_grade, pdf_checks, direction_pred = self.validate_pdf_entry_confluence(
-            curr_row, prev_row, snapshot
+            curr_row, prev_row, snapshot, signal_type=target_sig_type
         )
 
         if is_buy:
             if apply_pdf_filter and not pdf_approved:
-                # Sinyal BUY ditahan jika konfluensi 7 buku belum cukup kuat
+                # Sinyal BUY ditahan jika konfluensi 7 buku belum tembus Grade A (65%)
                 signal = "HOLD"
                 reasons = [
-                    f"Sinyal beli ditahan (Filter 7 Buku PDF). Skor konfluensi {pdf_score:.0f}% < 55%. "
-                    f"Menunggu konfirmasi arah market yang lebih pasti."
+                    f"Sinyal beli ditahan (Filter 7 Buku PDF). Skor konfluensi {pdf_score:.0f}% < 65% ({setup_grade}). "
+                    f"Menunggu waktu masuk pasar yang benar-benar tepat demi menjaga Win Rate tinggi."
                 ]
             else:
                 signal = "BUY"
@@ -329,13 +418,22 @@ class SignalEngine:
                 if patterns_detected:
                     reasons.append(f"Pola: {', '.join(patterns_detected[:2])}")
         elif is_sell:
-            signal = "SELL"
-            reasons = list(sell_reasons)
+            if apply_pdf_filter and not pdf_approved and is_gold:
+                # Sinyal Short Gold ditahan jika konfluensi sell belum tembus Grade A (65%)
+                signal = "HOLD"
+                reasons = [
+                    f"Sinyal short ditahan (Filter 7 Buku PDF). Skor konfluensi {pdf_score:.0f}% < 65% ({setup_grade}). "
+                    f"Menunggu konfirmasi pembalikan arah yang lebih solid demi menjaga Win Rate tinggi."
+                ]
+            else:
+                signal = "SELL"
+                reasons = list(sell_reasons)
+                reasons.append(f"Telaah 7 Buku: {setup_grade} ({pdf_score:.0f}%)")
         else:
             signal = "HOLD"
             # Sertakan penjelasan kondisi saat ini
             reasons = [
-                f"Kondisi netral / belum terpenuhi. RSI={snapshot['rsi']:.1f}, "
+                f"Kondisi netral / menunggu konfluensi waktu masuk. RSI={snapshot['rsi']:.1f}, "
                 f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
                 f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
             ]

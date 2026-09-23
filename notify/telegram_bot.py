@@ -141,7 +141,7 @@ class TelegramNotifier:
             if sig.take_profit_price and sig.stop_loss_price:
                 tp_str = format_currency(sig.take_profit_price, sig.ticker)
                 sl_str = format_currency(sig.stop_loss_price, sig.ticker)
-                rrr = sig.risk_reward_ratio or 1.5
+                rrr = sig.risk_reward_ratio or 2.0
                 pct_tp = ((sig.price - sig.take_profit_price) / max(sig.price, 0.01)) * 100.0
                 pct_sl = ((sig.stop_loss_price - sig.price) / max(sig.price, 0.01)) * 100.0
                 lines.append(f"🎯 <b>Take Profit (TP):</b> <code>{tp_str}</code> (-{pct_tp:.2f}% Target Bawah)")
@@ -150,7 +150,19 @@ class TelegramNotifier:
 
             lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
             lines.append(wr_badge)
-            if sig.reasons:
+
+            pdf_details = getattr(sig, "pdf_confluence_details", [])
+            if pdf_details:
+                grade_str = getattr(sig, "setup_grade", "") or "Grade A"
+                score_val = getattr(sig, "pdf_confluence_score", 0.0)
+                lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+                lines.append(f"📚 <b>TELAAH 7 BUKU PDF ({grade_str} - {score_val:.0f}%):</b>")
+                for chk in pdf_details[:4]:
+                    lines.append(f"• {html.escape(chk)}")
+                pred = getattr(sig, "market_direction_prediction", "")
+                if pred:
+                    lines.append(f"🎯 <b>Prediksi Arah:</b> <i>{html.escape(pred)}</i>")
+            elif sig.reasons:
                 clean_reason = sig.reasons[0].split("(")[0].strip()
                 lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
 
@@ -166,7 +178,16 @@ class TelegramNotifier:
 
             lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
             lines.append(wr_badge)
-            if sig.reasons:
+
+            pdf_details = getattr(sig, "pdf_confluence_details", [])
+            if pdf_details:
+                grade_str = getattr(sig, "setup_grade", "") or "Grade A"
+                score_val = getattr(sig, "pdf_confluence_score", 0.0)
+                lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+                lines.append(f"📚 <b>TELAAH 7 BUKU PDF ({grade_str} - {score_val:.0f}%):</b>")
+                for chk in pdf_details[:3]:
+                    lines.append(f"• {html.escape(chk)}")
+            elif sig.reasons:
                 clean_reason = sig.reasons[0].split("(")[0].strip()
                 lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
 
