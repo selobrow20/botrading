@@ -244,30 +244,105 @@ class TelegramBotCommands:
             lines.append(f"{emoji} <b>{sig_type}</b> - <code>{ticker}</code> @ {price}")
             lines.append(f"   <i>Waktu: {t_candle}</i>")
             lines.append(f"   <i>Pemicu: {html.escape(reason_str)}</i>")
-    async def scan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler perintah /scan untuk menjalankan pemindaian on-demand."""
-        await update.message.reply_html("🔍 <i>Sedang memindai saham potensial di watchlist, mohon tunggu sebentar...</i>")
-        from scheduler.run_scheduler import PipelineRunner
-        runner = PipelineRunner(storage=self.storage)
-        res = runner.run_pipeline(force_run=True)
-        signals_triggered = res.get("signals_triggered", 0)
-        processed = res.get("processed", 0)
+    async def harian_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /harian untuk melihat rekomendasi sinyal trading harian lengkap dengan TP & SL."""
+        await update.message.reply_html("⏳ <i>Menganalisis saham potensial untuk Trading Harian (Day Trading & Swing)...</i>")
 
-        reply_lines = [
-            f"✅ <b>Pemindaian Selesai!</b>",
-            f"• Saham Diproses: <b>{processed}</b>",
-            f"• Sinyal Aktif: <b>{signals_triggered}</b>",
+        from data.fetcher import DataFetcher
+        from indicators.technical import TechnicalIndicators
+        from strategy.rules import get_strategy, DEFAULT_STRATEGY
+        from strategy.signal_engine import SignalEngine
+
+        cfg = load_config()
+        trading_cfg = cfg.get("trading", {})
+        mode = trading_cfg.get("mode", "intraday")
+        strat_name = cfg.get("strategies", {}).get("active", "DayTrading_Intraday_Momentum")
+        strategy = get_strategy(strat_name) or DEFAULT_STRATEGY
+
+        fetcher = DataFetcher(storage=self.storage)
+        engine = SignalEngine([strategy])
+
+        watchlist = cfg.get("watchlist", [])
+        # Batasi ke 10 saham teratas untuk respon cepat di Telegram
+        sample_watchlist = watchlist[:10]
+
+        buy_signals = []
+        radar_stocks = []
+
+        for ticker in sample_watchlist:
+            try:
+                # Ambil data terbaru
+                df = fetcher.get_data(ticker, interval="15m" if mode == "intraday" else "1d", period="5d")
+                if df.empty or len(df) < 15:
+                    continue
+
+                df_ind = TechnicalIndicators.add_all_indicators(df)
+                sig = engine.evaluate_bar(df_ind, ticker=ticker, strategy=strategy)
+
+                snap = sig.indicators_snapshot or {}
+                rsi = snap.get("rsi", 50.0)
+                vol_ratio = snap.get("volume_ratio", 1.0)
+
+                if sig.signal == "BUY":
+                    buy_signals.append(sig)
+                elif rsi >= 45.0 and rsi <= 65.0:
+                    # Saham di zona momentum sehat (radar pantauan)
+                    radar_stocks.append({
+                        "ticker": ticker,
+                        "price": sig.price,
+                        "rsi": rsi,
+                        "vol_ratio": vol_ratio,
+                    })
+            except Exception as e:
+                logger.debug(f"Error analisa {ticker}: {e}")
+
+        # Susun Pesan Rekomendasi
+        lines = [
+            f"🎯 <b>REKOMENDASI TRADING HARIAN IDX</b> 🇮🇩",
+            f"⚙️ Mode: <b>{mode.upper()}</b> | Strategi: <i>{strategy.name}</i>",
             "━━━━━━━━━━━━━━━━━━━━━━",
         ]
-        for d in res.get("details", []):
-            if d["signal"] in ["BUY", "SELL"]:
-                emoji = "🟢" if d["signal"] == "BUY" else "🔴"
-                reply_lines.append(f"{emoji} <b>{d['signal']}</b>: <code>{d['ticker']}</code> @ Rp {d['price']:,.0f}")
 
-        if signals_triggered == 0:
-            reply_lines.append("<i>Semua saham saat ini dalam status netral (HOLD).</i>")
+        if buy_signals:
+            lines.append("🟢 <b>SINYAL BELI SIAP EKSEKUSI (ENTRY):</b>")
+            for b in buy_signals:
+                lines.append(f"• <code>{b.ticker}</code> @ <b>Rp {b.price:,.0f}</b>")
+                lines.append(f"  🎯 Target Profit (TP): <b>Rp {b.take_profit_price:,.0f}</b>")
+                lines.append(f"  🛑 Stop Loss (SL): <b>Rp {b.stop_loss_price:,.0f}</b>")
+                lines.append(f"  ⚖️ Risk/Reward: <b>1 : {b.risk_reward_ratio or 1.67}</b>")
+                lines.append("──────────────────────")
+        else:
+            lines.append("<i>Belum ada sinyal BUY yang terkonfirmasi penuh pada candle saat ini.</i>")
+            lines.append("──────────────────────")
 
-        await update.message.reply_html("\n".join(reply_lines))
+        if radar_stocks:
+            lines.append("👀 <b>RADAR PANTAUAN (Mendekati Momentum Beli):</b>")
+            for r in radar_stocks[:5]:
+                lines.append(
+                    f"• <code>{r['ticker']}</code>: Rp {r['price']:,.0f} "
+                    f"(RSI: {r['rsi']:.1f}, Vol: {r['vol_ratio']:.1f}x)"
+                )
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+
+        lines.append("💡 <i>Ketik /scan untuk memindai ulang pasar secara langsung.</i>")
+        await update.message.reply_html("\n".join(lines))
+
+
+async def set_menu_commands(application: Application) -> None:
+    """Mendaftarkan tombol Menu perintah interaktif di aplikasi Telegram."""
+    from telegram import BotCommand
+    commands = [
+        BotCommand("harian", "🎯 Rekomendasi Sinyal Trading Harian (TP & SL)"),
+        BotCommand("scan", "🔍 Pindai Sinyal Pasar Sekarang"),
+        BotCommand("watchlist", "📋 Saham Potensial Cuan & Harga"),
+        BotCommand("status", "⚙️ Status Bot & Strategi Aktif"),
+        BotCommand("lasthistory", "📜 Riwayat Sinyal Terakhir"),
+        BotCommand("help", "ℹ️ Panduan Penggunaan Bot"),
+    ]
+    try:
+        await application.bot.set_my_commands(commands)
+    except Exception as e:
+        logger.debug(f"Gagal mengatur menu perintah bot: {e}")
 
 
 def build_telegram_application() -> Optional[Application]:
@@ -277,10 +352,11 @@ def build_telegram_application() -> Optional[Application]:
         logger.warning("Token Telegram belum disetel, bot listener tidak dapat dijalankan.")
         return None
 
-    app = Application.builder().token(token).build()
+    app = Application.builder().token(token).post_init(set_menu_commands).build()
     cmd_handler = TelegramBotCommands()
 
     app.add_handler(CommandHandler(["start", "help"], cmd_handler.start_command))
+    app.add_handler(CommandHandler(["harian", "tradingharian", "daytrade"], cmd_handler.harian_command))
     app.add_handler(CommandHandler("status", cmd_handler.status_command))
     app.add_handler(CommandHandler("scan", cmd_handler.scan_command))
     app.add_handler(CommandHandler("watchlist", cmd_handler.watchlist_command))
