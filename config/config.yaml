@@ -92,8 +92,38 @@ indicators:
 
 # Definisi Strategi Trading (Mendukung Day Trading & Swing Harian)
 strategies:
-  active: "DayTrading_Intraday_Momentum"
+  active: "Master_Confluence_Strategy"
   definitions:
+    # 0. Strategi Konfluensi Master (Buku Bob Volman, Fibonacci, Ichimoku, Murphy, Mega Profit)
+    Master_Confluence_Strategy:
+      description: "Konfluensi Tertinggi: Trend EMA50 + Area Pantulan 20 EMA/Fibonacci + Rejection Wick + Volume"
+      buy_rules:
+        - indicator: "close"
+          operator: ">="
+          target: "ema_50"
+          description: "Tren Mayor Bullish (Harga di Atas EMA 50)"
+        - indicator: "rejection_wick_ratio"
+          operator: ">="
+          value: 0.35
+          description: "Candle Rejection Wick (Buyer Membeli Kuat di Bawah)"
+        - indicator: "volume_ratio"
+          operator: ">="
+          value: 1.1
+          description: "Volume Konfirmasi Buyer (>= 1.1x Rata-rata)"
+        - indicator: "rsi"
+          operator: "<="
+          value: 60.0
+          description: "RSI Belum Overbought (RSI <= 60)"
+      sell_rules:
+        - indicator: "rsi"
+          operator: ">"
+          value: 72.0
+          description: "RSI Overbought (> 72)"
+        - indicator: "close"
+          operator: "cross_under"
+          target: "ema_20"
+          description: "Harga Tembus ke Bawah EMA 20"
+
     # 1. Strategi Day Trading (Intraday 15m / 30m)
     DayTrading_Intraday_Momentum:
       description: "Strategi Day Trading Cepat Momentum Intraday (EMA 20 + RSI Momentum + Volume Breakout)"

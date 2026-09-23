@@ -675,12 +675,95 @@ class TelegramBotCommands:
 
         await update.message.reply_html("\n".join(msg_lines))
 
+    async def candle_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /candle <ticker> untuk analisis pola candlestick & price action dari 7 buku."""
+        if not await self.check_user_access(update, context):
+            return
+
+        ticker_arg = context.args[0].upper().strip() if context.args else "GC=F"
+        from data.fetcher import DataFetcher
+        from indicators.technical import TechnicalIndicators
+        import asyncio
+
+        fetcher = DataFetcher(storage=self.storage)
+        clean_ticker = fetcher.normalize_ticker(ticker_arg)
+        is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        disp_ticker = "XAU/USD (Gold)" if is_gold else clean_ticker.replace(".JK", "")
+
+        await update.message.reply_html(f"🕯️ <i>Menganalisis pola candlestick & price action untuk <b>{disp_ticker}</b>...</i>")
+
+        def _fetch_and_eval():
+            interval = "15m"
+            period = "5d" if is_gold else "60d"
+            df = fetcher.get_data(clean_ticker, interval=interval, period=period)
+            if df.empty or len(df) < 15:
+                df = fetcher.get_data(clean_ticker, interval="1d", period="1y")
+            if df.empty or len(df) < 15:
+                return None
+            df_ind = TechnicalIndicators.add_all_indicators(df)
+            last_row = df_ind.iloc[-1]
+
+            c_close = float(last_row["Close"])
+            c_time = str(df_ind.index[-1])[5:16]
+
+            pinbar = bool(last_row.get("pattern_pinbar", 0))
+            engulfing = bool(last_row.get("pattern_engulfing", 0))
+            wick_ratio = float(last_row.get("rejection_wick_ratio", 0.0)) * 100.0
+            volman_pb = bool(last_row.get("volman_pullback", 0))
+            volman_bd = bool(last_row.get("volman_buildup", 0))
+            fib_gz = bool(last_row.get("fib_in_golden_zone", 0))
+            ichi_cloud = bool(last_row.get("ichimoku_above_cloud", 0))
+            rsi_val = float(last_row.get("rsi", 50.0))
+            vol_ratio = float(last_row.get("volume_ratio", 1.0))
+
+            return {
+                "ticker": disp_ticker,
+                "is_gold": is_gold,
+                "close": c_close,
+                "time": c_time,
+                "pinbar": pinbar,
+                "engulfing": engulfing,
+                "wick_ratio": wick_ratio,
+                "volman_pb": volman_pb,
+                "volman_bd": volman_bd,
+                "fib_gz": fib_gz,
+                "ichi_cloud": ichi_cloud,
+                "rsi": rsi_val,
+                "vol_ratio": vol_ratio,
+            }
+
+        res = await asyncio.to_thread(_fetch_and_eval)
+        if not res:
+            await update.message.reply_text(f"Data tidak ditemukan atau feed sedang offline untuk {ticker_arg}.")
+            return
+
+        price_fmt = f"${res['close']:,.2f}" if res["is_gold"] else f"Rp {res['close']:,.0f}"
+        lines = [
+            f"🕯️ <b>BEDAH CANDLESTICK & PRICE ACTION: {res['ticker']}</b>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"💵 <b>Harga Terkini:</b> <code>{price_fmt}</code> ({res['time']} WIB)",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "📖 <b>POLA BUKU YANG TERDETEKSI:</b>",
+            f"• <b>Pinbar Rejection:</b> {'🟢 YA (Ekor Penolakan Kuat)' if res['pinbar'] else f'⚪ Tidak (Ekor: {res['wick_ratio']:.0f}%)'}",
+            f"• <b>Bullish Engulfing:</b> {'🟢 YA (Candle Menelan Penuh)' if res['engulfing'] else '⚪ Tidak'}",
+            f"• <b>Bob Volman 20 EMA:</b> {'🟢 Pullback Reversal Terkonfirmasi' if res['volman_pb'] else '⚪ Normal'}",
+            f"• <b>Bob Volman Buildup:</b> {'🔥 Kompresi Siap Breakout' if res['volman_bd'] else '⚪ Volatilitas Reguler'}",
+            f"• <b>Fibonacci Golden Pocket:</b> {'🎯 Rebound di Area 50%-61.8%' if res['fib_gz'] else '⚪ Di luar Golden Zone'}",
+            f"• <b>Ichimoku Kumo Cloud:</b> {'⛅ Bullish di Atas Awan' if res['ichi_cloud'] else '☁️ Di Bawah / Dalam Awan'}",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"📊 <b>Konfirmasi Volume:</b> {res['vol_ratio']:.1f}x rata-rata | <b>RSI:</b> {res['rsi']:.1f}",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "💡 <i>Gunakan: <code>/candle BBCA</code>, <code>/candle BBRI</code>, atau <code>/candle GOLD</code></i>",
+        ]
+        await update.message.reply_html("\n".join(lines))
+
 
 async def set_menu_commands(application: Application) -> None:
     """Mendaftarkan tombol Menu perintah interaktif di aplikasi Telegram."""
     from telegram import BotCommand
     commands = [
         BotCommand("harian", "🎯 Rekomendasi Sinyal Trading Harian (TP & SL)"),
+        BotCommand("candle", "🕯️ Bedah Pola Candlestick & Price Action"),
         BotCommand("gold", "🥇 Analisis Sinyal Emas Dunia (XAU/USD)"),
         BotCommand("scan", "🔍 Pindai Sinyal Pasar Sekarang"),
         BotCommand("watchlist", "📋 Saham Potensial Cuan & Harga"),
@@ -706,6 +789,7 @@ def build_telegram_application() -> Optional[Application]:
 
     app.add_handler(CommandHandler(["start", "help"], cmd_handler.start_command))
     app.add_handler(CommandHandler(["harian", "tradingharian", "daytrade"], cmd_handler.harian_command))
+    app.add_handler(CommandHandler(["candle", "candlestick", "pola"], cmd_handler.candle_command))
     app.add_handler(CommandHandler(["gold", "xau", "emas"], cmd_handler.gold_command))
     app.add_handler(CommandHandler("status", cmd_handler.status_command))
     app.add_handler(CommandHandler("scan", cmd_handler.scan_command))

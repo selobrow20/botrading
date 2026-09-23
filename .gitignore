@@ -28,6 +28,10 @@ logs/
 *.jpg
 reports/
 
+# Large training materials (PDFs)
+materials/*.pdf
+
+
 # IDE / OS
 .vscode/
 .idea/

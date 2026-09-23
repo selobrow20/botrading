@@ -298,3 +298,181 @@ DEFAULT_STRATEGY = Strategy(
     sell_combine="OR",
 )
 register_strategy(DEFAULT_STRATEGY)
+
+# 1. Strategi Bob Volman Price Action (Under Standing Price Action)
+BOB_VOLMAN_STRATEGY = Strategy(
+    name="PriceAction_BobVolman",
+    description="Bob Volman 20 EMA Pullback Reversal dengan Candle Rejection & Volume",
+    buy_rules=[
+        RuleCondition(
+            indicator="volman_pullback",
+            operator=">=",
+            value=1.0,
+            description="Bob Volman Pullback: Uji Dinamis Support 20 EMA",
+        ),
+        RuleCondition(
+            indicator="rejection_wick_ratio",
+            operator=">=",
+            value=0.35,
+            description="Candle Rejection Wick (Ekor Bawah >= 35% Rentang Candle)",
+        ),
+        RuleCondition(
+            indicator="volume_ratio",
+            operator=">=",
+            value=1.1,
+            description="Konfirmasi Volume Buyer (>= 1.1x SMA 20)",
+        ),
+    ],
+    buy_combine="AND",
+    sell_rules=[
+        RuleCondition(
+            indicator="close",
+            operator="cross_under",
+            target="ema_20",
+            description="Harga Breakdown Tembus Bawah 20 EMA",
+        ),
+        RuleCondition(
+            indicator="rsi",
+            operator=">",
+            value=72.0,
+            description="RSI Overbought (> 72)",
+        ),
+    ],
+    sell_combine="OR",
+)
+register_strategy(BOB_VOLMAN_STRATEGY)
+
+# 2. Strategi Ichimoku Kinko Hyo Cloud Breakout
+ICHIMOKU_STRATEGY = Strategy(
+    name="Ichimoku_Cloud_Breakout",
+    description="Ichimoku Kinko Hyo: Breakout Awan Kumo & Bullish TK Alignment",
+    buy_rules=[
+        RuleCondition(
+            indicator="ichimoku_above_cloud",
+            operator=">=",
+            value=1.0,
+            description="Harga Berada di Atas Awan Kumo (Bullish Cloud)",
+        ),
+        RuleCondition(
+            indicator="ichimoku_tenkan",
+            operator=">=",
+            target="ichimoku_kijun",
+            description="Tenkan-sen di Atas Kijun-sen (Bullish Momentum)",
+        ),
+        RuleCondition(
+            indicator="rsi",
+            operator=">",
+            value=45.0,
+            description="RSI Momentum Positif (> 45)",
+        ),
+    ],
+    buy_combine="AND",
+    sell_rules=[
+        RuleCondition(
+            indicator="close",
+            operator="<",
+            target="ichimoku_kijun",
+            description="Harga Jatuh Menembus Kijun-sen",
+        ),
+        RuleCondition(
+            indicator="rsi",
+            operator=">",
+            value=75.0,
+            description="RSI Overbought (> 75)",
+        ),
+    ],
+    sell_combine="OR",
+)
+register_strategy(ICHIMOKU_STRATEGY)
+
+# 3. Strategi Fibonacci Golden Pocket (50% - 61.8%)
+FIBONACCI_STRATEGY = Strategy(
+    name="Fibonacci_GoldenPocket",
+    description="Fibonacci Retracement: Rebound Akurat di Zona Emas 50% - 61.8%",
+    buy_rules=[
+        RuleCondition(
+            indicator="fib_in_golden_zone",
+            operator=">=",
+            value=1.0,
+            description="Harga Menguji Area Golden Pocket (50.0% - 61.8%)",
+        ),
+        RuleCondition(
+            indicator="close",
+            operator=">=",
+            target="ema_50",
+            description="Filter Tren Mayor: Harga di Atas EMA 50",
+        ),
+        RuleCondition(
+            indicator="rejection_wick_ratio",
+            operator=">=",
+            value=0.30,
+            description="Rebound Pinbar / Ekor Rejection di Golden Pocket",
+        ),
+    ],
+    buy_combine="AND",
+    sell_rules=[
+        RuleCondition(
+            indicator="close",
+            operator="cross_under",
+            target="ema_20",
+            description="Harga Tembus Bawah EMA 20",
+        ),
+        RuleCondition(
+            indicator="rsi",
+            operator=">",
+            value=70.0,
+            description="RSI Overbought (> 70)",
+        ),
+    ],
+    sell_combine="OR",
+)
+register_strategy(FIBONACCI_STRATEGY)
+
+# 4. Master Confluence Strategy (Gabungan Multi-Buku Terbaik)
+MASTER_CONFLUENCE_STRATEGY = Strategy(
+    name="Master_Confluence_Strategy",
+    description="Konfluensi Utama: Trend EMA50 + Area Bob Volman/Fibonacci + Candlestick Rejection + Volume",
+    buy_rules=[
+        RuleCondition(
+            indicator="close",
+            operator=">=",
+            target="ema_50",
+            description="Tren Mayor Bullish (Close >= EMA 50)",
+        ),
+        RuleCondition(
+            indicator="rejection_wick_ratio",
+            operator=">=",
+            value=0.35,
+            description="Candle Rejection Wick (Buyer Membeli di Bawah)",
+        ),
+        RuleCondition(
+            indicator="volume_ratio",
+            operator=">=",
+            value=1.1,
+            description="Volume Buyer Menguat (>= 1.1x)",
+        ),
+        RuleCondition(
+            indicator="rsi",
+            operator="<=",
+            value=60.0,
+            description="RSI Belum Jenuh Beli (RSI <= 60)",
+        ),
+    ],
+    buy_combine="AND",
+    sell_rules=[
+        RuleCondition(
+            indicator="rsi",
+            operator=">",
+            value=72.0,
+            description="RSI Overbought (> 72)",
+        ),
+        RuleCondition(
+            indicator="close",
+            operator="cross_under",
+            target="ema_20",
+            description="Harga Tembus ke Bawah EMA 20",
+        ),
+    ],
+    sell_combine="OR",
+)
+register_strategy(MASTER_CONFLUENCE_STRATEGY)

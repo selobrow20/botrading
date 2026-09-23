@@ -115,6 +115,12 @@ class SignalEngine:
             "ema_20": float(curr_row.get("ema_20", 0.0)),
             "ema_50": float(curr_row.get("ema_50", 0.0)),
             "volume_ratio": float(curr_row.get("volume_ratio", 0.0)),
+            "pinbar": bool(curr_row.get("pattern_pinbar", 0)),
+            "engulfing": bool(curr_row.get("pattern_engulfing", 0)),
+            "rejection_wick": float(curr_row.get("rejection_wick_ratio", 0.0)),
+            "volman_pullback": bool(curr_row.get("volman_pullback", 0)),
+            "ichimoku_above_cloud": bool(curr_row.get("ichimoku_above_cloud", 0)),
+            "fib_golden_zone": bool(curr_row.get("fib_in_golden_zone", 0)),
         }
 
         # 1. Evaluasi Aturan BUY
@@ -136,6 +142,19 @@ class SignalEngine:
             is_sell = all(sell_satisfied_list) and len(sell_satisfied_list) > 0
         else:  # OR
             is_sell = any(sell_satisfied_list) and len(sell_satisfied_list) > 0
+
+        # Deteksi pola candlestick & konfirmasi buku
+        patterns_detected = []
+        if snapshot["pinbar"]:
+            patterns_detected.append("Pinbar Rejection (Bob Volman)")
+        if snapshot["engulfing"]:
+            patterns_detected.append("Bullish Engulfing")
+        if snapshot["volman_pullback"]:
+            patterns_detected.append("20 EMA Pullback")
+        if snapshot["fib_golden_zone"]:
+            patterns_detected.append("Fibonacci Golden Pocket")
+        if snapshot["ichimoku_above_cloud"]:
+            patterns_detected.append("Ichimoku Kumo Cloud")
 
         # 3. Hitung Manajemen Risiko Trading Harian (TP / SL / RRR)
         is_gold = any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
@@ -162,6 +181,8 @@ class SignalEngine:
         if is_buy:
             signal = "BUY"
             reasons = list(buy_reasons)
+            if patterns_detected:
+                reasons.append(f"Konfirmasi: {', '.join(patterns_detected[:2])}")
         elif is_sell:
             signal = "SELL"
             reasons = list(sell_reasons)
