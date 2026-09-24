@@ -312,4 +312,34 @@ def test_market_close_summary_and_gold_winrate_filter():
     assert "Win Rate" not in stock_msg
 
 
+def test_stock_sell_suppression_and_gold_sell_preservation():
+    """Memastikan sinyal SELL untuk saham ditiadakan (Long-Only), sedangkan Gold tetap bisa BUY & SELL."""
+    strat = Strategy(
+        name="TestSellRules",
+        description="Strategi uji coba SELL",
+        buy_rules=[],
+        sell_rules=[RuleCondition("close", ">", value=0.0, description="Kondisi jual")],
+        sell_combine="OR",
+    )
+    engine = SignalEngine([strat])
+
+    df_dummy = pd.DataFrame({
+        "Close": [10000.0, 9900.0],
+        "High": [10050.0, 9950.0],
+        "Low": [9950.0, 9850.0],
+        "Open": [10000.0, 9900.0],
+        "Volume": [1000, 1000],
+    })
+
+    # 1. Saham IDX (BBCA.JK) -> Sinyal SELL harus otomatis di-convert menjadi HOLD
+    stock_res = engine.evaluate_bar(df_dummy, ticker="BBCA.JK", strategy=strat)
+    assert stock_res.signal == "HOLD"
+    assert "mode BUY/Long-Only" in stock_res.reasons[0]
+
+    # 2. Emas (XAUUSD) -> Sinyal SELL tetap diizinkan
+    gold_res = engine.evaluate_bar(df_dummy, ticker="XAUUSD", strategy=strat, apply_pdf_filter=False)
+    assert gold_res.signal == "SELL"
+
+
+
 

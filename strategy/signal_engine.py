@@ -418,7 +418,14 @@ class SignalEngine:
                 if patterns_detected:
                     reasons.append(f"Pola: {', '.join(patterns_detected[:2])}")
         elif is_sell:
-            if apply_pdf_filter and not pdf_approved and is_gold:
+            if not is_gold:
+                # Sesuai arahan pengguna: Saham IDX khusus BUY/Long-Only (sinyal SELL ditiadakan)
+                signal = "HOLD"
+                reasons = [
+                    f"Sinyal jual saham dilewati (Saham IDX khusus mode BUY/Long-Only). "
+                    f"RSI={snapshot['rsi']:.1f}, EMA50={snapshot['ema_50']:.0f}"
+                ]
+            elif apply_pdf_filter and not pdf_approved and is_gold:
                 # Sinyal Short Gold ditahan jika konfluensi sell belum tembus Grade A (65%)
                 signal = "HOLD"
                 reasons = [

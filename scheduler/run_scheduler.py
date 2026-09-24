@@ -250,6 +250,11 @@ class PipelineRunner:
                 # Evaluasi Sinyal (candle terakhir)
                 sig_result = self.signal_engine.evaluate_bar(df_ind, ticker=ticker, bar_idx=-1)
 
+                # Sesuai arahan pengguna: Saham IDX khusus mode BUY (Long-Only), sinyal SELL ditiadakan
+                if not is_gold and sig_result.signal == "SELL":
+                    sig_result.signal = "HOLD"
+                    sig_result.reasons = ["Sinyal jual saham dilewati (Saham IDX khusus mode BUY/Long-Only)."]
+
                 is_duplicate, dup_reason = self._check_duplicate(sig_result)
                 is_fresh, fresh_reason = self._is_candle_fresh(sig_result, item_interval)
                 should_notify = (sig_result.signal in ["BUY", "SELL"]) and (not is_duplicate) and is_fresh
