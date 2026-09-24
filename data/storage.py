@@ -632,6 +632,19 @@ class StockStorage:
         gold_lose = sum(1 for r in gold_rows if r.get("outcome") == "LOSE")
         gold_comp = gold_win + gold_lose
         gold_wr = round((gold_win / gold_comp) * 100.0, 1) if gold_comp > 0 else 0.0
+        gold_pnl_vals = [float(r["pnl_pct"]) for r in gold_rows if r.get("pnl_pct") is not None]
+        gold_total_pnl = round(sum(gold_pnl_vals), 2)
+
+        # Hitung posisi OPEN khusus Gold
+        try:
+            with self._get_connection() as conn2:
+                cur2 = conn2.cursor()
+                cur2.execute(
+                    "SELECT COUNT(*) FROM signals WHERE status = 'OPEN' AND (ticker LIKE '%XAUUSD%' OR ticker LIKE '%GC=F%' OR ticker LIKE '%GOLD%' OR ticker LIKE '%EMAS%')"
+                )
+                gold_open_count = cur2.fetchone()[0]
+        except Exception:
+            gold_open_count = 0
 
         # Statistik khusus Saham IDX
         idx_rows = [r for r in rows if r not in gold_rows]
@@ -658,7 +671,9 @@ class StockStorage:
                 "completed": gold_comp,
                 "win": gold_win,
                 "lose": gold_lose,
+                "open": gold_open_count,
                 "win_rate": gold_wr,
+                "total_pnl": gold_total_pnl,
             },
             "idx_stats": {
                 "total": len(idx_rows),

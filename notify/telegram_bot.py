@@ -1350,72 +1350,72 @@ class TelegramBotCommands:
         await update.message.reply_html("\n".join(lines))
 
     async def winrate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler perintah /winrate dan /performance untuk rekam jejak akurasi Win/Lose bot."""
+        """Handler perintah /winrate dan /performance untuk rekam jejak akurasi Win/Lose bot khusus Gold (XAU/USD)."""
         if not await self.check_user_access(update, context):
             return
 
         stats = self.storage.get_win_rate_stats()
-        tot = stats["total_signals"]
-        comp = stats["completed"]
-        win = stats["win_count"]
-        lose = stats["lose_count"]
-        opn = stats["open_count"]
-        wr = stats["win_rate"]
-        lr = stats["lose_rate"]
-        pnl = stats["total_pnl"]
-
-        if comp >= 5 and wr >= 75.0:
-            eval_note = "🔥 <b>Akurasi Luar Biasa!</b> Filter 7 buku PDF terbukti sangat akurat memprediksi market."
-        elif comp >= 5 and wr >= 60.0:
-            eval_note = "🟢 <b>Akurasi Sehat & Profitable.</b> Risk:Reward terjaga dengan baik."
-        elif comp == 0:
-            eval_note = f"⏳ Sinyal masih berjalan ({opn} posisi OPEN). Menunggu candle mencapai target TP / SL."
-        else:
-            eval_note = "⚠️ <b>Perlu Penyesuaian.</b> Kami terus memperketat filter konfluensi untuk menekan loss."
-
         g_stats = stats.get("gold_stats", {})
-        idx_stats = stats.get("idx_stats", {})
-        stars = "⭐" * min(5, max(1, int(wr / 20))) if comp > 0 else ""
 
-        recent_trades = self.storage.get_recent_completed_signals(limit=4)
+        # Gunakan data Gold sebagai angka utama
+        g_comp  = g_stats.get("completed", 0)
+        g_win   = g_stats.get("win", 0)
+        g_lose  = g_stats.get("lose", 0)
+        g_open  = g_stats.get("open", stats.get("open_count", 0))
+        g_wr    = g_stats.get("win_rate", 0.0)
+        g_lr    = 100.0 - g_wr if g_comp > 0 else 0.0
+        g_pnl   = g_stats.get("total_pnl", stats.get("total_pnl", 0.0))
+
+        # Bintang akurasi
+        stars = "⭐" * min(5, max(1, int(g_wr / 20))) if g_comp > 0 else ""
+
+        # Evaluasi otomatis
+        if g_comp >= 5 and g_wr >= 75.0:
+            eval_note = "🔥 <b>Akurasi Luar Biasa!</b> Filter 7 buku PDF terbukti sangat akurat prediksi arah Gold."
+        elif g_comp >= 5 and g_wr >= 60.0:
+            eval_note = "🟢 <b>Akurasi Sehat & Profitable.</b> Risk:Reward XAU/USD terjaga dengan baik."
+        elif g_comp == 0:
+            eval_note = f"⏳ Sinyal Gold masih berjalan ({g_open} posisi OPEN). Menunggu candle mencapai TP / SL."
+        else:
+            eval_note = "⚠️ <b>Perlu Penyesuaian.</b> Kami terus memperketat filter konfluensi Gold untuk menekan loss."
+
+        # Hanya ambil riwayat trade Gold saja
+        recent_trades = self.storage.get_recent_completed_signals(limit=5)
+        gold_trades = [
+            rt for rt in recent_trades
+            if any(k in rt.get("ticker", "").upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        ]
 
         lines = [
-            "📊 <b>STATISTIK AKURASI SINYAL (WIN / LOSE RATE)</b> 🏆",
+            "🥇 <b>STATISTIK WIN RATE — EMAS (XAU/USD)</b> 🏆",
             "━━━━━━━━━━━━━━━━━━━━━━",
-            f"🎯 <b>Win Rate Akurasi:</b> <code>{wr:.1f}%</code> {stars}",
-            f"🛑 <b>Lose Rate:</b> <code>{lr:.1f}%</code>",
-            f"💰 <b>Total Akumulasi PnL:</b> <code>{pnl:+.2f}%</code>",
+            f"🎯 <b>Win Rate Gold:</b> <code>{g_wr:.1f}%</code> {stars}",
+            f"🛑 <b>Lose Rate:</b>     <code>{g_lr:.1f}%</code>",
+            f"💰 <b>Total PnL Gold:</b> <code>{g_pnl:+.2f}%</code>",
             "━━━━━━━━━━━━━━━━━━━━━━",
-            "📈 <b>RINCIAN REKAM JEJAK:</b>",
-            f"• <b>Total Sinyal:</b> {tot} sinyal",
-            f"• <b>Sinyal Selesai:</b> {comp} trade (🟢 {win} Win | 🔴 {lose} Lose)",
-            f"• <b>Posisi Berjalan (OPEN):</b> {opn} sinyal aktif",
-            "━━━━━━━━━━━━━━━━━━━━━━",
-            "🥇 <b>Khusus Emas Dunia (XAU/USD):</b>",
-            f"• Selesai: {g_stats.get('completed', 0)} trade (🟢 {g_stats.get('win', 0)}W | 🔴 {g_stats.get('lose', 0)}L)",
-            f"• Win Rate Gold: <b>{g_stats.get('win_rate', 0.0):.1f}%</b>",
-            "",
-            "🇮🇩 <b>Khusus Saham Indonesia (IDX):</b>",
-            f"• Selesai: {idx_stats.get('completed', 0)} trade (🟢 {idx_stats.get('win', 0)}W | 🔴 {idx_stats.get('lose', 0)}L)",
-            f"• Win Rate Saham: <b>{idx_stats.get('win_rate', 0.0):.1f}%</b>",
+            "📈 <b>REKAM JEJAK GOLD:</b>",
+            f"• <b>Trade Selesai:</b> {g_comp} trade  (🟢 {g_win} Win | 🔴 {g_lose} Lose)",
+            f"• <b>Posisi OPEN:</b>   {g_open} sinyal aktif sedang berjalan",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"💡 <i>{eval_note}</i>",
         ]
 
-        if recent_trades:
+        if gold_trades:
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-            lines.append("📋 <b>LAPORAN HASIL REKOMENDASI TERAKHIR (TP / SL):</b>")
-            for rt in recent_trades:
-                c_out = rt.get("outcome", "WIN")
-                c_icon = "🟢 TP" if c_out == "WIN" else "🔴 SL"
-                c_tick = rt.get("ticker", "")
-                c_disp = "XAU/USD" if any(k in c_tick.upper() for k in ["GC=F", "XAUUSD", "GOLD"]) else c_tick.replace(".JK", "")
+            lines.append("📋 <b>RIWAYAT HASIL TERAKHIR (XAU/USD):</b>")
+            for rt in gold_trades:
+                c_out  = rt.get("outcome", "WIN")
+                c_icon = "🟢 TP HIT" if c_out == "WIN" else "🔴 SL HIT"
                 c_type = rt.get("signal_type", "BUY")
-                c_pnl = float(rt.get("pnl_pct") or 0.0)
+                c_pnl  = float(rt.get("pnl_pct") or 0.0)
                 c_note = rt.get("outcome_note") or "Selesai mencapai level target."
                 c_time = rt.get("exit_time") or rt.get("candle_time") or "-"
-                lines.append(f"• <b>[{c_icon}] {c_disp} ({c_type}):</b> <code>{c_pnl:+.2f}%</code> ({c_time})")
-                lines.append(f"  <i>Ket: {html.escape(c_note)}</i>")
+                lines.append(f"• <b>[{c_icon}] XAU/USD ({c_type}):</b> <code>{c_pnl:+.2f}%</code>  <i>({c_time})</i>")
+                lines.append(f"  📝 <i>{html.escape(c_note[:80])}</i>")
+        else:
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append("📋 <i>Belum ada trade Gold yang selesai. Posisi aktif sedang dipantau real-time.</i>")
+            lines.append("💡 <i>Setiap kali TP/SL Gold tercapai, laporan otomatis dikirim ke chat ini.</i>")
 
         await update.message.reply_html("\n".join(lines))
 
