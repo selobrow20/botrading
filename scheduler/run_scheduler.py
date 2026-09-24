@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 
 # Add base directory to path
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -235,10 +236,13 @@ class PipelineRunner:
                         f"🎯 Laporan TP/SL: {res_sig['ticker']} {res_sig['signal_type']} "
                         f"-> {res_sig['outcome']} ({res_sig['pnl_pct']:+.2f}%)"
                     )
-                    try:
-                        self.notifier.send_tp_sl_report(res_sig)
-                    except Exception as e:
-                        logger.error(f"Gagal mengirim laporan TP/SL {res_sig['ticker']} ke Telegram: {e}")
+                    # Sesuai preferensi user: Alert real-time TP/SL hanya untuk Gold (XAU/USD).
+                    # Saham dicatat di DB & disajikan simpel saat tutup pasar agar tidak bising.
+                    if is_gold or res_sig.get("is_gold"):
+                        try:
+                            self.notifier.send_tp_sl_report(res_sig)
+                        except Exception as e:
+                            logger.error(f"Gagal mengirim laporan TP/SL {res_sig['ticker']} ke Telegram: {e}")
 
                 # Hitung Indikator
                 df_ind = TechnicalIndicators.add_all_indicators(df)
@@ -361,6 +365,40 @@ class PipelineRunner:
             logger.error(f"Error pada check_upcoming_news_job: {e}")
             return 0
 
+    def run_market_close_job(self) -> None:
+        """
+        Job otomatis penutupan pasar saham (BEI) tiap pukul 16:05 WIB (Senin - Jumat).
+        Mengirim ringkasan pergerakan harga saham utama yang simpel dan ringkas ke Telegram.
+        """
+        try:
+            logger.info("Menjalankan laporan penutupan pasar saham BEI...")
+            cfg = load_config()
+            watchlist = cfg.get("watchlist", ["BBCA.JK", "BBRI.JK", "BMRI.JK", "TLKM.JK", "ASII.JK"])
+            stock_tickers = [t for t in watchlist if not any(k in t.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])]
+
+            summary_data = []
+            for ticker in stock_tickers[:8]:
+                try:
+                    clean_t = ticker.replace(".JK", "")
+                    df = self.fetcher.get_data(ticker, interval="1d", period="5d")
+                    if not df.empty and len(df) >= 1:
+                        curr_c = float(df.iloc[-1]["Close"])
+                        prev_c = float(df.iloc[-2]["Close"]) if len(df) >= 2 else curr_c
+                        chg_pct = ((curr_c - prev_c) / prev_c) * 100.0 if prev_c > 0 else 0.0
+                        summary_data.append({
+                            "ticker": clean_t,
+                            "close": curr_c,
+                            "change_pct": chg_pct,
+                        })
+                except Exception as e:
+                    logger.debug(f"Gagal mengambil ringkasan tutup pasar {ticker}: {e}")
+
+            if summary_data:
+                self.notifier.send_market_close_report(summary_data)
+                logger.info(f"Laporan penutupan pasar saham berhasil dikirim ({len(summary_data)} emiten).")
+        except Exception as e:
+            logger.error(f"Error pada run_market_close_job: {e}")
+
     def _check_duplicate(self, sig: SignalResult) -> Tuple[bool, str]:
         """
         Mencegah spam notifikasi berulang untuk kondisi sinyal yang sama.
@@ -451,6 +489,15 @@ def start_scheduler() -> None:
         trigger=IntervalTrigger(minutes=1),
         id="pre_news_checker_job",
         name="Pengecekan High-Impact News 10 Menit",
+        replace_existing=True,
+    )
+
+    # Jadwalkan laporan penutupan pasar saham IDX simpel (16:05 WIB, Senin-Jumat)
+    scheduler.add_job(
+        runner.run_market_close_job,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=16, minute=5, timezone=ZoneInfo("Asia/Jakarta")),
+        id="idx_market_close_report_job",
+        name="Laporan Penutupan Pasar Saham IDX Simpel",
         replace_existing=True,
     )
 

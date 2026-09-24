@@ -96,8 +96,12 @@ class TelegramNotifier:
 
         is_gold = any(k in ticker_upper for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
         wr_stats = self.storage.get_win_rate_stats()
-        comp = wr_stats.get("completed", 0)
-        wr_badge = f"📊 <b>Akurasi Bot:</b> Win Rate <b>{wr_stats['win_rate']:.1f}%</b> ({wr_stats['win_count']}W / {wr_stats['lose_count']}L)" if comp > 0 else "📊 <b>Akurasi Bot:</b> <i>Sedang aktif melacak sinyal</i>"
+        if is_gold:
+            g_stats = wr_stats.get("gold_stats", {})
+            g_comp = g_stats.get("completed", 0)
+            wr_badge = f"📊 <b>Akurasi Emas (Gold):</b> Win Rate <b>{g_stats.get('win_rate', 0.0):.1f}%</b> ({g_stats.get('win', 0)}W / {g_stats.get('lose', 0)}L)" if g_comp > 0 else "📊 <b>Akurasi Emas:</b> <i>Sedang aktif melacak sinyal</i>"
+        else:
+            wr_badge = ""
 
         lines = []
 
@@ -115,7 +119,8 @@ class TelegramNotifier:
                 lines.append(f"⚖️ <b>Risk/Reward Ratio:</b> 1 : {rrr}")
 
             lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
-            lines.append(wr_badge)
+            if wr_badge:
+                lines.append(wr_badge)
 
             # Telaah 7 Buku PDF untuk Sinyal Masuk
             pdf_details = getattr(sig, "pdf_confluence_details", [])
@@ -149,7 +154,8 @@ class TelegramNotifier:
                 lines.append(f"⚖️ <b>Risk/Reward Ratio:</b> 1 : {rrr}")
 
             lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
-            lines.append(wr_badge)
+            if wr_badge:
+                lines.append(wr_badge)
 
             pdf_details = getattr(sig, "pdf_confluence_details", [])
             if pdf_details:
@@ -177,7 +183,8 @@ class TelegramNotifier:
                 lines.append(f"🎯 TP Pengaman: <b>{tp_str}</b> | 🛑 SL: <b>{sl_str}</b> (RRR 1:{rrr})")
 
             lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
-            lines.append(wr_badge)
+            if wr_badge:
+                lines.append(wr_badge)
 
             pdf_details = getattr(sig, "pdf_confluence_details", [])
             if pdf_details:
@@ -380,6 +387,61 @@ class TelegramNotifier:
                 success = False
         return success
 
+    def format_market_close_summary(
+        self,
+        watchlist_data: List[Dict[str, Any]],
+        date_str: Optional[str] = None,
+    ) -> str:
+        """
+        Menyusun Laporan Penutupan Pasar Saham (BEI) yang ringkas, simpel, dan padat.
+        """
+        now = datetime.now()
+        day_names = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+        day_wib = day_names[now.weekday()]
+        date_wib = date_str or f"{day_wib}, {now.strftime('%d/%m/%Y')}"
+
+        lines = [
+            "🔔 <b>LAPORAN PENUTUPAN PASAR SAHAM (BEI)</b> 🇮🇩",
+            f"📅 <b>{date_wib} | Sesi 2 Selesai (16:00 WIB)</b>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "📊 <b>Performa Watchlist Hari Ini:</b>",
+        ]
+
+        if not watchlist_data:
+            lines.append("• <i>Data ringkasan saham hari ini belum tersedia.</i>")
+        else:
+            for item in watchlist_data[:8]:
+                t = item.get("ticker", "").replace(".JK", "")
+                price = float(item.get("close") or item.get("price") or 0.0)
+                chg = float(item.get("change_pct") or 0.0)
+                icon = "🟢" if chg > 0 else "🔴" if chg < 0 else "⚪"
+                chg_str = f"+{chg:.1f}%" if chg > 0 else f"{chg:.1f}%"
+                lines.append(f"{icon} <b>{t}:</b> Rp {price:,.0f} (<code>{chg_str}</code>)")
+
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("📌 <b>Status:</b> Pasar BEI resmi ditutup. Posisi terpantau aman.")
+        lines.append("💡 <i>Ketik /potensi untuk memantau radar saham besok pagi.</i>")
+
+        return "\n".join(lines)
+
+    def send_market_close_report(self, watchlist_data: List[Dict[str, Any]]) -> bool:
+        """Mengirimkan laporan penutupan pasar saham ringkas ke seluruh pengguna terdaftar."""
+        msg = self.format_market_close_summary(watchlist_data)
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        success = True
+        for cid in approved_ids:
+            try:
+                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
+                if not res:
+                    success = False
+            except Exception as e:
+                logger.error(f"Gagal kirim laporan penutupan saham ke {cid}: {e}")
+                success = False
+        return success
+
     def format_news_alert_message(self, analysis: Dict[str, Any]) -> str:
         """Menyusun pesan notifikasi 10 menit sebelum berita rilis dengan rekomendasi BUY/SELL berbasis PDF & Web."""
         bull = analysis["bullish_scenario"]
@@ -477,6 +539,7 @@ class TelegramBotCommands:
         self.storage = storage or StockStorage()
         self.config = load_config()
         self.admin_id = get_admin_id()
+        self.notifier = TelegramNotifier(storage=self.storage)
 
     def _is_admin(self, update: Update) -> bool:
         """Memeriksa apakah pengirim adalah Super Admin (berdasarkan Chat ID atau Username)."""
@@ -503,12 +566,24 @@ class TelegramBotCommands:
 
         # 1. Super Admin otomatis lolos (berdasarkan Chat ID 8754997836 atau username @selobrow)
         if self._is_admin(update):
-            self.storage.approve_user(user_id)
+            self.storage.approve_user(user_id, duration="lifetime")
             return True
 
-        # 2. Cek apakah sudah disetujui di database
+        # 2. Cek apakah sudah disetujui di database & belum expired
         if self.storage.is_user_authorized(user_id, admin_id=self.admin_id):
             return True
+
+        # Cek apakah user sebelumnya approved tapi sudah kedaluwarsa
+        all_u = {u["chat_id"]: u for u in self.storage.list_all_users()}
+        curr_u = all_u.get(user_id)
+        if curr_u and curr_u.get("status") == "approved":
+            exp_str = curr_u.get("expires_at", "")
+            await update.message.reply_html(
+                f"⏳ <b>Masa Aktif Akses Bot Anda Telah Berakhir</b>\n\n"
+                f"Akses Anda berakhir pada: <code>{exp_str} WIB</code>.\n"
+                f"Silakan hubungi <b>Admin (@selobrow)</b> untuk perpanjangan masa aktif bot! 🙏"
+            )
+            return False
 
         # 3. User belum terdaftar / berstatus pending
         status = self.storage.register_or_get_user(
@@ -532,7 +607,7 @@ class TelegramBotCommands:
             "⏳ <i>Mohon tunggu hingga Admin menyetujui akses Anda.</i>"
         )
 
-        # Kirim alert izin ke Admin beserta tombol klik langsung
+        # Kirim alert izin ke Admin beserta pilihan tombol durasi (jam & hari)
         target_admin = self.admin_id or SUPERADMIN_CHAT_ID
         if target_admin:
             admin_msg = (
@@ -542,13 +617,24 @@ class TelegramBotCommands:
                 f"💬 <b>Username:</b> @{html.escape(user_name)}\n"
                 f"🆔 <b>Chat ID:</b> <code>{user_id}</code>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"<i>Klik salah satu tombol di bawah:</i>"
+                f"<i>Pilih durasi akses untuk pengguna ini:</i>"
             )
             keyboard = [
                 [
-                    InlineKeyboardButton("✅ Izinkan (Approve)", callback_data=f"approve_{user_id}"),
-                    InlineKeyboardButton("🚫 Tolak (Reject)", callback_data=f"reject_{user_id}"),
-                ]
+                    InlineKeyboardButton("⏱️ 1 Jam (Trial)", callback_data=f"apprdur_{user_id}_1h"),
+                    InlineKeyboardButton("⏱️ 6 Jam", callback_data=f"apprdur_{user_id}_6h"),
+                ],
+                [
+                    InlineKeyboardButton("📅 1 Hari", callback_data=f"apprdur_{user_id}_1d"),
+                    InlineKeyboardButton("📅 7 Hari", callback_data=f"apprdur_{user_id}_7d"),
+                ],
+                [
+                    InlineKeyboardButton("📅 30 Hari", callback_data=f"apprdur_{user_id}_30d"),
+                    InlineKeyboardButton("♾️ Permanen", callback_data=f"apprdur_{user_id}_lifetime"),
+                ],
+                [
+                    InlineKeyboardButton("🚫 Tolak Akses", callback_data=f"reject_{user_id}"),
+                ],
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             try:
@@ -564,7 +650,7 @@ class TelegramBotCommands:
         return False
 
     async def button_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler klik tombol interaktif (Izinkan / Tolak) khusus Admin."""
+        """Handler klik tombol interaktif (Izinkan / Tolak / Durasi Akses) khusus Admin."""
         query = update.callback_query
         if not query:
             return
@@ -577,17 +663,45 @@ class TelegramBotCommands:
         data = query.data or ""
         msg_text = query.message.text or ""
 
-        if data.startswith("approve_"):
-            target_id = data.replace("approve_", "").strip()
-            self.storage.approve_user(target_id)
+        if data.startswith("apprdur_"):
+            parts = data.split("_")
+            target_id = parts[1]
+            dur = parts[2] if len(parts) > 2 else "30d"
+            success, expires_at, dur_label = self.storage.approve_user(target_id, dur)
+            exp_display = expires_at if expires_at else "Permanen (Tanpa Batas Waktu)"
             await query.edit_message_text(
-                text=f"{msg_text}\n\n✅ <b>STATUS: DISETUJUI OLEH ADMIN</b> 🎉\nPengguna sekarang memiliki akses penuh ke bot.",
+                text=f"{msg_text}\n\n✅ <b>STATUS: DISETUJUI ({dur_label})</b> 🎉\n"
+                     f"⏱️ Masa Aktif: <code>{dur_label}</code>\n"
+                     f"📅 Berlaku s/d: <code>{exp_display}</code>",
                 parse_mode=ParseMode.HTML,
             )
             try:
                 await context.bot.send_message(
                     chat_id=target_id,
-                    text="🎉 <b>Selamat! Permintaan akses Anda telah disetujui oleh Admin.</b>\nKetik /start untuk mulai menggunakan bot!",
+                    text=f"🎉 <b>Selamat! Permintaan akses Anda telah disetujui oleh Admin.</b>\n\n"
+                         f"⏱️ <b>Masa Aktif:</b> <b>{dur_label}</b>\n"
+                         f"📅 <b>Berlaku s/d:</b> <code>{exp_display}</code>\n\n"
+                         f"Ketik /start untuk mulai menggunakan bot!",
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception as e:
+                logger.warning(f"Gagal kirim pesan approved ke {target_id}: {e}")
+
+        elif data.startswith("approve_"):
+            target_id = data.replace("approve_", "").strip()
+            success, expires_at, dur_label = self.storage.approve_user(target_id, "30d")
+            exp_display = expires_at if expires_at else "Permanen (Tanpa Batas Waktu)"
+            await query.edit_message_text(
+                text=f"{msg_text}\n\n✅ <b>STATUS: DISETUJUI ({dur_label})</b> 🎉\n"
+                     f"📅 Berlaku s/d: <code>{exp_display}</code>",
+                parse_mode=ParseMode.HTML,
+            )
+            try:
+                await context.bot.send_message(
+                    chat_id=target_id,
+                    text=f"🎉 <b>Selamat! Permintaan akses Anda telah disetujui oleh Admin.</b>\n\n"
+                         f"⏱️ <b>Masa Aktif:</b> <b>{dur_label}</b> (s/d {exp_display})\n"
+                         f"Ketik /start untuk mulai menggunakan bot!",
                     parse_mode=ParseMode.HTML,
                 )
             except Exception as e:
@@ -610,29 +724,81 @@ class TelegramBotCommands:
                 pass
 
     async def approve_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler perintah /approve <chat_id> khusus Admin."""
+        """Handler perintah /approve <chat_id> [durasi] khusus Admin."""
         if not self._is_admin(update):
             await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
             return
 
         if not context.args:
-            await update.message.reply_html("⚠️ Format salah. Gunakan: <code>/approve &lt;chat_id&gt;</code>")
+            await update.message.reply_html(
+                "⚠️ Format salah. Gunakan: <code>/approve &lt;chat_id&gt; [durasi]</code>\n\n"
+                "<b>Pilihan durasi:</b>\n"
+                "• Jam: <code>1h</code>, <code>2h</code>, <code>6h</code>, <code>12h</code>\n"
+                "• Hari: <code>1d</code>, <code>7d</code>, <code>30d</code>, <code>90d</code>\n"
+                "• Permanen: <code>lifetime</code> atau <code>permanen</code>\n"
+                "<i>(Default jika kosong: 30d)</i>"
+            )
             return
 
         target_id = context.args[0].strip()
-        success = self.storage.approve_user(target_id)
+        dur = context.args[1].strip() if len(context.args) > 1 else "30d"
+        success, expires_at, dur_label = self.storage.approve_user(target_id, dur)
+        exp_display = expires_at if expires_at else "Permanen (Tanpa Batas Waktu)"
         if success:
-            await update.message.reply_html(f"✅ <b>Pengguna {target_id} berhasil disetujui!</b>")
+            await update.message.reply_html(
+                f"✅ <b>Pengguna {target_id} berhasil disetujui!</b>\n"
+                f"⏱️ <b>Masa Aktif:</b> <code>{dur_label}</code>\n"
+                f"📅 <b>Berlaku s/d:</b> <code>{exp_display}</code>"
+            )
             try:
                 await context.bot.send_message(
                     chat_id=target_id,
-                    text="🎉 <b>Selamat! Akses Anda telah disetujui oleh Admin.</b>\nKetik /start untuk mulai menggunakan bot!",
+                    text=f"🎉 <b>Selamat! Akses Anda telah disetujui oleh Admin.</b>\n\n"
+                         f"⏱️ <b>Masa Aktif:</b> <b>{dur_label}</b>\n"
+                         f"📅 <b>Berlaku s/d:</b> <code>{exp_display}</code>\n\n"
+                         f"Ketik /start untuk mulai menggunakan bot!",
                     parse_mode=ParseMode.HTML,
                 )
             except Exception as e:
                 logger.warning(f"Gagal notif ke {target_id}: {e}")
         else:
             await update.message.reply_text(f"Gagal menyetujui Chat ID {target_id}.")
+
+    async def extend_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /extend <chat_id> <durasi> khusus Admin untuk memperpanjang waktu akses."""
+        if not self._is_admin(update):
+            await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
+            return
+
+        if not context.args or len(context.args) < 2:
+            await update.message.reply_html(
+                "⚠️ Format salah. Gunakan: <code>/extend &lt;chat_id&gt; &lt;durasi&gt;</code>\n"
+                "Contoh: <code>/extend 123456 7d</code> atau <code>/extend 123456 2h</code>"
+            )
+            return
+
+        target_id = context.args[0].strip()
+        dur = context.args[1].strip()
+        success, expires_at, dur_label = self.storage.extend_user(target_id, dur)
+        exp_display = expires_at if expires_at else "Permanen (Tanpa Batas Waktu)"
+        if success:
+            await update.message.reply_html(
+                f"🔄 <b>Akses pengguna {target_id} berhasil diperpanjang!</b>\n"
+                f"➕ <b>Tambahan:</b> <code>{dur_label}</code>\n"
+                f"📅 <b>Masa Aktif Baru s/d:</b> <code>{exp_display}</code>"
+            )
+            try:
+                await context.bot.send_message(
+                    chat_id=target_id,
+                    text=f"🔄 <b>Masa aktif bot Anda telah diperpanjang oleh Admin!</b>\n\n"
+                         f"➕ <b>Tambahan:</b> <b>{dur_label}</b>\n"
+                         f"📅 <b>Aktif hingga:</b> <code>{exp_display}</code>",
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception as e:
+                logger.warning(f"Gagal notif perpanjangan ke {target_id}: {e}")
+        else:
+            await update.message.reply_text(f"Pengguna {target_id} tidak ditemukan.")
 
     async def reject_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /reject <chat_id> khusus Admin."""
@@ -657,7 +823,7 @@ class TelegramBotCommands:
             pass
 
     async def users_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler perintah /users untuk melihat daftar pengguna (khusus Admin)."""
+        """Handler perintah /users untuk melihat daftar pengguna & masa aktifnya (khusus Admin)."""
         if not self._is_admin(update):
             await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
             return
@@ -667,16 +833,50 @@ class TelegramBotCommands:
             await update.message.reply_text("Belum ada pengguna lain yang meminta akses.")
             return
 
-        lines = ["👥 <b>DAFTAR PENGGUNA BOT:</b>", "━━━━━━━━━━━━━━━━━━━━━━"]
+        lines = ["👥 <b>DAFTAR PENGGUNA & MASA AKTIF BOT:</b>", "━━━━━━━━━━━━━━━━━━━━━━"]
         for u in users:
             st = u.get("status", "pending")
             emoji = "🟢" if st == "approved" else "🔴" if st == "rejected" else "🟡"
             cid = u.get("chat_id", "-")
             name = u.get("full_name") or u.get("username") or "-"
-            lines.append(f"{emoji} <b>{html.escape(name)}</b> (<code>{cid}</code>) - <i>{st.upper()}</i>")
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append("👉 Ketik <code>/approve &lt;id&gt;</code> atau <code>/reject &lt;id&gt;</code>")
+            rem = u.get("remaining_label", "")
+            lines.append(f"{emoji} <b>{html.escape(name)}</b> (<code>{cid}</code>)")
+            lines.append(f"   Status: <i>{st.upper()}</i> | Masa Aktif: <b>{rem}</b>")
+            lines.append("──────────────────────")
+        lines.append("👉 Ketik <code>/approve &lt;id&gt; [durasi]</code> (misal: <code>1h</code>, <code>6h</code>, <code>7d</code>, <code>30d</code>, <code>lifetime</code>)")
+        lines.append("👉 Ketik <code>/extend &lt;id&gt; [durasi]</code> untuk memperpanjang waktu")
         await update.message.reply_html("\n".join(lines))
+
+    async def tutup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /tutup untuk melihat laporan penutupan pasar saham BEI yang simpel."""
+        if not await self.check_user_access(update, context):
+            return
+
+        from data.fetcher import DataFetcher
+        cfg = load_config()
+        watchlist = cfg.get("watchlist", ["BBCA.JK", "BBRI.JK", "BMRI.JK", "TLKM.JK", "ASII.JK"])
+        fetcher = DataFetcher(storage=self.storage)
+
+        summary_data = []
+        for ticker in watchlist[:8]:
+            try:
+                clean_t = ticker.replace(".JK", "")
+                df = fetcher.get_data(ticker, interval="1d", period="5d")
+                if not df.empty and len(df) >= 1:
+                    last_row = df.iloc[-1]
+                    curr_c = float(last_row["Close"])
+                    prev_c = float(df.iloc[-2]["Close"]) if len(df) >= 2 else curr_c
+                    chg_pct = ((curr_c - prev_c) / prev_c) * 100.0 if prev_c > 0 else 0.0
+                    summary_data.append({
+                        "ticker": clean_t,
+                        "close": curr_c,
+                        "change_pct": chg_pct,
+                    })
+            except Exception as e:
+                logger.debug(f"Gagal memuat ringkasan saham {ticker}: {e}")
+
+        summary_text = self.notifier.format_market_close_summary(summary_data)
+        await update.message.reply_html(summary_text)
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /start dan /help"""
@@ -1652,6 +1852,7 @@ async def set_menu_commands(application: Application) -> None:
         BotCommand("laporan", "📋 Laporan Hasil Rekomendasi (TP/SL) & Akurasi"),
         BotCommand("candle", "🕯️ Bedah Pola Candlestick & Price Action"),
         BotCommand("gold", "🥇 Analisis Sinyal Emas Dunia (XAU/USD)"),
+        BotCommand("tutup", "🔔 Laporan Penutupan Pasar Saham (BEI) Simpel"),
         BotCommand("scan", "🔍 Pindai Sinyal Pasar Sekarang"),
         BotCommand("watchlist", "📋 Saham Potensial Cuan & Harga"),
         BotCommand("status", "⚙️ Status Bot & Strategi Aktif"),
@@ -1698,11 +1899,13 @@ def build_telegram_application() -> Optional[Application]:
     app.add_handler(CommandHandler(["winrate", "performance", "akurasi", "laporan", "evaluasi"], cmd_handler.winrate_command))
     app.add_handler(CommandHandler(["candle", "candlestick", "pola"], cmd_handler.candle_command))
     app.add_handler(CommandHandler(["gold", "xau", "emas"], cmd_handler.gold_command))
+    app.add_handler(CommandHandler(["tutup", "closesaham", "laporansaham"], cmd_handler.tutup_command))
     app.add_handler(CommandHandler("status", cmd_handler.status_command))
     app.add_handler(CommandHandler("scan", cmd_handler.scan_command))
     app.add_handler(CommandHandler("watchlist", cmd_handler.watchlist_command))
     app.add_handler(CommandHandler("lasthistory", cmd_handler.lasthistory_command))
     app.add_handler(CommandHandler("approve", cmd_handler.approve_command))
+    app.add_handler(CommandHandler("extend", cmd_handler.extend_command))
     app.add_handler(CommandHandler("reject", cmd_handler.reject_command))
     app.add_handler(CommandHandler("users", cmd_handler.users_command))
     app.add_handler(CallbackQueryHandler(cmd_handler.button_callback_handler))

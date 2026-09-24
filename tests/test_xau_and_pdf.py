@@ -248,3 +248,68 @@ def test_format_tp_sl_report():
     assert "-1.50%" in lose_msg
     assert "cut loss disiplin melindungi portofolio" in lose_msg
 
+
+def test_market_close_summary_and_gold_winrate_filter():
+    """Menguji format laporan penutupan pasar saham BEI yang simpel dan filter winrate khusus Gold."""
+    from unittest.mock import patch
+
+    notifier = TelegramNotifier()
+
+    # 1. Format laporan penutupan pasar saham (simpel & ringkas)
+    sample_market_data = [
+        {"ticker": "BBCA", "close": 10250.0, "change_pct": 1.25},
+        {"ticker": "BBRI", "close": 5100.0, "change_pct": -0.50},
+        {"ticker": "TLKM", "close": 3200.0, "change_pct": 0.0},
+    ]
+
+    report = notifier.format_market_close_summary(sample_market_data)
+    assert "LAPORAN PENUTUPAN PASAR SAHAM (BEI)" in report
+    assert "BBCA" in report
+    assert "BBRI" in report
+    assert "Pasar BEI resmi ditutup" in report
+    assert "/potensi" in report
+
+    # 2. Uji filter badge winrate: Hanya muncul pada Gold, tidak muncul pada Saham
+    mock_stats = {
+        "gold_stats": {
+            "completed": 10,
+            "win": 8,
+            "lose": 2,
+            "win_rate": 80.0,
+        }
+    }
+
+    # Signal Gold (XAUUSD) -> badge winrate muncul
+    gold_sig = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="DayTrading",
+        signal="BUY",
+        price=2750.0,
+        take_profit_price=2775.0,
+        stop_loss_price=2735.0,
+        reasons=["Golden Pocket Fib 0.618"],
+        candle_time="2026-09-24 10:00:00",
+    )
+    with patch.object(notifier.storage, "get_win_rate_stats", return_value=mock_stats):
+        gold_msg = notifier.format_signal_message(gold_sig)
+    assert "Akurasi Emas (Gold)" in gold_msg
+    assert "80.0%" in gold_msg
+
+    # Signal Saham (BBCA.JK) -> Tanpa badge winrate agar tetap bersih & simpel
+    stock_sig = SignalResult(
+        ticker="BBCA.JK",
+        strategy_name="DayTrading",
+        signal="BUY",
+        price=10250.0,
+        take_profit_price=10550.0,
+        stop_loss_price=10050.0,
+        reasons=["Breakout EMA 20"],
+        candle_time="2026-09-24 10:00:00",
+    )
+    with patch.object(notifier.storage, "get_win_rate_stats", return_value=mock_stats):
+        stock_msg = notifier.format_signal_message(stock_sig)
+    assert "Akurasi Emas" not in stock_msg
+    assert "Win Rate" not in stock_msg
+
+
+

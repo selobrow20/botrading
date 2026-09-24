@@ -1,9 +1,10 @@
 import os
+import re
 import sqlite3
 import json
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union, Tuple
 from contextlib import contextmanager
 import pandas as pd
 from config.settings import BASE_DIR, load_config, setup_logger
@@ -12,6 +13,50 @@ logger = setup_logger("storage")
 
 
 SUPERADMIN_CHAT_ID = "8754997836"
+
+
+def parse_access_duration(duration_input: Optional[Union[str, int, float]]) -> Tuple[Optional[timedelta], str]:
+    """
+    Mengonversi input durasi akses (jam, hari, permanen) menjadi timedelta dan label deskriptif.
+    Mendukung:
+    - Jam: '1h', '2h', '3h', '6h', '12h', '24h', '1jam', '6jam'
+    - Hari: '1d', '7d', '14d', '30d', '90d', '1hari', '7hari', '30hari'
+    - Bulan: '1m', '3m', '6m', '1bulan'
+    - Permanen / Lifetime: 'lifetime', 'permanen', 'permanent', '0', None, ''
+    """
+    if duration_input is None:
+        return timedelta(days=30), "30 Hari"
+
+    d_str = str(duration_input).strip().lower()
+    if d_str in ["lifetime", "permanen", "permanent", "0", "unlimited", "selamanya", "none", ""]:
+        return None, "Permanen (Tanpa Batas Waktu)"
+
+    # Format Jam (contoh: 1h, 6h, 12h, 2jam)
+    m_hour = re.match(r"^(\d+)\s*(h|jam|hour|hours)$", d_str)
+    if m_hour:
+        hrs = int(m_hour.group(1))
+        return timedelta(hours=hrs), f"{hrs} Jam"
+
+    # Format Hari (contoh: 1d, 7d, 30d, 7hari)
+    m_day = re.match(r"^(\d+)\s*(d|hari|day|days)$", d_str)
+    if m_day:
+        days = int(m_day.group(1))
+        return timedelta(days=days), f"{days} Hari"
+
+    # Format Bulan (contoh: 1m, 3m, 1bulan)
+    m_month = re.match(r"^(\d+)\s*(m|bulan|month|months)$", d_str)
+    if m_month:
+        months = int(m_month.group(1))
+        return timedelta(days=months * 30), f"{months} Bulan ({months * 30} Hari)"
+
+    # Jika hanya angka polos, perlakukan sebagai hari (misal 7 -> 7 hari)
+    if d_str.isdigit():
+        days = int(d_str)
+        if days == 0:
+            return None, "Permanen (Tanpa Batas Waktu)"
+        return timedelta(days=days), f"{days} Hari"
+
+    return timedelta(days=30), "30 Hari"
 
 
 class StockStorage:
@@ -134,9 +179,16 @@ class StockStorage:
                     full_name TEXT,
                     status TEXT NOT NULL DEFAULT 'pending',
                     requested_at TEXT NOT NULL,
-                    approved_at TEXT
+                    approved_at TEXT,
+                    expires_at TEXT
                 );
             """)
+
+            # Auto-migration untuk tabel authorized_users
+            try:
+                cursor.execute("ALTER TABLE authorized_users ADD COLUMN expires_at TEXT;")
+            except Exception:
+                pass
 
             # Tabel 5: Kalender Ekonomi (Forex Factory & High-Impact News)
             cursor.execute("""
@@ -724,7 +776,7 @@ class StockStorage:
             return "pending"
 
     def is_user_authorized(self, chat_id: str, admin_id: Optional[str] = None) -> bool:
-        """Memeriksa apakah pengguna diizinkan menggunakan bot."""
+        """Memeriksa apakah pengguna diizinkan menggunakan bot (memvalidasi approval & masa aktif)."""
         chat_id_str = str(chat_id).strip()
         if chat_id_str in [SUPERADMIN_CHAT_ID, "8754997836"]:
             return True
@@ -732,30 +784,97 @@ class StockStorage:
             return True
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT status FROM authorized_users WHERE chat_id = ?", (chat_id_str,))
+            cursor.execute("SELECT status, expires_at FROM authorized_users WHERE chat_id = ?", (chat_id_str,))
             row = cursor.fetchone()
             if row and row["status"] == "approved":
+                expires_at = row["expires_at"]
+                if expires_at:
+                    try:
+                        exp_dt = datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S")
+                        if datetime.now() > exp_dt:
+                            return False  # Sudah kedaluwarsa!
+                    except Exception:
+                        pass
                 return True
         return False
 
-    def approve_user(self, chat_id: str) -> bool:
-        """Menyetujui akses pengguna."""
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    def approve_user(
+        self,
+        chat_id: str,
+        duration: Optional[Union[str, int, float]] = "30d",
+    ) -> Tuple[bool, Optional[str], str]:
+        """
+        Menyetujui akses pengguna dengan durasi waktu tertentu (jam, hari, atau permanen).
+        Mengembalikan tuple: (success: bool, expires_at: Optional[str], duration_label: str)
+        """
+        now = datetime.now()
+        now_str = now.strftime("%Y-%m-%d %H:%M:%S")
         chat_id_str = str(chat_id).strip()
+
+        delta, duration_label = parse_access_duration(duration)
+        if delta is not None:
+            expires_at = (now + delta).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            expires_at = None
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE authorized_users 
-                SET status = 'approved', approved_at = ? 
+                SET status = 'approved', approved_at = ?, expires_at = ? 
                 WHERE chat_id = ?
-            """, (now_str, chat_id_str))
+            """, (now_str, expires_at, chat_id_str))
             if cursor.rowcount == 0:
                 cursor.execute("""
-                    INSERT INTO authorized_users (chat_id, username, full_name, status, requested_at, approved_at)
-                    VALUES (?, '', 'Trader', 'approved', ?, ?)
-                """, (chat_id_str, now_str, now_str))
+                    INSERT INTO authorized_users (chat_id, username, full_name, status, requested_at, approved_at, expires_at)
+                    VALUES (?, '', 'Trader', 'approved', ?, ?, ?)
+                """, (chat_id_str, now_str, now_str, expires_at))
             conn.commit()
-            return True
+            return True, expires_at, duration_label
+
+    def extend_user(
+        self,
+        chat_id: str,
+        duration: Union[str, int, float] = "30d",
+    ) -> Tuple[bool, Optional[str], str]:
+        """
+        Memperpanjang masa aktif pengguna.
+        Jika pengguna masih aktif, durasi ditambahkan dari tanggal kedaluwarsa saat ini.
+        Jika pengguna sudah kedaluwarsa atau belum ada tanggal expired, dihitung dari waktu sekarang.
+        """
+        chat_id_str = str(chat_id).strip()
+        delta, duration_label = parse_access_duration(duration)
+        now = datetime.now()
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status, expires_at FROM authorized_users WHERE chat_id = ?", (chat_id_str,))
+            row = cursor.fetchone()
+            if not row:
+                return False, None, duration_label
+
+            current_exp_str = row["expires_at"]
+            base_time = now
+            if current_exp_str:
+                try:
+                    exp_dt = datetime.strptime(current_exp_str, "%Y-%m-%d %H:%M:%S")
+                    if exp_dt > now:
+                        base_time = exp_dt
+                except Exception:
+                    base_time = now
+
+            if delta is not None:
+                new_expires_at = (base_time + delta).strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                new_expires_at = None
+
+            cursor.execute("""
+                UPDATE authorized_users 
+                SET status = 'approved', expires_at = ? 
+                WHERE chat_id = ?
+            """, (new_expires_at, chat_id_str))
+            conn.commit()
+            return True, new_expires_at, duration_label
 
     def reject_user(self, chat_id: str) -> bool:
         """Menolak atau mencabut akses pengguna."""
@@ -769,27 +888,55 @@ class StockStorage:
             return cursor.rowcount > 0
 
     def get_approved_chat_ids(self, admin_id: Optional[str] = None) -> List[str]:
-        """Daftar chat ID yang aktif diizinkan menerima sinyal."""
+        """Daftar chat ID yang aktif diizinkan menerima sinyal (belum kedaluwarsa)."""
         approved = {SUPERADMIN_CHAT_ID, "8754997836"}
         if admin_id and str(admin_id).strip():
             approved.add(str(admin_id).strip())
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT chat_id FROM authorized_users WHERE status = 'approved'")
+            cursor.execute("""
+                SELECT chat_id FROM authorized_users 
+                WHERE status = 'approved' AND (expires_at IS NULL OR expires_at > ?)
+            """, (now_str,))
             for r in cursor.fetchall():
                 approved.add(str(r["chat_id"]).strip())
         return list(approved)
 
     def list_all_users(self) -> List[Dict[str, Any]]:
-        """Daftar seluruh pengguna yang pernah meminta akses bot."""
+        """Daftar seluruh pengguna yang pernah meminta akses bot beserta sisa masa aktif."""
+        now = datetime.now()
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT chat_id, username, full_name, status, requested_at, approved_at 
+                SELECT chat_id, username, full_name, status, requested_at, approved_at, expires_at 
                 FROM authorized_users 
                 ORDER BY requested_at DESC
             """)
-            return [dict(r) for r in cursor.fetchall()]
+            users = []
+            for r in cursor.fetchall():
+                u = dict(r)
+                exp_str = u.get("expires_at")
+                if u["status"] != "approved":
+                    u["remaining_label"] = "Menunggu Persetujuan" if u["status"] == "pending" else "Ditolak"
+                elif not exp_str:
+                    u["remaining_label"] = "♾️ Permanen"
+                else:
+                    try:
+                        exp_dt = datetime.strptime(exp_str, "%Y-%m-%d %H:%M:%S")
+                        diff = exp_dt - now
+                        if diff.total_seconds() <= 0:
+                            u["remaining_label"] = "🛑 Kedaluwarsa"
+                        elif diff.days > 0:
+                            u["remaining_label"] = f"🟢 Sisa {diff.days} Hari"
+                        else:
+                            hours = int(diff.total_seconds() // 3600)
+                            mins = int((diff.total_seconds() % 3600) // 60)
+                            u["remaining_label"] = f"🟢 Sisa {hours} Jam {mins}m"
+                    except Exception:
+                        u["remaining_label"] = f"Hingga {exp_str}"
+                users.append(u)
+            return users
 
     def save_economic_events(self, events: List[Dict[str, Any]]) -> int:
         """Menyimpan atau memperbarui daftar event kalender ekonomi."""
