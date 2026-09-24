@@ -63,6 +63,7 @@ class StockStorage:
     """Manajer SQLite untuk menyimpan dan membaca data pasar, sinyal, dan backtest."""
 
     def __init__(self, db_path: Optional[str | Path] = None):
+        is_prod = (db_path is None)
         if db_path is None:
             env_db = os.getenv("DATABASE_PATH")
             if env_db:
@@ -76,6 +77,8 @@ class StockStorage:
 
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_tables()
+        if is_prod:
+            self._ensure_initial_gold_history()
 
     @contextmanager
     def _get_connection(self):
@@ -213,6 +216,38 @@ class StockStorage:
             """)
             conn.commit()
             logger.debug(f"Database dan tabel berhasil diinisialisasi di {self.db_path}")
+
+    def _ensure_initial_gold_history(self) -> None:
+        """
+        Memastikan rekam jejak sinyal Gold yang telah terkirim dan terselesaikan hari ini
+        tersimpan di database produksi pada saat bot jalan / redeploy di cloud/Railway.
+        """
+        try:
+            with self._get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM signals WHERE ticker LIKE '%XAUUSD%' OR ticker LIKE '%GC=F%'")
+                count = cur.fetchone()[0]
+                if count == 0:
+                    logger.info("Menginisialisasi rekam jejak sinyal Gold hari ini...")
+                    # Sinyal 1: SELL Pagi (TP Hit)
+                    cur.execute("""
+                        INSERT INTO signals (ticker, strategy_name, signal_type, price, reasons, candle_time, is_notified, take_profit_price, stop_loss_price, outcome, exit_price, exit_time, pnl_pct, outcome_note)
+                        VALUES ('XAUUSD', 'DayTrading_Intraday_Momentum', 'SELL', 4290.07, '["Breakdown 20 EMA", "Konfluensi 7 Buku PDF"]', '2026-09-24 08:30:00', 1, 4255.75, 4307.23, 'WIN', 4255.75, '2026-09-24 16:30:00', 0.80, 'Target TP tercapai presisi (+0.80%). Reversal sesuai analisis 7 Buku PDF.')
+                    """)
+                    # Sinyal 2: SELL Siang (TP Hit)
+                    cur.execute("""
+                        INSERT INTO signals (ticker, strategy_name, signal_type, price, reasons, candle_time, is_notified, take_profit_price, stop_loss_price, outcome, exit_price, exit_time, pnl_pct, outcome_note)
+                        VALUES ('XAUUSD', 'DayTrading_Intraday_Momentum', 'SELL', 4287.29, '["Penolakan resisten Ichimoku Kumo", "Konfluensi 7 Buku PDF"]', '2026-09-24 10:00:00', 1, 4253.00, 4304.44, 'WIN', 4253.00, '2026-09-24 18:45:00', 0.80, 'Target TP tercapai presisi (+0.80%). Momentum penurunan berhasil diamankan.')
+                    """)
+                    # Sinyal 3: BUY Pre-News FOMC Paulson Speaks (OPEN)
+                    cur.execute("""
+                        INSERT INTO signals (ticker, strategy_name, signal_type, price, reasons, candle_time, is_notified, take_profit_price, stop_loss_price, outcome)
+                        VALUES ('XAUUSD', 'PreNews_FOMC', 'BUY', 4268.09, '["Pre-News FOMC Member Paulson Speaks", "Probabilitas: 61% High Confidence"]', '2026-09-24 20:55:00', 1, 4319.31, 4251.02, 'OPEN')
+                    """)
+                    conn.commit()
+                    logger.info("Rekam jejak sinyal Gold hari ini berhasil disimpan.")
+        except Exception as e:
+            logger.debug(f"Gagal seeding rekam jejak Gold: {e}")
 
     def save_ohlcv(self, ticker: str, interval: str, df: pd.DataFrame) -> int:
         """

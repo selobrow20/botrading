@@ -1390,7 +1390,7 @@ class TelegramBotCommands:
             eval_note = "⚠️ <b>Perlu Penyesuaian.</b> Kami terus memperketat filter konfluensi Gold untuk menekan loss."
 
         # Hanya ambil riwayat trade Gold saja
-        recent_trades = self.storage.get_recent_completed_signals(limit=5)
+        recent_trades = self.storage.get_recent_completed_signals(limit=10)
         gold_trades = [
             rt for rt in recent_trades
             if any(k in rt.get("ticker", "").upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
