@@ -456,12 +456,22 @@ class TelegramNotifier:
 
         badge_emoji = "🟢" if "BUY" in rec else "🔴" if "SELL" in rec else "🟡"
         action_name = "BUY / LONG 🚀" if "BUY" in rec else "SELL / SHORT 📉" if "SELL" in rec else "STRADDLE BREAKOUT ⚡"
+        # Hitung estimasi menit tersisa secara dinamis
+        try:
+            now_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
+            clean_date = analysis['date_wib'].split("+")[0].strip()
+            ev_dt = datetime.strptime(clean_date, "%Y-%m-%d %H:%M:%S").replace(tzinfo=ZoneInfo("Asia/Jakarta"))
+            diff_secs = (ev_dt - now_wib).total_seconds()
+            diff_mins = max(1, int(round(diff_secs / 60.0)))
+            time_badge = f"(<b>~{diff_mins} Menit Lagi!</b>)"
+        except Exception:
+            time_badge = "(<b>~10 Menit Lagi!</b>)"
 
         lines = [
             f"🚨 <b>ALERT PRE-NEWS: REKOMENDASI TRADING XAU/USD (GOLD)</b> ⚠️",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"📢 <b>Event:</b> {html.escape(analysis['news_title'])} (<b>{news_type}</b>)",
-            f"⏰ <b>Waktu Rilis:</b> <code>{analysis['date_wib']} WIB</code> (<b>~10 Menit Lagi!</b>)",
+            f"⏰ <b>Waktu Rilis:</b> <code>{analysis['date_wib']} WIB</code> {time_badge}",
             f"💵 <b>Harga Emas Saat Ini:</b> <code>${analysis['current_price']:,.2f}</code>",
             f"💥 <b>Estimasi Volatilitas:</b> ±{analysis['expected_volatility_pct']}% (±${analysis['expected_volatility_dollars']})",
             "━━━━━━━━━━━━━━━━━━━━━━",

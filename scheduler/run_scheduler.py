@@ -333,12 +333,28 @@ class PipelineRunner:
             from strategy.news_predictor import NewsPredictor
 
             cal = EconomicCalendar(storage=self.storage)
-            upcoming = cal.get_upcoming_high_impact_news(within_minutes=15)
-            if not upcoming:
-                return 0
 
+            # Ambil data candle live gold terbaru
             df_gold = self.fetcher.get_data("XAUUSD", interval="15m", period="5d", force_fetch=True)
             live_price = float(df_gold["Close"].iloc[-1]) if not df_gold.empty else None
+
+            # Evaluasi berkala TP/SL posisi Gold yang sedang OPEN tiap 1 menit
+            if not df_gold.empty:
+                resolved_gold = self.storage.resolve_open_signals("XAUUSD", df_gold)
+                for res_sig in resolved_gold:
+                    logger.info(
+                        f"🎯 Laporan TP/SL Gold (1m check): {res_sig['ticker']} {res_sig['signal_type']} "
+                        f"-> {res_sig['outcome']} ({res_sig['pnl_pct']:+.2f}%)"
+                    )
+                    try:
+                        self.notifier.send_tp_sl_report(res_sig)
+                    except Exception as e:
+                        logger.error(f"Gagal mengirim laporan TP/SL Gold ke Telegram: {e}")
+
+            # Cek berita besar yang akan rilis ~10 menit ke depan (sesuai arahan user)
+            upcoming = cal.get_upcoming_high_impact_news(within_minutes=10)
+            if not upcoming:
+                return 0
 
             notified_count = 0
             for event in upcoming:
@@ -361,6 +377,34 @@ class PipelineRunner:
                 if ev_id:
                     self.storage.mark_news_alert_sent(ev_id)
                 notified_count += 1
+
+                # Simpan rekomendasi trading ke database agar masuk sebagai posisi OPEN & terlacak di Win Rate
+                setup = analysis.get("trade_setup", {})
+                action = setup.get("action")
+                if action in ["BUY", "SELL"]:
+                    entry_p = float(setup.get("entry_price", analysis.get("current_price", 0.0)))
+                    tp_p = float(setup.get("tp1", 0.0))
+                    sl_p = float(setup.get("sl", 0.0))
+                    title = analysis.get("news_title", "Pre-News")
+                    conf = analysis.get("confidence_pct", 70)
+                    now_str = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%Y-%m-%d %H:%M:%S")
+
+                    sig_id = self.storage.save_signal(
+                        ticker="XAUUSD",
+                        strategy_name=f"PreNews_{news_type}",
+                        signal_type=action,
+                        price=entry_p,
+                        reasons=[
+                            f"Pre-News {news_type}: {title}",
+                            f"Probabilitas: {conf}% High Confidence",
+                            f"Bias: {analysis.get('recommendation_bias', 'NEUTRAL')}",
+                        ],
+                        candle_time=now_str,
+                        is_notified=True,
+                        take_profit_price=tp_p,
+                        stop_loss_price=sl_p,
+                    )
+                    logger.info(f"💾 Sinyal Pre-News {action} XAUUSD tersimpan ke DB (ID: {sig_id}) sebagai posisi OPEN.")
 
             return notified_count
         except Exception as e:

@@ -419,26 +419,41 @@ class StockStorage:
             return []
 
         clean_ticker = ticker.upper()
-        query = """
-            SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time, take_profit_price, stop_loss_price
-            FROM signals
-            WHERE ticker = ? AND outcome = 'OPEN' AND signal_type IN ('BUY', 'SELL')
-            AND take_profit_price IS NOT NULL AND stop_loss_price IS NOT NULL
-        """
+        is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+
+        if is_gold:
+            query = """
+                SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time, take_profit_price, stop_loss_price
+                FROM signals
+                WHERE (ticker LIKE '%XAUUSD%' OR ticker LIKE '%GC=F%' OR ticker LIKE '%GOLD%' OR ticker LIKE '%EMAS%')
+                AND outcome = 'OPEN' AND signal_type IN ('BUY', 'SELL')
+                AND take_profit_price IS NOT NULL AND stop_loss_price IS NOT NULL
+            """
+            params = ()
+        else:
+            query = """
+                SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time, take_profit_price, stop_loss_price
+                FROM signals
+                WHERE ticker = ? AND outcome = 'OPEN' AND signal_type IN ('BUY', 'SELL')
+                AND take_profit_price IS NOT NULL AND stop_loss_price IS NOT NULL
+            """
+            params = (clean_ticker,)
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query, (clean_ticker,))
+            cursor.execute(query, params)
             open_signals = [dict(r) for r in cursor.fetchall()]
 
         if not open_signals:
             return []
 
         resolved_signals = []
-        is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
 
         df_eval = df.copy()
         if not isinstance(df_eval.index, pd.DatetimeIndex):
             df_eval.index = pd.to_datetime(df_eval.index)
+        if df_eval.index.tz is not None:
+            df_eval.index = df_eval.index.tz_localize(None)
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -450,10 +465,12 @@ class StockStorage:
                 sl = float(sig["stop_loss_price"])
                 try:
                     sig_time = pd.to_datetime(sig["candle_time"])
+                    if hasattr(sig_time, "tz") and sig_time.tz is not None:
+                        sig_time = sig_time.tz_localize(None)
                 except Exception:
                     continue
 
-                subsequent_bars = df_eval[df_eval.index > sig_time]
+                subsequent_bars = df_eval[df_eval.index >= sig_time]
                 if subsequent_bars.empty:
                     continue
 
@@ -640,10 +657,12 @@ class StockStorage:
             with self._get_connection() as conn2:
                 cur2 = conn2.cursor()
                 cur2.execute(
-                    "SELECT COUNT(*) FROM signals WHERE status = 'OPEN' AND (ticker LIKE '%XAUUSD%' OR ticker LIKE '%GC=F%' OR ticker LIKE '%GOLD%' OR ticker LIKE '%EMAS%')"
+                    "SELECT COUNT(*) FROM signals WHERE outcome = 'OPEN' AND signal_type IN ('BUY', 'SELL') "
+                    "AND (ticker LIKE '%XAUUSD%' OR ticker LIKE '%GC=F%' OR ticker LIKE '%GOLD%' OR ticker LIKE '%EMAS%')"
                 )
                 gold_open_count = cur2.fetchone()[0]
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Gagal hitung gold_open_count: {e}")
             gold_open_count = 0
 
         # Statistik khusus Saham IDX
