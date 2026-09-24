@@ -257,18 +257,20 @@ class PipelineRunner:
                 if sig_result.signal in ["BUY", "SELL"]:
                     results["signals_triggered"] += 1
 
-                # Simpan ke Database lengkap dengan target TP & SL
-                self.storage.save_signal(
-                    ticker=sig_result.ticker,
-                    strategy_name=sig_result.strategy_name,
-                    signal_type=sig_result.signal,
-                    price=sig_result.price,
-                    reasons=sig_result.reasons,
-                    candle_time=sig_result.candle_time,
-                    is_notified=should_notify,
-                    take_profit_price=sig_result.take_profit_price,
-                    stop_loss_price=sig_result.stop_loss_price,
-                )
+                # Simpan ke Database hanya BUY/SELL (HOLD tidak perlu disimpan)
+                if sig_result.signal in ["BUY", "SELL"]:
+                    self.storage.save_signal(
+                        ticker=sig_result.ticker,
+                        strategy_name=sig_result.strategy_name,
+                        signal_type=sig_result.signal,
+                        price=sig_result.price,
+                        reasons=sig_result.reasons,
+                        candle_time=sig_result.candle_time,
+                        is_notified=should_notify,
+                        take_profit_price=sig_result.take_profit_price,
+                        stop_loss_price=sig_result.stop_loss_price,
+                    )
+
 
                 # Kirim Notifikasi jika sinyal valid, bukan duplikat, dan candle segar
                 if should_notify:
