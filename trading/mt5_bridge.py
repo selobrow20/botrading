@@ -64,6 +64,7 @@ class MT5Bridge:
         self.path: str = str(os.getenv("MT5_PATH", mt5_cfg.get("path", "")) or "")
         self.magic_number: int = int(mt5_cfg.get("magic_number", 777777))
         self.default_lot: float = float(mt5_cfg.get("default_lot", 0.01))
+        self.use_dynamic_lot: bool = bool(mt5_cfg.get("use_dynamic_lot", False))
         self.risk_percent: float = float(mt5_cfg.get("risk_percent", 1.0))
         self.max_slippage: int = int(mt5_cfg.get("max_slippage", 20))
         self.gold_symbol: str = str(mt5_cfg.get("gold_symbol", "XAUUSD"))
@@ -272,7 +273,7 @@ class MT5Bridge:
         # Varian penamaan emas di berbagai broker
         is_gold = any(k in clean for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
         candidates = (
-            [self.gold_symbol, "XAUUSD", "XAUUSDm", "GOLD", "XAUUSD.s", "XAUUSD.a", "XAUUSD.c", "XAUUSD#", "XAUUSD_i"]
+            [self.gold_symbol, "XAUUSDc", "XAUUSD", "XAUUSDm", "GOLD", "XAUUSD.m", "XAUUSD.c", "XAUUSD.s", "XAUUSD.a", "XAUUSD.z", "XAUUSD#", "XAUUSD_i"]
             if is_gold
             else [clean, f"{clean}.s", f"{clean}m"]
         )
@@ -284,6 +285,16 @@ class MT5Bridge:
                 if not s_info.visible:
                     mt5.symbol_select(sym, True)
                 return sym
+
+        # Jika belum ketemu, cari secara dinamis dari seluruh simbol yang didukung broker
+        if is_gold:
+            all_syms = mt5.symbols_get()
+            if all_syms:
+                for s in all_syms:
+                    if "XAUUSD" in s.name.upper() or "GOLD" in s.name.upper():
+                        if not s.visible:
+                            mt5.symbol_select(s.name, True)
+                        return s.name
 
         return None
 
@@ -297,7 +308,7 @@ class MT5Bridge:
         Menghitung ukuran lot optimal berdasarkan manajemen risiko modal (% Equity)
         dan jarak Stop Loss.
         """
-        if self.simulation_mode:
+        if self.simulation_mode or not self.use_dynamic_lot:
             return self.default_lot
 
         if self.risk_percent <= 0:
