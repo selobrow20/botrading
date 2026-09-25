@@ -165,6 +165,9 @@ class PipelineRunner:
         """
         logger.info("=== Memulai Siklus Pipeline Analisis Saham & Komoditas ===")
 
+        # 0. Cek transaksi deal tertutup MT5 secara instan (laporan TP / SL hit)
+        self.check_and_report_mt5_deals()
+
         # 1. Cek Jam Pasar (IDX & Emas)
         idx_open, idx_reason = is_idx_market_open(config=self.config)
         gold_open, gold_reason = is_gold_market_open(config=self.config)
@@ -268,8 +271,9 @@ class PipelineRunner:
                     results["signals_triggered"] += 1
 
                 # Simpan ke Database HANYA jika sinyal segar, bukan duplikat, dan valid dinotifikasikan
+                sig_db_id = None
                 if should_notify:
-                    self.storage.save_signal(
+                    sig_db_id = self.storage.save_signal(
                         ticker=sig_result.ticker,
                         strategy_name=sig_result.strategy_name,
                         signal_type=sig_result.signal,
@@ -310,16 +314,27 @@ class PipelineRunner:
                             if mt5_bridge.enabled:
                                 mt5_res = mt5_bridge.execute_signal(sig_result)
                                 if mt5_res.get("success"):
+                                    order_ticket = mt5_res.get("ticket")
                                     logger.info(
-                                        f"🤖 MT5 Auto-Trade Sukses: #{mt5_res.get('ticket')} "
+                                        f"🤖 MT5 Auto-Trade Sukses: #{order_ticket} "
                                         f"{mt5_res.get('action')} {mt5_res.get('volume')} lot @ {mt5_res.get('price')}"
                                     )
                                     sig_result.reasons.append(
-                                        f"🤖 Auto-Trade MT5: Ticket #{mt5_res.get('ticket')} ({mt5_res.get('volume')} lot @ ${mt5_res.get('price'):,.2f})"
+                                        f"🤖 Auto-Trade MT5: Ticket #{order_ticket} ({mt5_res.get('volume')} lot @ ${mt5_res.get('price'):,.2f})"
                                     )
+                                    if sig_db_id and order_ticket:
+                                        try:
+                                            with self.storage._get_connection() as conn:
+                                                conn.cursor().execute(
+                                                    "UPDATE signals SET mt5_ticket = ? WHERE id = ?",
+                                                    (int(order_ticket), sig_db_id),
+                                                )
+                                                conn.commit()
+                                        except Exception as ex_db:
+                                            logger.warning(f"Gagal mengaitkan mt5_ticket ke sinyal DB: {ex_db}")
                                     try:
                                         self.notifier.send_mt5_execution_report({
-                                            "ticket": mt5_res.get("ticket"),
+                                            "ticket": order_ticket,
                                             "action": mt5_res.get("action"),
                                             "symbol": mt5_res.get("symbol"),
                                             "volume": mt5_res.get("volume"),
@@ -333,6 +348,8 @@ class PipelineRunner:
                                         logger.warning(f"Gagal kirim kartu laporan eksekusi MT5: {ex_rep}")
                                 else:
                                     logger.warning(f"MT5 Auto-Trade tidak tereksekusi: {mt5_res.get('message')}")
+                        except Exception as e:
+                            logger.error(f"Error saat mengeksekusi order MT5: {e}")
                         except Exception as e:
                             logger.error(f"Error saat mengeksekusi order MT5: {e}")
 
@@ -533,6 +550,101 @@ class PipelineRunner:
         except Exception as e:
             logger.error(f"Error pada run_market_close_job: {e}")
 
+    def check_and_report_mt5_deals(self) -> None:
+        """
+        Memeriksa riwayat penutupan transaksi live di MT5 (TP / SL hit).
+        Jika posisi ditutup oleh TP atau SL, langsung kirim kartu laporan hasil ke Telegram.
+        """
+        try:
+            from trading.mt5_bridge import MT5Bridge
+            bridge = MT5Bridge()
+            if not bridge.enabled or not bridge.is_available():
+                return
+
+            closed_deals = bridge.get_closed_deals(hours=24)
+            if not closed_deals:
+                return
+
+            for deal in closed_deals:
+                deal_ticket = deal["deal_ticket"]
+                pos_id = deal["position_id"]
+
+                # Cek apakah deal ini sudah pernah dilaporkan
+                if self.storage.is_mt5_deal_reported(deal_ticket):
+                    continue
+
+                outcome = deal["outcome"]  # "WIN" atau "LOSE"
+                reason_str = deal["reason"]  # "TP", "SL", "MANUAL"
+                exit_price = deal["price"]
+                pnl_cash = deal["profit"]
+                symbol = deal["symbol"]
+
+                # Cari sinyal awal di database berdasarkan mt5_ticket
+                entry_sig = self.storage.find_signal_by_mt5_ticket(pos_id)
+                entry_price = float(entry_sig["price"]) if entry_sig and entry_sig.get("price") else exit_price
+                sig_type = str(entry_sig["signal_type"]) if entry_sig and entry_sig.get("signal_type") else ("BUY" if deal["type"] == "SELL" else "SELL")
+                tp_price = float(entry_sig.get("take_profit_price")) if entry_sig and entry_sig.get("take_profit_price") else None
+                sl_price = float(entry_sig.get("stop_loss_price")) if entry_sig and entry_sig.get("stop_loss_price") else None
+
+                # Hitung PnL %
+                if entry_price > 0:
+                    if sig_type == "BUY":
+                        pnl_pct = round(((exit_price - entry_price) / entry_price) * 100.0, 2)
+                    else:
+                        pnl_pct = round(((entry_price - exit_price) / entry_price) * 100.0, 2)
+                else:
+                    pnl_pct = 0.0
+
+                from zoneinfo import ZoneInfo
+                from datetime import datetime, timezone
+                tz_wib = ZoneInfo("Asia/Jakarta")
+                exit_time_wib = datetime.fromtimestamp(deal["time"], tz=timezone.utc).astimezone(tz_wib).strftime("%Y-%m-%d %H:%M WIB")
+
+                if outcome == "WIN":
+                    note = f"🎯 Transaksi MT5 #{pos_id} sukses Take Profit di ${exit_price:,.2f} ({pnl_cash:+.2f} USC). Target keuntungan 7 Buku PDF berhasil dikunci!"
+                elif reason_str == "SL":
+                    note = f"🛑 Transaksi MT5 #{pos_id} menyentuh Stop Loss di ${exit_price:,.2f} ({pnl_cash:+.2f} USC). Batas toleransi risiko berhasil mengamankan modal trading Anda."
+                else:
+                    note = f"Transaksi MT5 #{pos_id} ditutup pada harga ${exit_price:,.2f} ({pnl_cash:+.2f} USC)."
+
+                rep_dict = {
+                    "id": entry_sig.get("id") if entry_sig else deal_ticket,
+                    "ticker": "XAUUSD",
+                    "strategy_name": "7 Buku PDF Confluence",
+                    "signal_type": sig_type,
+                    "price": entry_price,
+                    "exit_price": exit_price,
+                    "take_profit_price": tp_price,
+                    "stop_loss_price": sl_price,
+                    "pnl_pct": pnl_pct,
+                    "outcome": outcome,
+                    "candle_time": entry_sig.get("candle_time", "-") if entry_sig else "-",
+                    "exit_time": exit_time_wib,
+                    "outcome_note": note,
+                    "is_gold": True,
+                }
+
+                logger.info(f"📢 Mengirim kartu hasil TP/SL MT5 #{pos_id} ({reason_str}) ke Telegram...")
+                self.notifier.send_tp_sl_report(rep_dict)
+                self.storage.mark_mt5_deal_reported(deal_ticket, pos_id, outcome, pnl_pct)
+
+                # Update status sinyal di database jika ditemukan
+                if entry_sig and entry_sig.get("id"):
+                    try:
+                        with self.storage._get_connection() as conn:
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                UPDATE signals
+                                SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?
+                                WHERE id = ?
+                            """, (outcome, exit_price, exit_time_wib, pnl_pct, note, entry_sig["id"]))
+                            conn.commit()
+                    except Exception:
+                        pass
+
+        except Exception as e:
+            logger.warning(f"Error pengecekan MT5 closed deals: {e}")
+
     def _check_duplicate(self, sig: SignalResult) -> Tuple[bool, str]:
         """
         Mencegah spam notifikasi berulang untuk kondisi sinyal yang sama.
@@ -623,6 +735,15 @@ def start_scheduler() -> None:
         trigger=IntervalTrigger(minutes=1),
         id="pre_news_checker_job",
         name="Pengecekan High-Impact News 10 Menit",
+        replace_existing=True,
+    )
+
+    # Jadwalkan pengecekan deal penutupan posisi MT5 (TP/SL hit) tiap 30 detik
+    scheduler.add_job(
+        runner.check_and_report_mt5_deals,
+        trigger=IntervalTrigger(seconds=30),
+        id="mt5_deal_watcher_job",
+        name="Pemantauan Real-Time TP/SL MT5",
         replace_existing=True,
     )
 

@@ -576,6 +576,15 @@ class MT5Bridge:
 
             close_price = tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask
 
+            sym_info = mt5.symbol_info(pos.symbol)
+            filling_mode = int(sym_info.filling_mode or 0) if sym_info else 0
+            if filling_mode & 1:
+                fill_type = mt5.ORDER_FILLING_FOK
+            elif filling_mode & 2:
+                fill_type = mt5.ORDER_FILLING_IOC
+            else:
+                fill_type = mt5.ORDER_FILLING_RETURN
+
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,
                 "position": ticket,
@@ -587,7 +596,7 @@ class MT5Bridge:
                 "magic": self.magic_number,
                 "comment": f"Close #{ticket}",
                 "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_IOC,
+                "type_filling": fill_type,
             }
 
             res = mt5.order_send(request)
@@ -599,3 +608,62 @@ class MT5Bridge:
 
         except Exception as e:
             return {"success": False, "message": f"Error saat menutup posisi: {e}"}
+
+    def get_closed_deals(self, hours: int = 24) -> List[Dict[str, Any]]:
+        """
+        Mengambil seluruh transaksi posisi yang telah ditutup (DEAL_ENTRY_OUT)
+        pada akun MT5 dalam rentang jam tertentu.
+        Mendeteksi apakah penutupan disebabkan oleh Take Profit (TP), Stop Loss (SL),
+        atau penutupan manual.
+        """
+        if self.simulation_mode or not self.is_available():
+            return []
+
+        if not self.is_connected:
+            ok, _ = self.connect()
+            if not ok:
+                return []
+
+        try:
+            from datetime import datetime, timezone, timedelta
+            now_utc = datetime.now(timezone.utc)
+            from_utc = now_utc - timedelta(hours=hours)
+
+            deals = mt5.history_deals_get(from_utc, now_utc + timedelta(hours=1))
+            if not deals:
+                return []
+
+            closed_deals = []
+            for d in deals:
+                # Filter hanya deal penutupan (DEAL_ENTRY_OUT = 1) dan milik bot (magic_number)
+                if d.entry == mt5.DEAL_ENTRY_OUT and d.magic == self.magic_number:
+                    # Cek alasan penutupan: 4 = SL, 5 = TP, lainnya = Regular/Client
+                    reason_str = "MANUAL"
+                    outcome = "WIN" if d.profit >= 0 else "LOSE"
+                    comment_lower = (d.comment or "").lower()
+                    if d.reason == 4 or "sl" in comment_lower:
+                        reason_str = "SL"
+                        outcome = "LOSE"
+                    elif d.reason == 5 or "tp" in comment_lower:
+                        reason_str = "TP"
+                        outcome = "WIN"
+
+                    closed_deals.append({
+                        "deal_ticket": d.ticket,
+                        "order_ticket": d.order,
+                        "position_id": d.position_id,
+                        "symbol": d.symbol,
+                        "type": "SELL" if d.type == mt5.DEAL_TYPE_SELL else "BUY",
+                        "volume": d.volume,
+                        "price": float(d.price),
+                        "profit": float(d.profit),
+                        "reason": reason_str,
+                        "outcome": outcome,
+                        "time": d.time,
+                        "comment": d.comment,
+                    })
+            return closed_deals
+        except Exception as e:
+            logger.warning(f"Error mengambil riwayat closed deals MT5: {e}")
+            return []
+

@@ -225,8 +225,15 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         name="Pengecekan News XAU T-10 Menit",
         replace_existing=True,
     )
+    scheduler.add_job(
+        runner.check_and_report_mt5_deals,
+        trigger=IntervalTrigger(seconds=30),
+        id="mt5_deal_watcher_job",
+        name="Pemantauan Real-Time TP/SL MT5",
+        replace_existing=True,
+    )
     scheduler.start()
-    logger.info(f"BackgroundScheduler aktif (interval: {interval_mins} menit, news checker: 1 menit).")
+    logger.info(f"BackgroundScheduler aktif (interval: {interval_mins}m, news: 1m, MT5 watcher: 30s).")
 
     # Jalankan initial run & sync kalender di thread terpisah agar tidak menahan startup listener Telegram
     def _initial_startup_tasks():

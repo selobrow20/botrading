@@ -150,11 +150,23 @@ class StockStorage:
                 ("exit_time", "TEXT"),
                 ("pnl_pct", "REAL"),
                 ("outcome_note", "TEXT"),
+                ("mt5_ticket", "INTEGER"),
             ]:
                 try:
                     cursor.execute(f"ALTER TABLE signals ADD COLUMN {col_name} {col_def};")
                 except Exception:
                     pass
+
+            # Tabel 2b: Transaksi Deal MT5 yang Telah Dilaporkan (TP/SL Tracker)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS mt5_reported_deals (
+                    deal_ticket INTEGER PRIMARY KEY,
+                    position_id INTEGER,
+                    outcome TEXT,
+                    pnl_pct REAL,
+                    reported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
 
             # Tabel 3: Hasil Backtest
             cursor.execute("""
@@ -405,6 +417,7 @@ class StockStorage:
         is_notified: bool = False,
         take_profit_price: Optional[float] = None,
         stop_loss_price: Optional[float] = None,
+        mt5_ticket: Optional[int] = None,
     ) -> int:
         """Menyimpan riwayat sinyal baru ke database dengan target profit & stop loss."""
         if isinstance(reasons, list):
@@ -414,8 +427,8 @@ class StockStorage:
 
         query = """
             INSERT INTO signals 
-            (ticker, strategy_name, signal_type, price, reasons, candle_time, is_notified, take_profit_price, stop_loss_price, outcome)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')
+            (ticker, strategy_name, signal_type, price, reasons, candle_time, is_notified, take_profit_price, stop_loss_price, outcome, mt5_ticket)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -431,6 +444,7 @@ class StockStorage:
                     1 if is_notified else 0,
                     float(take_profit_price) if take_profit_price is not None else None,
                     float(stop_loss_price) if stop_loss_price is not None else None,
+                    int(mt5_ticket) if mt5_ticket is not None else None,
                 ),
             )
             conn.commit()
@@ -608,6 +622,46 @@ class StockStorage:
         Mengembalikan jumlah sinyal yang diselesaikan (resolved).
         """
         return len(self.resolve_open_signals(ticker, df))
+
+    def find_signal_by_mt5_ticket(self, ticket: int) -> Optional[Dict[str, Any]]:
+        """Mencari sinyal awal berdasarkan nomor tiket order MT5."""
+        query = """
+            SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time,
+                   take_profit_price, stop_loss_price, outcome, is_notified, mt5_ticket
+            FROM signals
+            WHERE mt5_ticket = ? OR reasons LIKE ?
+            ORDER BY id DESC LIMIT 1
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (int(ticket), f"%#{ticket}%"))
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+        return None
+
+    def is_mt5_deal_reported(self, deal_ticket: int) -> bool:
+        """Mengecek apakah deal penutupan MT5 sudah pernah dilaporkan ke Telegram."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM mt5_reported_deals WHERE deal_ticket = ?", (int(deal_ticket),))
+            return cursor.fetchone() is not None
+
+    def mark_mt5_deal_reported(
+        self,
+        deal_ticket: int,
+        position_id: int,
+        outcome: str,
+        pnl_pct: float = 0.0,
+    ) -> None:
+        """Mencatat deal penutupan MT5 yang telah dilaporkan ke Telegram."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO mt5_reported_deals (deal_ticket, position_id, outcome, pnl_pct)
+                VALUES (?, ?, ?, ?)
+            """, (int(deal_ticket), int(position_id), str(outcome), float(pnl_pct)))
+            conn.commit()
 
     def get_recent_completed_signals(
         self, limit: int = 5, ticker: Optional[str] = None
