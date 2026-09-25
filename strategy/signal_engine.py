@@ -437,13 +437,37 @@ class SignalEngine:
                 reasons = list(sell_reasons)
                 reasons.append(f"Telaah 7 Buku: {setup_grade} ({pdf_score:.0f}%)")
         else:
-            signal = "HOLD"
-            # Sertakan penjelasan kondisi saat ini
-            reasons = [
-                f"Kondisi netral / menunggu konfluensi waktu masuk. RSI={snapshot['rsi']:.1f}, "
-                f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
-                f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
-            ]
+            # Jika sinyal dasar masih netral namun telaah 7 Buku PDF membuktikan Grade A+ (>=80%)
+            # dengan konfluensi kuat dan arah tren terkonfirmasi, promosikan menjadi sinyal aktif!
+            if apply_pdf_filter and pdf_score >= 80.0 and is_gold:
+                if target_sig_type == "BUY" and curr_price >= snapshot.get("ema_50", 0.0):
+                    signal = "BUY"
+                    reasons = [
+                        f"Konfluensi Prima 7 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",
+                        f"Tren Bullish di atas EMA 50 ({snapshot.get('ema_50', 0):.2f})",
+                    ]
+                    if patterns_detected:
+                        reasons.append(f"Pola: {', '.join(patterns_detected[:2])}")
+                elif target_sig_type == "SELL" and curr_price <= snapshot.get("ema_50", 0.0):
+                    signal = "SELL"
+                    reasons = [
+                        f"Konfluensi Prima 7 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",
+                        f"Tren Bearish di bawah EMA 50 ({snapshot.get('ema_50', 0):.2f})",
+                    ]
+                else:
+                    signal = "HOLD"
+                    reasons = [
+                        f"Kondisi netral / menunggu konfluensi waktu masuk. RSI={snapshot['rsi']:.1f}, "
+                        f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
+                        f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
+                    ]
+            else:
+                signal = "HOLD"
+                reasons = [
+                    f"Kondisi netral / menunggu konfluensi waktu masuk. RSI={snapshot['rsi']:.1f}, "
+                    f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
+                    f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
+                ]
 
         logger.debug(
             f"Evaluasi {ticker} ({target_strategy.name}) @ {candle_time}: "

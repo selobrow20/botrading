@@ -118,18 +118,14 @@ strategies:
           operator: ">="
           target: "ema_50"
           description: "Tren Mayor Bullish (Harga di Atas EMA 50)"
-        - indicator: "rejection_wick_ratio"
-          operator: ">="
-          value: 0.35
-          description: "Candle Rejection Wick (Buyer Membeli Kuat di Bawah)"
         - indicator: "volume_ratio"
           operator: ">="
-          value: 1.1
-          description: "Volume Konfirmasi Buyer (>= 1.1x Rata-rata)"
+          value: 1.0
+          description: "Volume Konfirmasi Buyer (>= 1.0x Rata-rata)"
         - indicator: "rsi"
           operator: "<="
-          value: 60.0
-          description: "RSI Belum Overbought (RSI <= 60)"
+          value: 65.0
+          description: "RSI Belum Overbought (RSI <= 65)"
       sell_rules:
         - indicator: "rsi"
           operator: ">"
