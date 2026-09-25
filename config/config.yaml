@@ -73,10 +73,10 @@ trading:
 
 # Pengaturan Eksekutor MetaTrader 5 (MT5 Auto-Trade)
 mt5:
-  enabled: false                 # true untuk eksekusi order otomatis di MT5, false untuk mode sinyal saja
-  login: 0                       # Nomor akun MT5 (isi jika ingin auto-login)
-  password: ""                   # Password trading MT5
-  server: ""                     # Server broker MT5 (contoh: "Exness-MT5Real", "FBS-Real", "ICMarketsSC-Live")
+  enabled: true                 # true untuk eksekusi order otomatis di MT5, false untuk mode sinyal saja
+  login: 114202389               # Nomor akun MT5 HFM
+  password: ""                   # Password trading MT5 (isi di sini atau biarkan terminal MT5 login)
+  server: "HFMarketsGlobal-Live7" # Server broker MT5 (HFM / HotForex)
   path: ""                       # Path terminal64.exe jika kustom (biarkan kosong untuk auto-detect)
   magic_number: 777777           # ID unik penanda transaksi bot
   default_lot: 0.01              # Ukuran lot per transaksi (0.01 = micro lot)

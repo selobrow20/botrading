@@ -34,6 +34,10 @@ class MT5Bridge:
         r"C:\Program Files\XM Global MT5\terminal64.exe",
         r"C:\Program Files\OctaFX MetaTrader 5\terminal64.exe",
         r"C:\Program Files\HFM MetaTrader 5\terminal64.exe",
+        r"C:\Program Files\HF Markets MetaTrader 5\terminal64.exe",
+        r"C:\Program Files (x86)\HFM MetaTrader 5\terminal64.exe",
+        r"C:\Program Files (x86)\HF Markets MetaTrader 5\terminal64.exe",
+        r"C:\Program Files\HFM\terminal64.exe",
         r"C:\Program Files\Vantage FX MetaTrader 5\terminal64.exe",
     ]
 
