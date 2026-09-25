@@ -28,5 +28,5 @@ COPY . .
 # Buat direktori data, logs, dan reports
 RUN mkdir -p /app/data /app/logs /app/reports
 
-# Jalankan Scheduler Jam Bursa dan Listener Telegram bersamaan
-CMD ["python", "main.py", "run-all"]
+# Mode Standby: Bot utama berjalan di Laptop Windows lokal
+CMD ["python", "-c", "import time; print('Railway Standby Mode: Bot aktif berjalan di Windows Laptop MT5.'); time.sleep(86400 * 365)"]
