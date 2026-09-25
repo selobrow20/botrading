@@ -71,6 +71,19 @@ trading:
     stop_loss_pct: 3.0           # Stop Loss 3.0%
     trailing_stop_pct: 2.0
 
+# Pengaturan Eksekutor MetaTrader 5 (MT5 Auto-Trade)
+mt5:
+  enabled: false                 # true untuk eksekusi order otomatis di MT5, false untuk mode sinyal saja
+  login: 0                       # Nomor akun MT5 (isi jika ingin auto-login)
+  password: ""                   # Password trading MT5
+  server: ""                     # Server broker MT5 (contoh: "Exness-MT5Real", "FBS-Real", "ICMarketsSC-Live")
+  path: ""                       # Path terminal64.exe jika kustom (biarkan kosong untuk auto-detect)
+  magic_number: 777777           # ID unik penanda transaksi bot
+  default_lot: 0.01              # Ukuran lot per transaksi (0.01 = micro lot)
+  risk_percent: 1.0              # Batas risiko modal per trade (% dari Equity akun)
+  max_slippage: 20               # Toleransi deviasi harga (dalam points)
+  gold_symbol: "XAUUSD"          # Simbol emas di broker ("XAUUSD", "XAUUSDm", "GOLD", dll)
+
 # Parameter Indikator Teknikal
 indicators:
   moving_averages:

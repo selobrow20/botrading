@@ -297,6 +297,26 @@ class PipelineRunner:
                     except Exception as e:
                         logger.warning(f"Gagal membuat visual chart untuk {sig_result.ticker}: {e}")
 
+                    # Auto-Trade MT5 Execution (jika MT5 diaktifkan)
+                    if is_gold:
+                        try:
+                            from trading.mt5_bridge import MT5Bridge
+                            mt5_bridge = MT5Bridge()
+                            if mt5_bridge.enabled:
+                                mt5_res = mt5_bridge.execute_signal(sig_result)
+                                if mt5_res.get("success"):
+                                    logger.info(
+                                        f"🤖 MT5 Auto-Trade Sukses: #{mt5_res.get('ticket')} "
+                                        f"{mt5_res.get('action')} {mt5_res.get('volume')} lot @ {mt5_res.get('price')}"
+                                    )
+                                    sig_result.reasons.append(
+                                        f"🤖 Auto-Trade MT5: Ticket #{mt5_res.get('ticket')} ({mt5_res.get('volume')} lot @ ${mt5_res.get('price'):,.2f})"
+                                    )
+                                else:
+                                    logger.warning(f"MT5 Auto-Trade tidak tereksekusi: {mt5_res.get('message')}")
+                        except Exception as e:
+                            logger.error(f"Error saat mengeksekusi order MT5: {e}")
+
                     self.notifier.send_signal(sig_result, photo_path=chart_path)
                     results["signals_notified"] += 1
                 elif not is_fresh and (sig_result.signal in ["BUY", "SELL"]):
@@ -410,6 +430,31 @@ class PipelineRunner:
                         stop_loss_price=sl_p,
                     )
                     logger.info(f"💾 Sinyal Pre-News {action} XAUUSD tersimpan ke DB (ID: {sig_id}) sebagai posisi OPEN.")
+
+                    # Eksekusi Auto-Trade MT5 untuk Pre-News (jika MT5 diaktifkan)
+                    try:
+                        from trading.mt5_bridge import MT5Bridge
+                        mt5_bridge = MT5Bridge()
+                        if mt5_bridge.enabled:
+                            from strategy.signal_engine import SignalResult
+                            dummy_sig = SignalResult(
+                                ticker="XAUUSD",
+                                strategy_name=f"PreNews_{news_type}",
+                                signal=action,
+                                price=entry_p,
+                                take_profit_price=tp_p,
+                                stop_loss_price=sl_p,
+                                pdf_confluence_score=float(analysis.get("confluence_score", 75.0) or 75.0),
+                                setup_grade="Grade A",
+                            )
+                            mt5_res = mt5_bridge.execute_signal(dummy_sig)
+                            if mt5_res.get("success"):
+                                logger.info(
+                                    f"🤖 MT5 Pre-News Auto-Trade Sukses: #{mt5_res.get('ticket')} "
+                                    f"{mt5_res.get('action')} {mt5_res.get('volume')} lot @ {mt5_res.get('price')}"
+                                )
+                    except Exception as e:
+                        logger.error(f"Error eksekusi MT5 pre-news: {e}")
 
             return notified_count
         except Exception as e:

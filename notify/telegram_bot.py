@@ -198,6 +198,13 @@ class TelegramNotifier:
                 clean_reason = sig.reasons[0].split("(")[0].strip()
                 lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
 
+        # Tampilkan status eksekusi Auto-Trade MT5 jika ada
+        mt5_notes = [r for r in (sig.reasons or []) if "Auto-Trade MT5" in r]
+        if mt5_notes:
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            for mn in mt5_notes:
+                lines.append(f"<b>{html.escape(mn)}</b>")
+
         return "\n".join(lines)
 
     async def _async_send_text(self, text: str, target_chat_id: Optional[str] = None) -> bool:
@@ -729,6 +736,88 @@ class TelegramBotCommands:
                     chat_id=target_id,
                     text="🚫 <b>Akses Ditolak</b>\nMaaf, permintaan akses Anda ke bot ini ditolak oleh Admin.",
                     parse_mode=ParseMode.HTML,
+                )
+            except Exception:
+                pass
+
+        elif data in ["mt5_toggle_on", "mt5_toggle_off", "mt5_refresh"]:
+            from trading.mt5_bridge import MT5Bridge
+            bridge = MT5Bridge()
+            if data == "mt5_toggle_on":
+                bridge.enabled = True
+                await query.answer("🟢 Auto-Trade MT5 Diaktifkan!")
+            elif data == "mt5_toggle_off":
+                bridge.enabled = False
+                await query.answer("🔴 Auto-Trade MT5 Dinonaktifkan!")
+            else:
+                await query.answer("🔄 Status MT5 diperbarui.")
+
+            acc = bridge.get_account_info()
+            status_auto = "🟢 <b>AKTIF (Eksekusi Otomatis)</b>" if bridge.enabled else "🔴 <b>NONAKTIF (Sinyal Saja)</b>"
+            conn_badge = "🟢 <b>TERHUBUNG LIVE</b>" if bridge.is_connected else "⚪ <b>STANDBY / OFFLINE</b>"
+
+            lines = [
+                "🤖 <b>DASHBOARD METATRADER 5 (AUTO-TRADER)</b> 📈",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+                f"⚡ <b>Mode Auto-Trade:</b> {status_auto}",
+                f"📡 <b>Koneksi Terminal:</b> {conn_badge}",
+                f"📚 <b>Filter Eksekusi:</b> <code>Wajib 7 Buku PDF Grade A (≥65%)</code>",
+                f"📦 <b>Default Lot:</b> <code>{bridge.default_lot} Lot</code> (Batas Risiko: {bridge.risk_percent}%)",
+                f"🎯 <b>Instrumen Trading:</b> <code>{bridge.gold_symbol} (XAU/USD)</code>",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+            ]
+            if acc:
+                lines.extend([
+                    f"👤 <b>Akun MT5:</b> <code>#{acc['login']}</code> ({acc['server']} - {acc['trade_mode']})",
+                    f"💵 <b>Balance:</b> <code>${acc['balance']:,.2f}</code>",
+                    f"📊 <b>Equity:</b> <code>${acc['equity']:,.2f}</code>",
+                    f"📈 <b>Floating Profit:</b> <code>${acc['profit']:+,.2f}</code>",
+                    f"🛡️ <b>Free Margin:</b> <code>${acc['margin_free']:,.2f}</code>",
+                    "━━━━━━━━━━━━━━━━━━━━━━",
+                ])
+            else:
+                lines.extend([
+                    "ℹ️ <i>Terminal MT5 belum terhubung ke sesi live.</i>",
+                    "💡 <i>Pastikan aplikasi MetaTrader 5 dibuka di komputer/VPS Windows Anda.</i>",
+                    "━━━━━━━━━━━━━━━━━━━━━━",
+                ])
+
+            positions = bridge.get_open_positions()
+            if positions:
+                lines.append("📋 <b>POSISI TERBUKA SAAT INI (MT5):</b>")
+                for p in positions[:8]:
+                    icon = "🟢" if p["type"] == "BUY" else "🔴"
+                    lines.append(
+                        f"• {icon} <b>#{p['ticket']} {p['type']} {p['volume']} {p['symbol']}</b> | Floating: <b>${p['profit']:+,.2f}</b>"
+                    )
+                lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            else:
+                lines.append("<i>Tidak ada posisi trading yang sedang terbuka di MT5.</i>")
+                lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+
+            lines.extend([
+                "<b>PANDUAN PERINTAH MT5:</b>",
+                "• <code>/mt5 on</code> - Aktifkan eksekusi order otomatis",
+                "• <code>/mt5 off</code> - Matikan eksekusi otomatis",
+                "• <code>/mt5 lot 0.02</code> - Ubah ukuran lot transaksi",
+                "• <code>/mt5 close &lt;ticket&gt;</code> - Tutup manual posisi aktif",
+            ])
+
+            toggle_text = "🔴 Matikan Auto-Trade" if bridge.enabled else "🟢 Hidupkan Auto-Trade"
+            toggle_cb = "mt5_toggle_off" if bridge.enabled else "mt5_toggle_on"
+            keyboard = [
+                [
+                    InlineKeyboardButton(toggle_text, callback_data=toggle_cb),
+                    InlineKeyboardButton("🔄 Refresh Status", callback_data="mt5_refresh"),
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            try:
+                await query.edit_message_text(
+                    text="\n".join(lines),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup,
                 )
             except Exception:
                 pass
@@ -1429,6 +1518,122 @@ class TelegramBotCommands:
 
         await update.message.reply_html("\n".join(lines))
 
+    async def mt5_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /mt5 untuk memantau status, akun, posisi terbuka, dan mengendalikan Auto-Trade MT5."""
+        if not await self.check_user_access(update, context):
+            return
+
+        from trading.mt5_bridge import MT5Bridge
+        bridge = MT5Bridge()
+
+        args = context.args or []
+        if args:
+            sub = args[0].lower()
+            if sub == "on":
+                bridge.enabled = True
+                await update.message.reply_html(
+                    "🟢 <b>Auto-Trading MetaTrader 5 DIAKTIFKAN!</b>\n\n"
+                    "Bot akan mengeksekusi order (BUY / SELL) secara otomatis di akun MT5 setiap kali sinyal Emas (XAU/USD) 7 Buku PDF terkonfirmasi Grade A (≥65%).\n\n"
+                    "🎯 <i>Sinyal tetap dikawal ketat oleh kaidah Fibonacci Golden Pocket, Ichimoku Kumo, 20 EMA Bob Volman, dan manajemen risiko TP & SL.</i>"
+                )
+                return
+            elif sub == "off":
+                bridge.enabled = False
+                await update.message.reply_html(
+                    "🔴 <b>Auto-Trading MetaTrader 5 DINONAKTIFKAN!</b>\n\n"
+                    "Bot beralih ke mode notifikasi biasa (hanya mengirim sinyal ke Telegram tanpa membuka order di MT5)."
+                )
+                return
+            elif sub == "lot" and len(args) > 1:
+                try:
+                    new_lot = float(args[1])
+                    if new_lot <= 0 or new_lot > 50:
+                        raise ValueError()
+                    bridge.default_lot = new_lot
+                    await update.message.reply_html(f"✅ <b>Ukuran Lot Default Berhasil Diubah:</b> <code>{new_lot} Lot</code>")
+                except Exception:
+                    await update.message.reply_html("⚠️ Format salah. Contoh penggunaan: <code>/mt5 lot 0.02</code>")
+                return
+            elif sub == "close" and len(args) > 1:
+                try:
+                    ticket = int(args[1])
+                    res = bridge.close_position(ticket)
+                    if res.get("success"):
+                        await update.message.reply_html(f"✅ <b>Posisi #{ticket} Ditutup:</b> {res.get('message')}")
+                    else:
+                        await update.message.reply_html(f"❌ <b>Gagal:</b> {res.get('message')}")
+                except Exception as e:
+                    await update.message.reply_html(f"⚠️ Format tiket salah: {e}")
+                return
+
+        acc = bridge.get_account_info()
+        is_conn = bridge.is_connected
+        status_auto = "🟢 <b>AKTIF (Eksekusi Otomatis)</b>" if bridge.enabled else "🔴 <b>NONAKTIF (Sinyal Saja)</b>"
+        conn_badge = "🟢 <b>TERHUBUNG LIVE</b>" if is_conn else "⚪ <b>STANDBY / OFFLINE</b>"
+
+        lines = [
+            "🤖 <b>DASHBOARD METATRADER 5 (AUTO-TRADER)</b> 📈",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"⚡ <b>Mode Auto-Trade:</b> {status_auto}",
+            f"📡 <b>Koneksi Terminal:</b> {conn_badge}",
+            f"📚 <b>Filter Eksekusi:</b> <code>Wajib 7 Buku PDF Grade A (≥65%)</code>",
+            f"📦 <b>Default Lot:</b> <code>{bridge.default_lot} Lot</code> (Batas Risiko: {bridge.risk_percent}%)",
+            f"🎯 <b>Instrumen Trading:</b> <code>{bridge.gold_symbol} (XAU/USD)</code>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+        ]
+
+        if acc:
+            lines.extend([
+                f"👤 <b>Akun MT5:</b> <code>#{acc['login']}</code> ({acc['server']} - {acc['trade_mode']})",
+                f"💵 <b>Balance:</b> <code>${acc['balance']:,.2f}</code>",
+                f"📊 <b>Equity:</b> <code>${acc['equity']:,.2f}</code>",
+                f"📈 <b>Floating Profit:</b> <code>${acc['profit']:+,.2f}</code>",
+                f"🛡️ <b>Free Margin:</b> <code>${acc['margin_free']:,.2f}</code> (Leverage 1:{acc['leverage']})",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+            ])
+        else:
+            lines.extend([
+                "ℹ️ <i>Terminal MT5 belum terhubung ke sesi live.</i>",
+                "💡 <i>Pastikan aplikasi MetaTrader 5 dibuka di komputer/VPS Windows Anda.</i>",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+            ])
+
+        positions = bridge.get_open_positions()
+        if positions:
+            lines.append("📋 <b>POSISI TERBUKA SAAT INI (MT5):</b>")
+            for p in positions[:8]:
+                icon = "🟢" if p["type"] == "BUY" else "🔴"
+                lines.append(
+                    f"• {icon} <b>#{p['ticket']} {p['type']} {p['volume']} {p['symbol']}</b>\n"
+                    f"  Open: <code>${p['price_open']:,.2f}</code> | Current: <code>${p['price_current']:,.2f}</code>\n"
+                    f"  TP: <code>${p['tp']:,.2f}</code> | SL: <code>${p['sl']:,.2f}</code>\n"
+                    f"  Floating: <b>${p['profit']:+,.2f}</b>"
+                )
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        else:
+            lines.append("<i>Tidak ada posisi trading yang sedang terbuka di MT5.</i>")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+
+        lines.extend([
+            "<b>PANDUAN PERINTAH MT5:</b>",
+            "• <code>/mt5 on</code> - Aktifkan eksekusi order otomatis",
+            "• <code>/mt5 off</code> - Matikan eksekusi otomatis",
+            "• <code>/mt5 lot 0.02</code> - Ubah ukuran lot transaksi",
+            "• <code>/mt5 close &lt;ticket&gt;</code> - Tutup manual posisi aktif",
+        ])
+
+        toggle_text = "🔴 Matikan Auto-Trade" if bridge.enabled else "🟢 Hidupkan Auto-Trade"
+        toggle_cb = "mt5_toggle_off" if bridge.enabled else "mt5_toggle_on"
+        keyboard = [
+            [
+                InlineKeyboardButton(toggle_text, callback_data=toggle_cb),
+                InlineKeyboardButton("🔄 Refresh Status", callback_data="mt5_refresh"),
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.message.reply_html("\n".join(lines), reply_markup=reply_markup)
+
     async def chart_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /chart <ticker> untuk menampilkan live candlestick chart (TradingView style)."""
         if not await self.check_user_access(update, context):
@@ -1862,6 +2067,7 @@ async def set_menu_commands(application: Application) -> None:
         BotCommand("laporan", "📋 Laporan Hasil Rekomendasi (TP/SL) & Akurasi"),
         BotCommand("candle", "🕯️ Bedah Pola Candlestick & Price Action"),
         BotCommand("gold", "🥇 Analisis Sinyal Emas Dunia (XAU/USD)"),
+        BotCommand("mt5", "🤖 Dashboard Auto-Trade MetaTrader 5 (MT5)"),
         BotCommand("tutup", "🔔 Laporan Penutupan Pasar Saham (BEI) Simpel"),
         BotCommand("scan", "🔍 Pindai Sinyal Pasar Sekarang"),
         BotCommand("watchlist", "📋 Saham Potensial Cuan & Harga"),
@@ -1909,6 +2115,7 @@ def build_telegram_application() -> Optional[Application]:
     app.add_handler(CommandHandler(["winrate", "performance", "akurasi", "laporan", "evaluasi"], cmd_handler.winrate_command))
     app.add_handler(CommandHandler(["candle", "candlestick", "pola"], cmd_handler.candle_command))
     app.add_handler(CommandHandler(["gold", "xau", "emas"], cmd_handler.gold_command))
+    app.add_handler(CommandHandler(["mt5", "autotrade", "akun", "account"], cmd_handler.mt5_command))
     app.add_handler(CommandHandler(["tutup", "closesaham", "laporansaham"], cmd_handler.tutup_command))
     app.add_handler(CommandHandler("status", cmd_handler.status_command))
     app.add_handler(CommandHandler("scan", cmd_handler.scan_command))

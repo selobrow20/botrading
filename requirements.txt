@@ -22,3 +22,7 @@ pytest>=8.0.0
 
 # Document & Strategy Learning
 pypdf>=5.0.0
+
+# MetaTrader 5 Auto-Trading (Windows only)
+MetaTrader5>=5.0.0; sys_platform == 'win32'
+
