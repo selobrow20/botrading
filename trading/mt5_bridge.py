@@ -371,11 +371,11 @@ class MT5Bridge:
             }
 
         # 3. KAWALAN KETAT 7 BUKU PDF: Tolak eksekusi jika belum tembus Grade A (65%)
-        # Sesuai arahan pengguna: 'tetep dalam sinyal ya sesuai 7 pdf'
-        if score > 0 and score < 65.0:
+        # Sesuai instruksi mutlak pengguna: 'jgn sekali kali open jika engga ada sinyal dari bot ya harus ikut dari pentujuk pdf'
+        if score < 65.0:
             msg = (
                 f"❌ Eksekusi MT5 Ditolak: Skor konfluensi 7 Buku PDF ({score:.0f}%) "
-                f"belum tembus batas minimal Grade A (65%). Menjaga modal & akurasi win rate."
+                f"belum tembus batas minimal Grade A (65%). Sinyal tanpa konfluensi 7 PDF dilarang dieksekusi!"
             )
             logger.warning(msg)
             return {
