@@ -186,8 +186,13 @@ class ChartGenerator:
                 va="center",
             )
 
+        is_sell_action = signal_type.upper() == "SELL"
+
         if tp_price and tp_price > 0:
-            tp_diff = ((tp_price - ref_entry) / ref_entry) * 100.0
+            if is_sell_action:
+                tp_diff = ((ref_entry - tp_price) / ref_entry) * 100.0
+            else:
+                tp_diff = ((tp_price - ref_entry) / ref_entry) * 100.0
             tp_sign = "+" if tp_diff > 0 else ""
             ax_main.axhline(
                 y=tp_price,
@@ -208,7 +213,10 @@ class ChartGenerator:
             )
 
         if sl_price and sl_price > 0:
-            sl_diff = ((sl_price - ref_entry) / ref_entry) * 100.0
+            if is_sell_action:
+                sl_diff = -((sl_price - ref_entry) / ref_entry) * 100.0
+            else:
+                sl_diff = ((sl_price - ref_entry) / ref_entry) * 100.0
             sl_sign = "+" if sl_diff > 0 else ""
             ax_main.axhline(
                 y=sl_price,
@@ -299,7 +307,11 @@ class ChartGenerator:
         # Judul & Badge Potensi Header
         display_name = "XAU/USD (Gold Spot)" if is_gold else clean_ticker.replace(".JK", "")
         grade_badge = f" [GRADE {setup_grade}]" if setup_grade else ""
-        confluence_badge = f" (Konfluensi: {int(pdf_confluence_score * 100)}%)" if pdf_confluence_score else ""
+        if pdf_confluence_score:
+            score_num = pdf_confluence_score if pdf_confluence_score > 1.0 else pdf_confluence_score * 100.0
+            confluence_badge = f" (Konfluensi: {int(score_num)}%)"
+        else:
+            confluence_badge = ""
         sig_badge = f" • {signal_type.upper()}" if signal_type in ["BUY", "SELL"] else ""
 
         title_text = f"{display_name} • {interval.upper()} Live Chart{sig_badge}{grade_badge}{confluence_badge}"

@@ -1309,10 +1309,29 @@ class TelegramBotCommands:
             bb_upper = float(last_row.get("BB_Upper", last_close * 1.01))
             bb_lower = float(last_row.get("BB_Lower", last_close * 0.99))
 
-            # TP +0.6% & SL -0.35% untuk Gold Intraday
-            tp_calc = last_close * 1.006
-            sl_calc = last_close * 0.9965
-            rrr = round((tp_calc - last_close) / (last_close - sl_calc), 2)
+            # Ambil level TP & SL dari sinyal engine jika ada, atau hitung sesuai arah BUY/SELL
+            if sig.take_profit_price and sig.stop_loss_price:
+                tp_calc = float(sig.take_profit_price)
+                sl_calc = float(sig.stop_loss_price)
+                rrr = sig.risk_reward_ratio or round(abs(tp_calc - last_close) / max(abs(last_close - sl_calc), 0.01), 2)
+            else:
+                if sig.signal == "SELL":
+                    tp_calc = round(last_close * (1.0 - 0.008), 2)
+                    sl_calc = round(last_close * (1.0 + 0.004), 2)
+                    risk_dist = max(sl_calc - last_close, 0.01)
+                    rrr = round((last_close - tp_calc) / risk_dist, 2)
+                else:
+                    tp_calc = round(last_close * (1.0 + 0.008), 2)
+                    sl_calc = round(last_close * (1.0 - 0.004), 2)
+                    risk_dist = max(last_close - sl_calc, 0.01)
+                    rrr = round((tp_calc - last_close) / risk_dist, 2)
+
+            if sig.signal == "SELL":
+                tp_pct_val = abs((last_close - tp_calc) / last_close) * 100.0
+                sl_pct_val = abs((sl_calc - last_close) / last_close) * 100.0
+            else:
+                tp_pct_val = abs((tp_calc - last_close) / last_close) * 100.0
+                sl_pct_val = abs((last_close - sl_calc) / last_close) * 100.0
 
             chart_path = None
             try:
@@ -1346,6 +1365,8 @@ class TelegramBotCommands:
                 "reasons": sig.reasons,
                 "tp": tp_calc,
                 "sl": sl_calc,
+                "tp_pct": tp_pct_val,
+                "sl_pct": sl_pct_val,
                 "rrr": rrr,
                 "chart_path": chart_path,
             }
@@ -1404,8 +1425,8 @@ class TelegramBotCommands:
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"🎯 <b>STATUS SINYAL:</b> {sig_badge}",
             f"  • Entry Ref: <b>${close:,.2f}</b>",
-            f"  • Target Profit (TP): <b>${data['tp']:,.2f}</b> (+0.6%)",
-            f"  • Stop Loss (SL): <b>${data['sl']:,.2f}</b> (-0.35%)",
+            f"  • Target Profit (TP): <b>${data['tp']:,.2f}</b> (+{data['tp_pct']:.2f}%)",
+            f"  • Stop Loss (SL): <b>${data['sl']:,.2f}</b> (-{data['sl_pct']:.2f}%)",
             f"  • Risk/Reward Ratio: <b>1 : {data['rrr']}</b>",
             "━━━━━━━━━━━━━━━━━━━━━━",
             "💡 <i>Pasar emas global aktif 23 jam sehari (Senin-Jumat). Kelola leverage secara bijak!</i>",
