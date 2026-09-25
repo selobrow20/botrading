@@ -306,7 +306,8 @@ class ChartGenerator:
 
         # Judul & Badge Potensi Header
         display_name = "XAU/USD (Gold Spot)" if is_gold else clean_ticker.replace(".JK", "")
-        grade_badge = f" [GRADE {setup_grade}]" if setup_grade else ""
+        clean_grade = str(setup_grade).replace("GRADE ", "").replace("Grade ", "").strip() if setup_grade else ""
+        grade_badge = f" [GRADE {clean_grade}]" if clean_grade else ""
         if pdf_confluence_score:
             score_num = pdf_confluence_score if pdf_confluence_score > 1.0 else pdf_confluence_score * 100.0
             confluence_badge = f" (Konfluensi: {int(score_num)}%)"

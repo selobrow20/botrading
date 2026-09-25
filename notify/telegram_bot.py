@@ -1744,43 +1744,74 @@ class TelegramBotCommands:
             if df.empty or len(df) < 15:
                 df = fetcher.get_data(clean_ticker, interval="1d", period="1y", force_fetch=True if is_gold else False)
             if df.empty or len(df) < 15:
-                return None, None
+                return None, None, None, None
 
             df_ind = TechnicalIndicators.add_all_indicators(df)
             strategy = get_strategy("DayTrading_Intraday_Momentum") or DEFAULT_STRATEGY
             engine = SignalEngine([strategy])
             sig = engine.evaluate_bar(df_ind, ticker=clean_ticker, strategy=strategy)
 
+            # Hitung level TP & SL acuan jika belum ada (misal status HOLD / Konsolidasi)
+            tp_val = sig.take_profit_price
+            sl_val = sig.stop_loss_price
+            is_bearish = "bearish" in (sig.market_direction_prediction or "").lower() or sig.signal == "SELL"
+
+            if not tp_val or not sl_val:
+                if is_gold:
+                    if is_bearish:
+                        tp_val = round(sig.price * (1.0 - 0.008), 2)
+                        sl_val = round(sig.price * (1.0 + 0.004), 2)
+                    else:
+                        tp_val = round(sig.price * (1.0 + 0.008), 2)
+                        sl_val = round(sig.price * (1.0 - 0.004), 2)
+                else:
+                    tp_val = round(sig.price * 1.03, 0)
+                    sl_val = round(sig.price * 0.98, 0)
+
             chart_path = ChartGenerator.generate_chart(
                 df=df_ind,
                 ticker_symbol=clean_ticker,
                 interval=interval,
-                signal_type=sig.signal,
+                signal_type=sig.signal if sig.signal in ["BUY", "SELL"] else ("SELL" if is_bearish else "BUY"),
                 entry_price=sig.price,
-                tp_price=sig.take_profit_price,
-                sl_price=sig.stop_loss_price,
+                tp_price=tp_val,
+                sl_price=sl_val,
                 setup_grade=sig.setup_grade,
                 pdf_confluence_score=sig.pdf_confluence_score,
             )
-            return chart_path, sig
+            return chart_path, sig, tp_val, sl_val
 
-        chart_path, sig = await asyncio.to_thread(_generate)
+        chart_path, sig, tp_val, sl_val = await asyncio.to_thread(_generate)
         if not chart_path or not Path(chart_path).exists():
             await update.message.reply_text(f"Gagal mengambil data pasar atau membuat chart untuk {ticker_arg}.")
             return
 
         price_fmt = f"${sig.price:,.2f}" if is_gold else f"Rp {sig.price:,.0f}"
-        tp_str = f"${sig.take_profit_price:,.2f}" if is_gold and sig.take_profit_price else f"Rp {sig.take_profit_price:,.0f}" if sig.take_profit_price else "-"
-        sl_str = f"${sig.stop_loss_price:,.2f}" if is_gold and sig.stop_loss_price else f"Rp {sig.stop_loss_price:,.0f}" if sig.stop_loss_price else "-"
+
+        # Hitung persentase TP & SL acuan
+        is_sell_dir = tp_val < sig.price
+        if is_sell_dir:
+            tp_pct = abs((sig.price - tp_val) / sig.price) * 100.0
+            sl_pct = abs((sl_val - sig.price) / sig.price) * 100.0
+        else:
+            tp_pct = abs((tp_val - sig.price) / sig.price) * 100.0
+            sl_pct = abs((sig.price - sl_val) / sig.price) * 100.0
+
+        tp_str = f"${tp_val:,.2f} (+{tp_pct:.2f}%)" if is_gold else f"Rp {tp_val:,.0f} (+{tp_pct:.1f}%)"
+        sl_str = f"${sl_val:,.2f} (-{sl_pct:.2f}%)" if is_gold else f"Rp {sl_val:,.0f} (-{sl_pct:.1f}%)"
 
         caption_lines = [
             f"📈 <b>LIVE CANDLESTICK CHART: {disp_ticker}</b>",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"💵 <b>Harga Terkini:</b> <code>{price_fmt}</code>",
-            f"🎯 <b>Target TP:</b> <code>{tp_str}</code> | 🛑 <b>Batas SL:</b> <code>{sl_str}</code>",
+            f"🎯 <b>Target TP:</b> <code>{tp_str}</code>",
+            f"🛑 <b>Batas SL:</b> <code>{sl_str}</code>",
         ]
         if sig.setup_grade:
-            caption_lines.append(f"⭐ <b>Kualitas Setup:</b> Grade {sig.setup_grade} ({int((sig.pdf_confluence_score or 0)*100)}%)")
+            grade_clean = sig.setup_grade.replace("Grade Grade ", "").replace("Grade ", "")
+            score_num = sig.pdf_confluence_score or 0.0
+            score_clean = int(score_num if score_num > 1.0 else score_num * 100.0)
+            caption_lines.append(f"⭐ <b>Kualitas Setup:</b> Grade {grade_clean} ({score_clean}%)")
         if sig.market_direction_prediction:
             caption_lines.append(f"🎯 <b>Prediksi Arah:</b> <i>{html.escape(sig.market_direction_prediction)}</i>")
 
