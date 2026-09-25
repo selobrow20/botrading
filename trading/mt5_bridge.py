@@ -484,12 +484,12 @@ class MT5Bridge:
             # Hitung lot dengan pertimbangan momen (Grade A+ = 0.05 lot, Grade A = 0.01 lot)
             lot = self.calculate_lot_size(broker_sym, exec_price, sl, confluence_score=score, setup_grade=grade)
 
-            # Tentukan Filling Mode yang didukung broker
-            filling_mode = sym_info.filling_mode
-            if filling_mode & mt5.ORDER_FILLING_IOC:
-                fill_type = mt5.ORDER_FILLING_IOC
-            elif filling_mode & mt5.ORDER_FILLING_FOK:
+            # Tentukan Filling Mode yang didukung broker (Bit 0 (1): FOK, Bit 1 (2): IOC)
+            filling_mode = int(sym_info.filling_mode or 0)
+            if filling_mode & 1:
                 fill_type = mt5.ORDER_FILLING_FOK
+            elif filling_mode & 2:
+                fill_type = mt5.ORDER_FILLING_IOC
             else:
                 fill_type = mt5.ORDER_FILLING_RETURN
 
