@@ -802,15 +802,23 @@ class TelegramBotCommands:
             except Exception:
                 pass
 
-        elif data in ["mt5_toggle_on", "mt5_toggle_off", "mt5_refresh"]:
+        elif data in ["mt5_toggle_on", "mt5_toggle_off", "mt5_refresh", "mt5_mode_24h", "mt5_mode_night"]:
             from trading.mt5_bridge import MT5Bridge
             bridge = MT5Bridge()
             if data == "mt5_toggle_on":
-                bridge.enabled = True
+                bridge.set_enabled(True)
                 await query.answer("🟢 Auto-Trade MT5 Diaktifkan!")
             elif data == "mt5_toggle_off":
-                bridge.enabled = False
+                bridge.set_enabled(False)
                 await query.answer("🔴 Auto-Trade MT5 Dinonaktifkan!")
+            elif data == "mt5_mode_24h":
+                bridge.set_enabled(True)
+                bridge.set_trading_hours("all")
+                await query.answer("🟢 Mode 24 Jam Nonstop Diaktifkan!")
+            elif data == "mt5_mode_night":
+                bridge.set_enabled(True)
+                bridge.set_trading_hours("19:00-23:00")
+                await query.answer("🌙 Mode Sesi Malam (19:00-23:00 WIB) Diaktifkan!")
             else:
                 await query.answer("🔄 Status MT5 diperbarui.")
 
@@ -818,10 +826,15 @@ class TelegramBotCommands:
             status_auto = "🟢 <b>AKTIF (Eksekusi Otomatis)</b>" if bridge.enabled else "🔴 <b>NONAKTIF (Sinyal Saja)</b>"
             conn_badge = "🟢 <b>TERHUBUNG LIVE</b>" if bridge.is_connected else "⚪ <b>STANDBY / OFFLINE</b>"
 
+            hours_badge = "24 Jam Nonstop" if bridge.trading_hours == "all" else f"{bridge.trading_hours} WIB"
+            in_hours, _ = bridge.is_within_trading_hours()
+            hours_status = "🟢 <b>SESI AKTIF</b>" if in_hours else "⚪ <b>STANDBY (DILUAR JAM)</b>"
+
             lines = [
                 "🤖 <b>DASHBOARD METATRADER 5 (AUTO-TRADER)</b> 📈",
                 "━━━━━━━━━━━━━━━━━━━━━━",
                 f"⚡ <b>Mode Auto-Trade:</b> {status_auto}",
+                f"🕒 <b>Jadwal Trading:</b> <code>{hours_badge}</code> ({hours_status})",
                 f"📡 <b>Koneksi Terminal:</b> {conn_badge}",
                 f"📚 <b>Filter Eksekusi:</b> <code>Wajib 7 Buku PDF Grade A (≥65%)</code>",
                 f"📦 <b>Default Lot:</b> <code>{bridge.default_lot} Lot</code> (Batas Risiko: {bridge.risk_percent}%)",
@@ -858,20 +871,24 @@ class TelegramBotCommands:
                 lines.append("━━━━━━━━━━━━━━━━━━━━━━")
 
             lines.extend([
-                "<b>PANDUAN PERINTAH MT5:</b>",
-                "• <code>/mt5 on</code> - Aktifkan eksekusi order otomatis",
-                "• <code>/mt5 off</code> - Matikan eksekusi otomatis",
+                "<b>PANDUAN KENDALI MT5 DARI HP:</b>",
+                "• <code>/mt5 on</code> - Aktifkan eksekusi otomatis",
+                "• <code>/mt5 off</code> - Matikan eksekusi otomatis (Standby)",
+                "• <code>/mt5 jam 19:00-23:00</code> - Atur jadwal trading aktif",
+                "• <code>/mt5 jam all</code> - Kembalikan ke mode 24 jam nonstop",
                 "• <code>/mt5 lot 0.02</code> - Ubah ukuran lot transaksi",
                 "• <code>/mt5 close &lt;ticket&gt;</code> - Tutup manual posisi aktif",
             ])
 
-            toggle_text = "🔴 Matikan Auto-Trade" if bridge.enabled else "🟢 Hidupkan Auto-Trade"
-            toggle_cb = "mt5_toggle_off" if bridge.enabled else "mt5_toggle_on"
             keyboard = [
                 [
-                    InlineKeyboardButton(toggle_text, callback_data=toggle_cb),
+                    InlineKeyboardButton("🟢 24 Jam Nonstop", callback_data="mt5_mode_24h"),
+                    InlineKeyboardButton("🌙 Malam (19-23 WIB)", callback_data="mt5_mode_night"),
+                ],
+                [
+                    InlineKeyboardButton("🔴 Matikan Auto-Trade", callback_data="mt5_toggle_off"),
                     InlineKeyboardButton("🔄 Refresh Status", callback_data="mt5_refresh"),
-                ]
+                ],
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -1613,7 +1630,7 @@ class TelegramBotCommands:
         if args:
             sub = args[0].lower()
             if sub == "on":
-                bridge.enabled = True
+                bridge.set_enabled(True)
                 await update.message.reply_html(
                     "🟢 <b>Auto-Trading MetaTrader 5 DIAKTIFKAN!</b>\n\n"
                     "Bot akan mengeksekusi order (BUY / SELL) secara otomatis di akun MT5 setiap kali sinyal Emas (XAU/USD) 7 Buku PDF terkonfirmasi Grade A (≥65%).\n\n"
@@ -1621,18 +1638,39 @@ class TelegramBotCommands:
                 )
                 return
             elif sub == "off":
-                bridge.enabled = False
+                bridge.set_enabled(False)
                 await update.message.reply_html(
                     "🔴 <b>Auto-Trading MetaTrader 5 DINONAKTIFKAN!</b>\n\n"
                     "Bot beralih ke mode notifikasi biasa (hanya mengirim sinyal ke Telegram tanpa membuka order di MT5)."
                 )
+                return
+            elif sub in ["jam", "jadwal", "hours", "schedule"] and len(args) > 1:
+                val = args[1].lower()
+                if val in ["all", "24", "24h", "24jam", "nonstop"]:
+                    bridge.set_enabled(True)
+                    bridge.set_trading_hours("all")
+                    await update.message.reply_html(
+                        "🟢 <b>Jadwal MT5 Diatur ke Mode 24 Jam Nonstop!</b>\n\n"
+                        "Bot akan mengeksekusi order otomatis kapan pun sinyal Grade A (≥65%) muncul selama pasar buka."
+                    )
+                else:
+                    parts = val.split("-")
+                    if len(parts) == 2 and ":" in parts[0] and ":" in parts[1]:
+                        bridge.set_enabled(True)
+                        bridge.set_trading_hours(val)
+                        await update.message.reply_html(
+                            f"🌙 <b>Jadwal Trading Aktif Diatur: <code>{val} WIB</code></b>\n\n"
+                            f"Bot hanya akan mengeksekusi order otomatis pada rentang jam tersebut. Di luar jam tersebut bot berada dalam status STANDBY (hanya kirim sinyal analisa)."
+                        )
+                    else:
+                        await update.message.reply_html("⚠️ Format jadwal salah. Contoh: <code>/mt5 jam 19:00-23:00</code> atau <code>/mt5 jam all</code>")
                 return
             elif sub == "lot" and len(args) > 1:
                 try:
                     new_lot = float(args[1])
                     if new_lot <= 0 or new_lot > 50:
                         raise ValueError()
-                    bridge.default_lot = new_lot
+                    bridge.set_default_lot(new_lot)
                     await update.message.reply_html(f"✅ <b>Ukuran Lot Default Berhasil Diubah:</b> <code>{new_lot} Lot</code>")
                 except Exception:
                     await update.message.reply_html("⚠️ Format salah. Contoh penggunaan: <code>/mt5 lot 0.02</code>")
@@ -1654,10 +1692,15 @@ class TelegramBotCommands:
         status_auto = "🟢 <b>AKTIF (Eksekusi Otomatis)</b>" if bridge.enabled else "🔴 <b>NONAKTIF (Sinyal Saja)</b>"
         conn_badge = "🟢 <b>TERHUBUNG LIVE</b>" if is_conn else "⚪ <b>STANDBY / OFFLINE</b>"
 
+        hours_badge = "24 Jam Nonstop" if bridge.trading_hours == "all" else f"{bridge.trading_hours} WIB"
+        in_hours, _ = bridge.is_within_trading_hours()
+        hours_status = "🟢 <b>SESI AKTIF</b>" if in_hours else "⚪ <b>STANDBY (DILUAR JAM)</b>"
+
         lines = [
             "🤖 <b>DASHBOARD METATRADER 5 (AUTO-TRADER)</b> 📈",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"⚡ <b>Mode Auto-Trade:</b> {status_auto}",
+            f"🕒 <b>Jadwal Trading:</b> <code>{hours_badge}</code> ({hours_status})",
             f"📡 <b>Koneksi Terminal:</b> {conn_badge}",
             f"📚 <b>Filter Eksekusi:</b> <code>Wajib 7 Buku PDF Grade A (≥65%)</code>",
             f"📦 <b>Default Lot:</b> <code>{bridge.default_lot} Lot</code> (Batas Risiko: {bridge.risk_percent}%)",
@@ -1698,20 +1741,24 @@ class TelegramBotCommands:
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
 
         lines.extend([
-            "<b>PANDUAN PERINTAH MT5:</b>",
-            "• <code>/mt5 on</code> - Aktifkan eksekusi order otomatis",
-            "• <code>/mt5 off</code> - Matikan eksekusi otomatis",
+            "<b>PANDUAN KENDALI MT5 DARI HP:</b>",
+            "• <code>/mt5 on</code> - Aktifkan eksekusi otomatis",
+            "• <code>/mt5 off</code> - Matikan eksekusi otomatis (Standby)",
+            "• <code>/mt5 jam 19:00-23:00</code> - Atur jadwal trading aktif",
+            "• <code>/mt5 jam all</code> - Kembalikan ke mode 24 jam nonstop",
             "• <code>/mt5 lot 0.02</code> - Ubah ukuran lot transaksi",
             "• <code>/mt5 close &lt;ticket&gt;</code> - Tutup manual posisi aktif",
         ])
 
-        toggle_text = "🔴 Matikan Auto-Trade" if bridge.enabled else "🟢 Hidupkan Auto-Trade"
-        toggle_cb = "mt5_toggle_off" if bridge.enabled else "mt5_toggle_on"
         keyboard = [
             [
-                InlineKeyboardButton(toggle_text, callback_data=toggle_cb),
+                InlineKeyboardButton("🟢 24 Jam Nonstop", callback_data="mt5_mode_24h"),
+                InlineKeyboardButton("🌙 Malam (19-23 WIB)", callback_data="mt5_mode_night"),
+            ],
+            [
+                InlineKeyboardButton("🔴 Matikan Auto-Trade", callback_data="mt5_toggle_off"),
                 InlineKeyboardButton("🔄 Refresh Status", callback_data="mt5_refresh"),
-            ]
+            ],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 

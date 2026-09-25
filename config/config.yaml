@@ -85,6 +85,7 @@ mt5:
   risk_percent: 1.0              # Batas risiko modal per trade (% dari Equity akun)
   max_slippage: 20               # Toleransi deviasi harga (dalam points)
   gold_symbol: "XAUUSDc"         # Simbol emas di broker ("XAUUSDc" untuk akun Cent HFM)
+  trading_hours: "all"           # Jadwal trading: 'all' (24 jam) atau '19:00-23:00' (sesi malam US)
 
 # Parameter Indikator Teknikal
 indicators:

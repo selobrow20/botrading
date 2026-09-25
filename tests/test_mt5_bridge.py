@@ -159,3 +159,63 @@ def test_mt5_dynamic_lot_sizing_by_confluence():
     res_standard = bridge.execute_signal(standard_sig)
     assert res_standard["success"] is True
     assert res_standard["volume"] == 0.01
+
+
+def test_mt5_trading_hours_restriction():
+    """Menguji pembatasan jam aktif trading (misal sesi malam 19:00 - 23:00 WIB)."""
+    from datetime import time
+    from unittest.mock import patch
+    bridge = MT5Bridge(simulation_mode=True)
+    bridge.enabled = True
+
+    # Mode 24 jam nonstop -> selalu True
+    bridge.trading_hours = "all"
+    in_range, msg = bridge.is_within_trading_hours()
+    assert in_range is True
+
+    # Mode malam 19:00 - 23:00 WIB
+    bridge.trading_hours = "19:00-23:00"
+
+    strong_sig = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="Master_Confluence",
+        signal="BUY",
+        price=2750.0,
+        candle_time="2026-09-25T08:00:00",
+        take_profit_price=2775.0,
+        stop_loss_price=2735.0,
+        pdf_confluence_score=85.0,
+        setup_grade="Grade A+",
+    )
+
+    # Mock waktu siang jam 12:00 WIB (di luar jam)
+    with patch("trading.mt5_bridge.datetime") as mock_dt:
+        mock_now = MagicMock()
+        mock_now.time.return_value = time(12, 0)
+        mock_dt.now.return_value = mock_now
+
+        in_range, msg = bridge.is_within_trading_hours()
+        assert in_range is False
+        assert "Di luar jam aktif trading" in msg
+
+        res = bridge.execute_signal(strong_sig)
+        assert res["success"] is False
+        assert res["status"] == "outside_hours"
+
+    # Mock waktu malam jam 20:30 WIB (dalam jam aktif)
+    with patch("trading.mt5_bridge.datetime") as mock_dt:
+        mock_now = MagicMock()
+        mock_now.time.return_value = time(20, 30)
+        mock_dt.now.return_value = mock_now
+
+        in_range, msg = bridge.is_within_trading_hours()
+        assert in_range is True
+        assert "Dalam jam aktif trading" in msg
+
+        res = bridge.execute_signal(strong_sig)
+        assert res["success"] is True
+        assert res["status"] == "executed"
+
+    # Kembalikan ke all
+    bridge.trading_hours = "all"
+

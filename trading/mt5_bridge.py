@@ -7,8 +7,10 @@ lengkap dengan Take Profit (TP), Stop Loss (SL), dan manajemen risiko lot.
 
 import os
 import sys
+from datetime import datetime, time
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
+from zoneinfo import ZoneInfo
 from config.settings import load_config, setup_logger
 
 logger = setup_logger("mt5_bridge")
@@ -70,6 +72,7 @@ class MT5Bridge:
         self.risk_percent: float = float(mt5_cfg.get("risk_percent", 1.0))
         self.max_slippage: int = int(mt5_cfg.get("max_slippage", 20))
         self.gold_symbol: str = str(mt5_cfg.get("gold_symbol", "XAUUSD"))
+        self.trading_hours: str = str(mt5_cfg.get("trading_hours", "all") or "all")
 
         self.simulation_mode: bool = simulation_mode
         self.is_connected: bool = False
@@ -77,7 +80,7 @@ class MT5Bridge:
         self._simulated_ticket: int = 100000
 
         self._initialized = True
-        logger.info(f"MT5Bridge diinisialisasi. Enabled: {self.enabled}, Platform: {sys.platform}, Lib Available: {MT5_AVAILABLE}")
+        logger.info(f"MT5Bridge diinisialisasi. Enabled: {self.enabled}, Hours: {self.trading_hours}, Platform: {sys.platform}, Lib Available: {MT5_AVAILABLE}")
 
     @classmethod
     def is_available(cls) -> bool:
@@ -95,6 +98,76 @@ class MT5Bridge:
                 logger.info(f"Ditemukan instalasi terminal MT5 di: {p_str}")
                 return p_str
         return None
+
+    def is_within_trading_hours(self) -> Tuple[bool, str]:
+        """
+        Mengecek apakah waktu saat ini (WIB) berada di dalam jam trading yang diizinkan.
+        Format self.trading_hours: 'all' (24 jam) atau '19:00-23:00'.
+        """
+        if not self.trading_hours or self.trading_hours.lower() == "all":
+            return True, "Mode 24 Jam Aktif."
+
+        try:
+            now_wib = datetime.now(ZoneInfo("Asia/Jakarta")).time()
+
+            parts = self.trading_hours.split("-")
+            if len(parts) == 2:
+                s_h, s_m = map(int, parts[0].strip().split(":"))
+                e_h, e_m = map(int, parts[1].strip().split(":"))
+                start_t = time(s_h, s_m)
+                end_t = time(e_h, e_m)
+
+                if start_t <= end_t:
+                    in_range = start_t <= now_wib <= end_t
+                else:  # Lewat tengah malam (misal 21:00 - 03:00)
+                    in_range = now_wib >= start_t or now_wib <= end_t
+
+                if in_range:
+                    return True, f"Dalam jam aktif trading ({self.trading_hours} WIB)."
+                else:
+                    return False, f"Di luar jam aktif trading ({self.trading_hours} WIB). Waktu saat ini: {now_wib.strftime('%H:%M')} WIB."
+            return True, "Format jam tidak dibatasi."
+        except Exception as e:
+            logger.debug(f"Error parsing trading_hours ({self.trading_hours}): {e}")
+            return True, "Pengecekan jam dilewati."
+
+    def set_enabled(self, val: bool) -> None:
+        """Mengatur status aktif/nonaktif auto-trade dan menyimpannya secara persisten."""
+        self.enabled = bool(val)
+        self._save_mt5_config()
+
+    def set_default_lot(self, lot: float) -> None:
+        """Mengatur default lot transaksi dan menyimpannya secara persisten."""
+        self.default_lot = round(float(lot), 2)
+        self._save_mt5_config()
+
+    def set_trading_hours(self, hours_str: str) -> None:
+        """Mengatur jadwal jam trading aktif (misal '19:00-23:00' atau 'all')."""
+        self.trading_hours = str(hours_str).strip()
+        self._save_mt5_config()
+
+    def _save_mt5_config(self) -> None:
+        """Menyimpan konfigurasi runtime MT5 ke file config.yaml agar persist saat restart."""
+        try:
+            import yaml
+            cfg_path = Path("config/config.yaml")
+            if not cfg_path.exists():
+                return
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+
+            if "mt5" not in cfg:
+                cfg["mt5"] = {}
+
+            cfg["mt5"]["enabled"] = self.enabled
+            cfg["mt5"]["default_lot"] = self.default_lot
+            cfg["mt5"]["trading_hours"] = self.trading_hours
+
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+            logger.info("Konfigurasi MT5 berhasil diperbarui ke config/config.yaml")
+        except Exception as e:
+            logger.debug(f"Gagal menyimpan konfigurasi runtime MT5: {e}")
 
     def connect(
         self,
@@ -382,6 +455,16 @@ class MT5Bridge:
                 "success": False,
                 "status": "disabled",
                 "message": "Auto-Trade MT5 sedang NONAKTIF (hanya mode notifikasi sinyal).",
+            }
+
+        # 1b. Cek jadwal jam trading aktif
+        in_hours, hours_msg = self.is_within_trading_hours()
+        if not in_hours:
+            logger.info(f"Eksekusi MT5 dilewati: {hours_msg}")
+            return {
+                "success": False,
+                "status": "outside_hours",
+                "message": hours_msg,
             }
 
         # 2. Cek tipe sinyal
