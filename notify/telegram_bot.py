@@ -327,10 +327,19 @@ class TelegramNotifier:
         note = res_sig.get("outcome_note", "")
 
         stats = current_stats or self.storage.get_win_rate_stats()
-        wr = stats.get("win_rate", 0.0)
-        win_c = stats.get("win_count", 0)
-        lose_c = stats.get("lose_count", 0)
-        total_pnl = stats.get("total_pnl", 0.0)
+        # Selaras dengan instruksi pengguna: Win rate hanya khusus XAU/USD (Gold).
+        # Seluruh tampilan win rate disatukan menjadi 1 versi konsisten berbasis performa Gold.
+        if is_gold and "gold_stats" in stats:
+            g_stats = stats.get("gold_stats", {})
+            wr = g_stats.get("win_rate", 0.0)
+            win_c = g_stats.get("win", 0)
+            lose_c = g_stats.get("lose", 0)
+            total_pnl = g_stats.get("total_pnl", 0.0)
+        else:
+            wr = stats.get("win_rate", 0.0)
+            win_c = stats.get("win_count", 0)
+            lose_c = stats.get("lose_count", 0)
+            total_pnl = stats.get("total_pnl", 0.0)
 
         if is_win:
             header = "🎯 <b>[LAPORAN HASIL] TAKE PROFIT TERCAPAI!</b> 🚀"

@@ -239,11 +239,6 @@ class StockStorage:
                         INSERT INTO signals (ticker, strategy_name, signal_type, price, reasons, candle_time, is_notified, take_profit_price, stop_loss_price, outcome, exit_price, exit_time, pnl_pct, outcome_note)
                         VALUES ('XAUUSD', 'DayTrading_Intraday_Momentum', 'SELL', 4287.29, '["Penolakan resisten Ichimoku Kumo", "Konfluensi 7 Buku PDF"]', '2026-09-24 10:00:00', 1, 4253.00, 4304.44, 'WIN', 4253.00, '2026-09-24 18:45:00', 0.80, 'Target TP tercapai presisi (+0.80%). Momentum penurunan berhasil diamankan.')
                     """)
-                    # Sinyal 3: BUY Pre-News FOMC Paulson Speaks (OPEN)
-                    cur.execute("""
-                        INSERT INTO signals (ticker, strategy_name, signal_type, price, reasons, candle_time, is_notified, take_profit_price, stop_loss_price, outcome)
-                        VALUES ('XAUUSD', 'PreNews_FOMC', 'BUY', 4268.09, '["Pre-News FOMC Member Paulson Speaks", "Probabilitas: 61% High Confidence"]', '2026-09-24 20:55:00', 1, 4319.31, 4251.02, 'OPEN')
-                    """)
                     conn.commit()
                     logger.info("Rekam jejak sinyal Gold hari ini berhasil disimpan.")
         except Exception as e:

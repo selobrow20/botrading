@@ -232,6 +232,11 @@ class PipelineRunner:
                 # Evaluasi penyelesaian sinyal terbuka (TP / SL hit check & laporan evaluasi)
                 resolved_signals = self.storage.resolve_open_signals(ticker, df)
                 for res_sig in resolved_signals:
+                    # Validasi ketat: Jangan pernah kirim laporan TP/SL jika sinyal entry tidak pernah dinotifikasikan ke user!
+                    if not res_sig.get("is_notified", 1):
+                        logger.info(f"Melewatkan laporan TP/SL #{res_sig.get('id')} karena sinyal entry tidak dinotifikasikan.")
+                        continue
+
                     logger.info(
                         f"🎯 Laporan TP/SL: {res_sig['ticker']} {res_sig['signal_type']} "
                         f"-> {res_sig['outcome']} ({res_sig['pnl_pct']:+.2f}%)"
@@ -262,8 +267,8 @@ class PipelineRunner:
                 if sig_result.signal in ["BUY", "SELL"]:
                     results["signals_triggered"] += 1
 
-                # Simpan ke Database hanya BUY/SELL (HOLD tidak perlu disimpan)
-                if sig_result.signal in ["BUY", "SELL"]:
+                # Simpan ke Database HANYA jika sinyal segar, bukan duplikat, dan valid dinotifikasikan
+                if should_notify:
                     self.storage.save_signal(
                         ticker=sig_result.ticker,
                         strategy_name=sig_result.strategy_name,
@@ -271,7 +276,7 @@ class PipelineRunner:
                         price=sig_result.price,
                         reasons=sig_result.reasons,
                         candle_time=sig_result.candle_time,
-                        is_notified=should_notify,
+                        is_notified=True,
                         take_profit_price=sig_result.take_profit_price,
                         stop_loss_price=sig_result.stop_loss_price,
                     )
@@ -367,6 +372,10 @@ class PipelineRunner:
             if not df_gold.empty:
                 resolved_gold = self.storage.resolve_open_signals("XAUUSD", df_gold)
                 for res_sig in resolved_gold:
+                    # Validasi ketat: Hanya kirim laporan TP/SL jika sinyal entry pernah dinotifikasikan ke user
+                    if not res_sig.get("is_notified", 1):
+                        continue
+
                     logger.info(
                         f"🎯 Laporan TP/SL Gold (1m check): {res_sig['ticker']} {res_sig['signal_type']} "
                         f"-> {res_sig['outcome']} ({res_sig['pnl_pct']:+.2f}%)"
@@ -442,6 +451,7 @@ class PipelineRunner:
                                 strategy_name=f"PreNews_{news_type}",
                                 signal=action,
                                 price=entry_p,
+                                candle_time=now_str,
                                 take_profit_price=tp_p,
                                 stop_loss_price=sl_p,
                                 pdf_confluence_score=float(analysis.get("confluence_score", 75.0) or 75.0),

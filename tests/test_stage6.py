@@ -104,8 +104,10 @@ def test_stage_6():
             "YA" if d["notified"] else "TIDAK (Deduplikasi / HOLD)",
         ])
 
-    print("\nTabel Pemrosesan Watchlist:")
-    print(tabulate(table_rows, headers=["Ticker", "Sinyal", "Harga", "Waktu Candle", "Kirim Notifikasi"], tablefmt="pretty"))
+    # Cleanup sinyal dummy pengujian
+    with storage._get_connection() as conn:
+        conn.cursor().execute("DELETE FROM signals WHERE ticker LIKE 'DUMMY%'")
+        conn.commit()
 
     print("\n" + "=" * 75)
     print("✅ TAHAP 6 BERHASIL TERVERIFIKASI PENUH!")
