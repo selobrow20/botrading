@@ -84,6 +84,53 @@ class DataFetcher:
             logger.warning(f"Gagal mengambil data Spot Gold dari primary feed: {e}")
         return pd.DataFrame()
 
+    def fetch_from_mt5(self, symbol: str = "XAUUSDc", interval: str = "15m", limit: int = 100) -> pd.DataFrame:
+        """
+        Mengambil data candlestick langsung dari terminal MetaTrader 5 lokal (HFM Live Broker).
+        Paling cepat, 0 latency, dan 100% identik dengan harga akun trading.
+        """
+        try:
+            import MetaTrader5 as mt5
+            from trading.mt5_bridge import MT5Bridge
+            bridge = MT5Bridge()
+            if not bridge.is_connected:
+                bridge.connect()
+            if not bridge.is_connected:
+                return pd.DataFrame()
+
+            target_symbol = symbol or bridge.gold_symbol or "XAUUSDc"
+            mt5.symbol_select(target_symbol, True)
+
+            tf_map = {
+                "1m": mt5.TIMEFRAME_M1,
+                "5m": mt5.TIMEFRAME_M5,
+                "15m": mt5.TIMEFRAME_M15,
+                "30m": mt5.TIMEFRAME_M30,
+                "1h": mt5.TIMEFRAME_H1,
+                "4h": mt5.TIMEFRAME_H4,
+                "1d": mt5.TIMEFRAME_D1,
+            }
+            tf = tf_map.get(interval, mt5.TIMEFRAME_M15)
+            rates = mt5.copy_rates_from_pos(target_symbol, tf, 0, limit)
+            if rates is not None and len(rates) > 0:
+                df = pd.DataFrame(rates)
+                df["Date"] = pd.to_datetime(df["time"], unit="s")
+                df.rename(columns={
+                    "open": "Open",
+                    "high": "High",
+                    "low": "Low",
+                    "close": "Close",
+                    "tick_volume": "Volume"
+                }, inplace=True)
+                df.set_index("Date", inplace=True)
+                clean_df = self._clean_dataframe(df[["Open", "High", "Low", "Close", "Volume"]])
+                if not clean_df.empty:
+                    logger.info(f"Sukses mengambil {len(clean_df)} bar Spot Gold langsung dari terminal MT5 ({target_symbol}).")
+                    return clean_df
+        except Exception as e:
+            logger.debug(f"Gagal mengambil data dari MT5: {e}")
+        return pd.DataFrame()
+
     def fetch_ohlcv(
         self,
         ticker: str,
@@ -93,7 +140,7 @@ class DataFetcher:
         end: Optional[str] = None,
     ) -> pd.DataFrame:
         """
-        Mengambil data OHLCV dari yfinance atau direct spot feed dengan toleransi error dan retry backoff.
+        Mengambil data OHLCV dari MT5, direct spot feed, atau yfinance dengan toleransi error dan retry backoff.
         
         Args:
             ticker: Kode saham (misal BBCA atau BBCA.JK) atau instrumen global (XAUUSD)
@@ -107,12 +154,20 @@ class DataFetcher:
         """
         normalized_ticker = self.normalize_ticker(ticker)
 
-        # Jika instrumen adalah Emas Spot (XAUUSD), utamakan direct Spot Gold feed
+        # Jika instrumen adalah Emas Spot (XAUUSD):
+        # 1. Utamakan direct Spot Gold feed (TradingView)
+        # 2. Jika ada kendala jaringan, fallback langsung ke terminal MT5 HFM
+        # 3. Terakhir fallback ke COMEX Gold Futures (GC=F)
         if normalized_ticker == "XAUUSD":
             spot_df = self.fetch_spot_gold(interval=interval, limit=100)
             if not spot_df.empty and len(spot_df) >= 15:
                 return spot_df
-            logger.warning("Gagal fetch dari direct Spot Gold feed, fallback ke COMEX Gold Futures (GC=F)...")
+
+            mt5_df = self.fetch_from_mt5(interval=interval, limit=100)
+            if not mt5_df.empty and len(mt5_df) >= 15:
+                return mt5_df
+
+            logger.warning("Gagal fetch dari direct Spot Gold feed dan MT5, fallback ke COMEX Gold Futures (GC=F)...")
             normalized_ticker = "GC=F"
 
         if period is None and start is None:
