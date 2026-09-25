@@ -363,18 +363,33 @@ class SignalEngine:
         if snapshot["ichimoku_above_cloud"]:
             patterns_detected.append("Ichimoku Kumo Cloud")
 
-        # 3. Hitung Manajemen Risiko Trading Harian (TP / SL / RRR minimal 1:2.0)
+        # 3. Tentukan arah sinyal TERLEBIH DAHULU agar TP/SL dihitung dengan benar
+        # Untuk Gold: jika strategi dasar belum tegas, tentukan arah dari posisi harga vs EMA50
         is_gold = any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        if is_buy:
+            target_sig_type = "BUY"
+        elif is_sell:
+            target_sig_type = "SELL"
+        elif is_gold:
+            # Biarkan 7 Buku PDF yang menentukan arah berdasarkan posisi harga terhadap EMA 50
+            target_sig_type = "BUY" if curr_price >= snapshot.get("ema_50", curr_price) else "SELL"
+        else:
+            target_sig_type = "BUY"
+
+        # 4. Hitung Manajemen Risiko Trading Harian (TP / SL / RRR minimal 1:2.0)
+        # Penting: gunakan target_sig_type (bukan is_sell) agar SELL Gold yang dipromosikan
+        # mendapatkan TP di BAWAH entry dan SL di ATAS entry (bukan terbalik!)
         if is_gold:
             tp_pct = 0.8
             sl_pct = 0.40
-            # RRR 1:2.0
-            if is_sell and not is_buy:
+            if target_sig_type == "SELL":
+                # SELL: TP di bawah harga entry, SL di atas harga entry
                 tp_price = round(curr_price * (1.0 - (tp_pct / 100.0)), 2)
                 sl_price = round(curr_price * (1.0 + (sl_pct / 100.0)), 2)
                 risk_dist = max(sl_price - curr_price, 0.01)
                 rrr = round((curr_price - tp_price) / risk_dist, 2)
             else:
+                # BUY: TP di atas harga entry, SL di bawah harga entry
                 tp_price = round(curr_price * (1.0 + (tp_pct / 100.0)), 2)
                 sl_price = round(curr_price * (1.0 - (sl_pct / 100.0)), 2)
                 risk_dist = max(curr_price - sl_price, 0.01)
@@ -386,7 +401,7 @@ class SignalEngine:
             tp_pct = float(mode_cfg.get("take_profit_pct", 3.0 if trading_mode == "intraday" else 5.0))
             sl_pct = float(mode_cfg.get("stop_loss_pct", 1.5 if trading_mode == "intraday" else 2.5))
 
-            if is_sell and not is_buy:
+            if target_sig_type == "SELL":
                 tp_price = round(curr_price * (1.0 - (tp_pct / 100.0)), 0)
                 sl_price = round(curr_price * (1.0 + (sl_pct / 100.0)), 0)
                 risk_dist = max(sl_price - curr_price, 1.0)
@@ -397,18 +412,7 @@ class SignalEngine:
                 risk_dist = max(curr_price - sl_price, 1.0)
                 rrr = round((tp_price - curr_price) / risk_dist, 2)
 
-        # 4. Keputusan Sinyal & Alasan (Didukung Telaah Lengkap 7 Buku PDF)
-        # Untuk Gold: Jika strategi dasar belum tegas BUY/SELL, tentukan arah dari posisi harga vs EMA50
-        if is_buy:
-            target_sig_type = "BUY"
-        elif is_sell:
-            target_sig_type = "SELL"
-        elif is_gold:
-            # Biarkan 7 Buku PDF yang menentukan arah berdasarkan posisi harga terhadap EMA 50
-            target_sig_type = "BUY" if curr_price >= snapshot.get("ema_50", curr_price) else "SELL"
-        else:
-            target_sig_type = "BUY"
-
+        # 5. Evaluasi 7 Buku PDF dengan arah yang sudah ditentukan di atas
         pdf_approved, pdf_score, setup_grade, pdf_checks, direction_pred = self.validate_pdf_entry_confluence(
             curr_row, prev_row, snapshot, signal_type=target_sig_type
         )
