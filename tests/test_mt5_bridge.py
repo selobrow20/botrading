@@ -121,3 +121,41 @@ def test_mt5_disabled_mode_does_not_execute():
     res = bridge.execute_signal(sig)
     assert res["success"] is False
     assert res["status"] == "disabled"
+
+
+def test_mt5_dynamic_lot_sizing_by_confluence():
+    """Menguji penentuan ukuran lot: 0.05 lot untuk momen super bagus (Grade A+), 0.01 lot untuk standar/riskan."""
+    bridge = MT5Bridge(simulation_mode=True)
+    bridge.enabled = True
+
+    # 1. Momen Super Bagus (Grade A+ >= 80%) -> 0.05 lot
+    super_sig = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="Master_Confluence",
+        signal="BUY",
+        price=2750.0,
+        candle_time="2026-09-25T08:00:00",
+        take_profit_price=2775.0,
+        stop_loss_price=2735.0,
+        pdf_confluence_score=85.0,
+        setup_grade="Grade A+",
+    )
+    res_super = bridge.execute_signal(super_sig)
+    assert res_super["success"] is True
+    assert res_super["volume"] == 0.05
+
+    # 2. Momen Standar / Masih Riskan (Grade A 65% - 79%) -> 0.01 lot
+    standard_sig = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="Master_Confluence",
+        signal="BUY",
+        price=2750.0,
+        candle_time="2026-09-25T08:00:00",
+        take_profit_price=2775.0,
+        stop_loss_price=2735.0,
+        pdf_confluence_score=70.0,
+        setup_grade="Grade A",
+    )
+    res_standard = bridge.execute_signal(standard_sig)
+    assert res_standard["success"] is True
+    assert res_standard["volume"] == 0.01

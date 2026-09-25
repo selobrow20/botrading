@@ -64,6 +64,8 @@ class MT5Bridge:
         self.path: str = str(os.getenv("MT5_PATH", mt5_cfg.get("path", "")) or "")
         self.magic_number: int = int(mt5_cfg.get("magic_number", 777777))
         self.default_lot: float = float(mt5_cfg.get("default_lot", 0.01))
+        self.high_confidence_lot: float = float(mt5_cfg.get("high_confidence_lot", 0.05))
+        self.high_confidence_threshold: float = float(mt5_cfg.get("high_confidence_threshold", 80.0))
         self.use_dynamic_lot: bool = bool(mt5_cfg.get("use_dynamic_lot", False))
         self.risk_percent: float = float(mt5_cfg.get("risk_percent", 1.0))
         self.max_slippage: int = int(mt5_cfg.get("max_slippage", 20))
@@ -303,16 +305,25 @@ class MT5Bridge:
         symbol: str,
         entry_price: float,
         sl_price: float,
+        confluence_score: float = 0.0,
+        setup_grade: str = "",
     ) -> float:
         """
-        Menghitung ukuran lot optimal berdasarkan manajemen risiko modal (% Equity)
-        dan jarak Stop Loss.
+        Menghitung ukuran lot trading:
+        - Momen Bagus Banget (Grade A+ / Skor Konfluensi >= 80%): 0.05 lot (sesuai arahan pengguna).
+        - Momen Standar / Masih Riskan (Grade A / Skor 65% - 79%): 0.01 lot pengaman.
         """
+        is_high_conviction = (
+            confluence_score >= self.high_confidence_threshold
+            or "A+" in str(setup_grade).upper()
+        )
+        base_lot = self.high_confidence_lot if is_high_conviction else self.default_lot
+
         if self.simulation_mode or not self.use_dynamic_lot:
-            return self.default_lot
+            return round(base_lot, 2)
 
         if self.risk_percent <= 0:
-            return self.default_lot
+            return round(base_lot, 2)
 
         try:
             acc = mt5.account_info()
@@ -403,7 +414,10 @@ class MT5Bridge:
                 "message": "Target TP atau SL tidak valid (wajib memiliki level TP & SL pengaman).",
             }
 
-        # 5. Mode Simulasi (Dry-Run untuk Unit Testing)
+        # 5. Hitung Lot Sesuai Kualitas Momen (0.05 lot momen bagus banget, 0.01 lot standar/riskan)
+        lot = self.calculate_lot_size(ticker, price, sl, confluence_score=score, setup_grade=grade)
+
+        # Mode Simulasi (Dry-Run untuk Unit Testing)
         if self.simulation_mode:
             self._simulated_ticket += 1
             ticket = self._simulated_ticket
@@ -411,7 +425,7 @@ class MT5Bridge:
                 "ticket": ticket,
                 "symbol": ticker,
                 "type": sig_type,
-                "volume": self.default_lot,
+                "volume": lot,
                 "price_open": price,
                 "sl": sl,
                 "tp": tp,
@@ -420,19 +434,19 @@ class MT5Bridge:
                 "comment": f"7PDF-{sig_type}",
             }
             self._simulated_positions.append(pos_dict)
-            logger.info(f"🤖 [SIMULASI] Order MT5 #{ticket} {sig_type} {ticker} @ {price} (TP: {tp}, SL: {sl}) sukses dieksekusi.")
+            logger.info(f"🤖 [SIMULASI] Order MT5 #{ticket} {sig_type} {ticker} ({lot} lot) @ {price} (TP: {tp}, SL: {sl}) sukses dieksekusi.")
             return {
                 "success": True,
                 "status": "executed",
                 "ticket": ticket,
                 "symbol": ticker,
                 "action": sig_type,
-                "volume": self.default_lot,
+                "volume": lot,
                 "price": price,
                 "tp": tp,
                 "sl": sl,
                 "magic": self.magic_number,
-                "message": f"Order simulasi #{ticket} {sig_type} berhasil dipasang.",
+                "message": f"Order simulasi #{ticket} {sig_type} ({lot} lot) berhasil dipasang.",
             }
 
         # 6. Eksekusi Live MT5 Real / Demo
@@ -467,8 +481,8 @@ class MT5Bridge:
             order_type = mt5.ORDER_TYPE_BUY if sig_type == "BUY" else mt5.ORDER_TYPE_SELL
             exec_price = float(tick.ask if sig_type == "BUY" else tick.bid)
 
-            # Hitung lot
-            lot = self.calculate_lot_size(broker_sym, exec_price, sl)
+            # Hitung lot dengan pertimbangan momen (Grade A+ = 0.05 lot, Grade A = 0.01 lot)
+            lot = self.calculate_lot_size(broker_sym, exec_price, sl, confluence_score=score, setup_grade=grade)
 
             # Tentukan Filling Mode yang didukung broker
             filling_mode = sym_info.filling_mode

@@ -79,7 +79,9 @@ mt5:
   server: "HFMarketsGlobal-Live7" # Server broker MT5 (HFM / HotForex)
   path: ""                       # Path terminal64.exe jika kustom (biarkan kosong untuk auto-detect)
   magic_number: 777777           # ID unik penanda transaksi bot
-  default_lot: 0.01              # Ukuran lot per transaksi (0.01 = micro lot)
+  default_lot: 0.01              # Ukuran lot standar / masih riskan (0.01 micro lot)
+  high_confidence_lot: 0.05      # Ukuran lot jika ada momen bagus banget (Grade A+ >= 80%)
+  high_confidence_threshold: 80.0 # Batas konfluensi momen prima (80%)
   risk_percent: 1.0              # Batas risiko modal per trade (% dari Equity akun)
   max_slippage: 20               # Toleransi deviasi harga (dalam points)
   gold_symbol: "XAUUSDc"         # Simbol emas di broker ("XAUUSDc" untuk akun Cent HFM)
