@@ -398,7 +398,17 @@ class SignalEngine:
                 rrr = round((tp_price - curr_price) / risk_dist, 2)
 
         # 4. Keputusan Sinyal & Alasan (Didukung Telaah Lengkap 7 Buku PDF)
-        target_sig_type = "BUY" if is_buy else "SELL" if is_sell else "BUY"
+        # Untuk Gold: Jika strategi dasar belum tegas BUY/SELL, tentukan arah dari posisi harga vs EMA50
+        if is_buy:
+            target_sig_type = "BUY"
+        elif is_sell:
+            target_sig_type = "SELL"
+        elif is_gold:
+            # Biarkan 7 Buku PDF yang menentukan arah berdasarkan posisi harga terhadap EMA 50
+            target_sig_type = "BUY" if curr_price >= snapshot.get("ema_50", curr_price) else "SELL"
+        else:
+            target_sig_type = "BUY"
+
         pdf_approved, pdf_score, setup_grade, pdf_checks, direction_pred = self.validate_pdf_entry_confluence(
             curr_row, prev_row, snapshot, signal_type=target_sig_type
         )
@@ -437,13 +447,13 @@ class SignalEngine:
                 reasons = list(sell_reasons)
                 reasons.append(f"Telaah 7 Buku: {setup_grade} ({pdf_score:.0f}%)")
         else:
-            # Jika sinyal dasar masih netral namun telaah 7 Buku PDF membuktikan Grade A+ (>=80%)
+            # Jika sinyal dasar masih netral namun telaah 7 Buku PDF membuktikan Grade A (>=65%)
             # dengan konfluensi kuat dan arah tren terkonfirmasi, promosikan menjadi sinyal aktif!
-            if apply_pdf_filter and pdf_score >= 80.0 and is_gold:
+            if apply_pdf_filter and pdf_score >= 65.0 and is_gold:
                 if target_sig_type == "BUY" and curr_price >= snapshot.get("ema_50", 0.0):
                     signal = "BUY"
                     reasons = [
-                        f"Konfluensi Prima 7 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",
+                        f"Konfluensi 7 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",
                         f"Tren Bullish di atas EMA 50 ({snapshot.get('ema_50', 0):.2f})",
                     ]
                     if patterns_detected:
@@ -451,9 +461,11 @@ class SignalEngine:
                 elif target_sig_type == "SELL" and curr_price <= snapshot.get("ema_50", 0.0):
                     signal = "SELL"
                     reasons = [
-                        f"Konfluensi Prima 7 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",
+                        f"Konfluensi 7 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",
                         f"Tren Bearish di bawah EMA 50 ({snapshot.get('ema_50', 0):.2f})",
                     ]
+                    if patterns_detected:
+                        reasons.append(f"Pola: {', '.join(patterns_detected[:2])}")
                 else:
                     signal = "HOLD"
                     reasons = [
