@@ -317,6 +317,20 @@ class PipelineRunner:
                                     sig_result.reasons.append(
                                         f"🤖 Auto-Trade MT5: Ticket #{mt5_res.get('ticket')} ({mt5_res.get('volume')} lot @ ${mt5_res.get('price'):,.2f})"
                                     )
+                                    try:
+                                        self.notifier.send_mt5_execution_report({
+                                            "ticket": mt5_res.get("ticket"),
+                                            "action": mt5_res.get("action"),
+                                            "symbol": mt5_res.get("symbol"),
+                                            "volume": mt5_res.get("volume"),
+                                            "price": mt5_res.get("price"),
+                                            "tp": mt5_res.get("tp"),
+                                            "sl": mt5_res.get("sl"),
+                                            "score": getattr(sig_result, "pdf_confluence_score", 0.0),
+                                            "grade": getattr(sig_result, "setup_grade", "Grade A"),
+                                        })
+                                    except Exception as ex_rep:
+                                        logger.warning(f"Gagal kirim kartu laporan eksekusi MT5: {ex_rep}")
                                 else:
                                     logger.warning(f"MT5 Auto-Trade tidak tereksekusi: {mt5_res.get('message')}")
                         except Exception as e:
@@ -463,6 +477,20 @@ class PipelineRunner:
                                     f"🤖 MT5 Pre-News Auto-Trade Sukses: #{mt5_res.get('ticket')} "
                                     f"{mt5_res.get('action')} {mt5_res.get('volume')} lot @ {mt5_res.get('price')}"
                                 )
+                                try:
+                                    self.notifier.send_mt5_execution_report({
+                                        "ticket": mt5_res.get("ticket"),
+                                        "action": mt5_res.get("action"),
+                                        "symbol": mt5_res.get("symbol"),
+                                        "volume": mt5_res.get("volume"),
+                                        "price": mt5_res.get("price"),
+                                        "tp": mt5_res.get("tp"),
+                                        "sl": mt5_res.get("sl"),
+                                        "score": float(analysis.get("confluence_score", 75.0) or 75.0),
+                                        "grade": "Grade A",
+                                    })
+                                except Exception as ex_rep:
+                                    logger.warning(f"Gagal kirim kartu laporan eksekusi MT5 pre-news: {ex_rep}")
                     except Exception as e:
                         logger.error(f"Error eksekusi MT5 pre-news: {e}")
 

@@ -403,6 +403,59 @@ class TelegramNotifier:
                 success = False
         return success
 
+    def format_mt5_execution_report(self, order_info: Dict[str, Any]) -> str:
+        """
+        Menyusun kartu laporan resmi Telegram saat order MT5 berhasil dieksekusi real-time.
+        """
+        ticket = order_info.get("ticket", "-")
+        action = order_info.get("action", "BUY")
+        symbol = order_info.get("symbol", "XAUUSDc")
+        volume = float(order_info.get("volume", 0.01))
+        price = float(order_info.get("price", 0.0))
+        tp = float(order_info.get("tp", 0.0))
+        sl = float(order_info.get("sl", 0.0))
+        score = float(order_info.get("score", 0.0))
+        grade = str(order_info.get("grade", "Grade A"))
+        lot_badge = "🔥 <b>MOMEN BAGUS BANGET (0.05 LOT)</b>" if volume >= 0.05 else "🛡️ <b>STANDAR / PENGAMAN (0.01 LOT)</b>"
+        action_icon = "🟢" if action == "BUY" else "🔴"
+        action_label = "BUY / LONG" if action == "BUY" else "SELL / SHORT"
+
+        lines = [
+            "🤖 <b>[LAPORAN EKSEKUSI] ORDER MT5 TERPASANG!</b> ⚡",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"🎫 <b>Ticket ID:</b> <code>#{ticket}</code>",
+            f"📊 <b>Instrumen:</b> <code>{symbol} (Gold)</code>",
+            f"{action_icon} <b>Aksi Order:</b> <b>{action_label}</b>",
+            f"📦 <b>Volume:</b> <code>{volume:.2f} Lot</code> ({lot_badge})",
+            f"💵 <b>Harga Masuk:</b> <code>${price:,.2f}</code>",
+            f"🎯 <b>Take Profit (TP):</b> <code>${tp:,.2f}</code>",
+            f"🛑 <b>Stop Loss (SL):</b> <code>${sl:,.2f}</code>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"⭐ <b>Konfluensi 7 PDF:</b> {score:.0f}% ({grade})",
+            "🛡️ <i>Order diproteksi SL & TP otomatis. Terhubung langsung ke MT5 akun Anda!</i>",
+        ]
+        return "\n".join(lines)
+
+    def send_mt5_execution_report(self, order_info: Dict[str, Any]) -> bool:
+        """
+        Mengirim kartu konfirmasi eksekusi order MT5 ke seluruh pengguna Telegram.
+        """
+        msg = self.format_mt5_execution_report(order_info)
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        success = True
+        for cid in approved_ids:
+            try:
+                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
+                if not res:
+                    success = False
+            except Exception as e:
+                logger.error(f"Error kirim laporan eksekusi MT5 ke {cid}: {e}")
+                success = False
+        return success
+
     def format_market_close_summary(
         self,
         watchlist_data: List[Dict[str, Any]],

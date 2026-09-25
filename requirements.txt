@@ -23,6 +23,9 @@ pytest>=8.0.0
 # Document & Strategy Learning
 pypdf>=5.0.0
 
-# MetaTrader 5 Auto-Trading (Windows only)
+# MetaTrader 5 Auto-Trading (Windows native)
 MetaTrader5>=5.0.0; sys_platform == 'win32'
+
+# Cloud MT5 Auto-Trading (Linux & Windows 24/7 on Railway)
+metaapi-cloud-sdk>=29.0.0
 
