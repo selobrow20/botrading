@@ -2356,7 +2356,7 @@ async def on_bot_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> No
     from telegram.error import Conflict, NetworkError, TimedOut
     if isinstance(context.error, Conflict):
         logger.warning(
-            "⚠️ [Conflict Handled] Terdeteksi instance bot lain aktif bersamaan atau sedang proses transisi redeploy di Railway. "
+            "⚠️ [Conflict Handled] Terdeteksi ada lebih dari 1 proses bot aktif bersamaan (multi-instance). "
             "Bot otomatis menyinkronkan koneksi..."
         )
         return
