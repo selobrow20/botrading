@@ -115,12 +115,31 @@ class TechnicalIndicators:
         engulfing_body = (open_s <= close_s.shift(1)) & (close_s >= open_s.shift(1))
         engulfing = (prev_red & curr_green & engulfing_body).astype(float)
 
+        # Ekor atas (Upper Wick) dan Pola Shooting Star / Bearish Engulfing
+        upper_wick = np.where(close_s >= open_s, high_s - close_s, high_s - open_s)
+        upper_wick_s = pd.Series(upper_wick, index=close_s.index)
+        shooting_star_cond = (
+            (upper_wick_s >= 1.8 * body)
+            & (upper_wick_s >= 0.45 * range_val)
+            & (close_s <= high_s - (0.45 * range_val))
+        )
+        shooting_star = shooting_star_cond.astype(float)
+
+        prev_green = close_s.shift(1) > open_s.shift(1)
+        curr_red = open_s > close_s
+        bearish_engulfing_body = (open_s >= close_s.shift(1)) & (close_s <= open_s.shift(1))
+        bearish_engulfing = (prev_green & curr_red & bearish_engulfing_body).astype(float)
+
         rejection_ratio = (lower_wick_s / range_val).fillna(0.0)
+        upper_rejection_ratio = (upper_wick_s / range_val).fillna(0.0)
 
         return {
             "pattern_pinbar": pinbar,
             "pattern_engulfing": engulfing,
+            "pattern_shooting_star": shooting_star,
+            "pattern_bearish_engulfing": bearish_engulfing,
             "rejection_wick_ratio": rejection_ratio,
+            "upper_wick_ratio": upper_rejection_ratio,
         }
 
     @staticmethod
@@ -225,6 +244,134 @@ class TechnicalIndicators:
             "volman_buildup_ratio": buildup_ratio,
         }
 
+    @staticmethod
+    def chart_patterns(
+        high_s: pd.Series,
+        low_s: pd.Series,
+        close_s: pd.Series,
+        open_s: pd.Series,
+    ) -> Dict[str, pd.Series]:
+        """
+        Deteksi Pola Grafik (Buku: CHART PATTERN):
+        - Double Bottom (W) & Double Top (M)
+        - Falling Wedge (Bullish) & Rising Wedge (Bearish)
+        - Inverse Head & Shoulders & Head & Shoulders
+        """
+        n = len(close_s)
+        db = pd.Series(0.0, index=close_s.index)
+        dt = pd.Series(0.0, index=close_s.index)
+        wedge_fall = pd.Series(0.0, index=close_s.index)
+        wedge_rise = pd.Series(0.0, index=close_s.index)
+        head_shoulders = pd.Series(0.0, index=close_s.index)
+        inv_head_shoulders = pd.Series(0.0, index=close_s.index)
+
+        # Evaluasi lookback 20 bar
+        for i in range(12, n):
+            w_low = low_s.iloc[max(0, i - 20):i + 1]
+            w_high = high_s.iloc[max(0, i - 20):i + 1]
+            w_close = close_s.iloc[max(0, i - 20):i + 1]
+
+            mid_idx = len(w_low) // 2
+            l1, l2 = w_low.iloc[:mid_idx].min(), w_low.iloc[mid_idx:].min()
+            h1, h2 = w_high.iloc[:mid_idx].max(), w_high.iloc[mid_idx:].max()
+
+            # Double Bottom (W): Dua lembah berjarak dekat (<= 1.5%), penutupan memantul
+            if abs(l1 - l2) / max(l1, 1.0) <= 0.015 and w_close.iloc[-1] >= (l1 + l2) / 2.0 * 1.002:
+                db.iloc[i] = 1.0
+
+            # Double Top (M): Dua puncak berjarak dekat (<= 1.5%), penutupan terkoreksi
+            if abs(h1 - h2) / max(h1, 1.0) <= 0.015 and w_close.iloc[-1] <= (h1 + h2) / 2.0 * 0.998:
+                dt.iloc[i] = 1.0
+
+            # Falling Wedge & Rising Wedge (Kompresi rentang menyempit dengan arah miring)
+            range_early = w_high.iloc[:4].mean() - w_low.iloc[:4].mean()
+            range_late = w_high.iloc[-4:].mean() - w_low.iloc[-4:].mean()
+            if range_late < range_early * 0.75:
+                if w_high.iloc[-1] < w_high.iloc[0] and w_low.iloc[-1] < w_low.iloc[0]:
+                    wedge_fall.iloc[i] = 1.0
+                elif w_high.iloc[-1] > w_high.iloc[0] and w_low.iloc[-1] > w_low.iloc[0]:
+                    wedge_rise.iloc[i] = 1.0
+
+            # Head and Shoulders (Puncak tengah lebih tinggi dari bahu kiri dan kanan)
+            if len(w_high) >= 15:
+                seg = len(w_high) // 3
+                left_pk = w_high.iloc[:seg].max()
+                head_pk = w_high.iloc[seg:2 * seg].max()
+                right_pk = w_high.iloc[2 * seg:].max()
+                if head_pk > left_pk * 1.002 and head_pk > right_pk * 1.002 and abs(left_pk - right_pk) / left_pk < 0.02:
+                    head_shoulders.iloc[i] = 1.0
+
+                # Inverse Head and Shoulders (Lembah tengah lebih dalam)
+                left_tr = w_low.iloc[:seg].min()
+                head_tr = w_low.iloc[seg:2 * seg].min()
+                right_tr = w_low.iloc[2 * seg:].min()
+                if head_tr < left_tr * 0.998 and head_tr < right_tr * 0.998 and abs(left_tr - right_tr) / left_tr < 0.02:
+                    inv_head_shoulders.iloc[i] = 1.0
+
+        return {
+            "pattern_double_bottom": db,
+            "pattern_double_top": dt,
+            "pattern_falling_wedge": wedge_fall,
+            "pattern_rising_wedge": wedge_rise,
+            "pattern_head_shoulders": head_shoulders,
+            "pattern_inv_head_shoulders": inv_head_shoulders,
+        }
+
+    @staticmethod
+    def market_structure(
+        high_s: pd.Series,
+        low_s: pd.Series,
+        close_s: pd.Series,
+        open_s: pd.Series,
+        period: int = 10,
+    ) -> Dict[str, pd.Series]:
+        """
+        Kaidah Struktur Pasar & Smart Money (Buku: Trading Alchemist - Rizki Aditama):
+        - Higher High (HH) & Higher Low (HL) -> Struktur Bullish
+        - Lower High (LH) & Lower Low (LL) -> Struktur Bearish
+        - Break of Structure (BOS)
+        - Order Block (OB): Bullish (Demand Zone) & Bearish (Supply Zone)
+        - Fair Value Gap (FVG / Imbalance)
+        """
+        rolling_sh = high_s.shift(1).rolling(period, min_periods=3).max()
+        rolling_sl = low_s.shift(1).rolling(period, min_periods=3).min()
+
+        # Break of Structure (BOS)
+        bos_bullish = (close_s > rolling_sh).astype(float)
+        bos_bearish = (close_s < rolling_sl).astype(float)
+
+        # Struktur Tren HH/HL vs LH/LL
+        sh_prev = rolling_sh.shift(max(period // 2, 2))
+        sl_prev = rolling_sl.shift(max(period // 2, 2))
+        structure_bullish = ((rolling_sh >= sh_prev) & (rolling_sl >= sl_prev)).astype(float)
+        structure_bearish = ((rolling_sh <= sh_prev) & (rolling_sl <= sl_prev)).astype(float)
+
+        # Fair Value Gap (FVG / Imbalance 3 Candle)
+        fvg_bullish = (low_s > high_s.shift(2)).astype(float)
+        fvg_bearish = (high_s < low_s.shift(2)).astype(float)
+
+        # Order Block (OB)
+        # Bullish OB: Candle merah sebelum rally kencang menembus high sebelumnya
+        prev_down = (open_s.shift(1) > close_s.shift(1))
+        curr_strong_up = (close_s > high_s.shift(1)) & (close_s > open_s)
+        ob_bullish = (prev_down & curr_strong_up).astype(float)
+
+        # Bearish OB: Candle hijau sebelum drop kencang menembus low sebelumnya
+        prev_up = (close_s.shift(1) > open_s.shift(1))
+        curr_strong_down = (close_s < low_s.shift(1)) & (close_s < open_s)
+        ob_bearish = (prev_up & curr_strong_down).astype(float)
+
+        return {
+            "structure_bullish": structure_bullish,
+            "structure_bearish": structure_bearish,
+            "structure_bos_bullish": bos_bullish,
+            "structure_bos_bearish": bos_bearish,
+            "order_block_bullish": ob_bullish,
+            "order_block_bearish": ob_bearish,
+            "fvg_bullish": fvg_bullish,
+            "fvg_bearish": fvg_bearish,
+        }
+
     @classmethod
     def add_all_indicators(
         cls,
@@ -314,6 +461,16 @@ class TechnicalIndicators:
             res["High"], res["Low"], res["Close"], ema20_col, ema50_col
         )
         for k, v in volman_dict.items():
+            res[k] = v
+
+        # 10. Pola Grafik (Buku: CHART PATTERN)
+        cp_dict = cls.chart_patterns(res["High"], res["Low"], res["Close"], res["Open"])
+        for k, v in cp_dict.items():
+            res[k] = v
+
+        # 11. Struktur Pasar & Smart Money (Buku: Trading Alchemist - Rizki Aditama)
+        ms_dict = cls.market_structure(res["High"], res["Low"], res["Close"], res["Open"])
+        for k, v in ms_dict.items():
             res[k] = v
 
         # Tambahkan lowercase alias untuk harga dasar

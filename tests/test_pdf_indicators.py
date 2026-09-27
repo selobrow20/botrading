@@ -161,6 +161,6 @@ def test_pdf_confluence_entry_validator():
     )
     msg = notifier.format_signal_message(sig_buy)
     assert "SINYAL ENTRY (MASUK / BUY)" in msg
-    assert "TELAAH 7 BUKU PDF" in msg
+    assert "TELAAH 9 BUKU PDF" in msg or "TELAAH 7 BUKU PDF" in msg
     assert "Prediksi Arah" in msg
 

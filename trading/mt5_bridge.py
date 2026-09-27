@@ -1,6 +1,6 @@
 """
 Modul Eksekutor MetaTrader 5 (MT5 Bridge & Auto-Trader).
-Menghubungkan sinyal bot trading (khususnya Emas / XAU/USD berbasis 7 Buku PDF)
+Menghubungkan sinyal bot trading (khususnya Emas / XAU/USD berbasis 9 Buku PDF)
 secara langsung ke terminal MetaTrader 5 untuk eksekusi order otomatis (BUY / SELL)
 lengkap dengan Take Profit (TP), Stop Loss (SL), dan manajemen risiko lot.
 """
@@ -436,9 +436,9 @@ class MT5Bridge:
 
     def execute_signal(self, sig: Any) -> Dict[str, Any]:
         """
-        Mengeksekusi sinyal trading langsung ke MetaTrader 5 dengan pengawalan ketat 7 Buku PDF:
+        Mengeksekusi sinyal trading langsung ke MetaTrader 5 dengan pengawalan ketat 9 Buku PDF:
         1. Wajib sinyal BUY atau SELL.
-        2. Wajib memenuhi skor konfluensi 7 PDF (Grade A >= 65%).
+        2. Wajib memenuhi skor konfluensi 9 PDF (Grade A >= 65%).
         3. Memasang Take Profit (TP) & Stop Loss (SL) secara otomatis.
         """
         sig_type = getattr(sig, "signal", "").upper()
@@ -475,12 +475,12 @@ class MT5Bridge:
                 "message": f"Sinyal {sig_type} bukan sinyal eksekusi (HOLD).",
             }
 
-        # 3. KAWALAN KETAT 7 BUKU PDF: Tolak eksekusi jika belum tembus Grade A (65%)
-        # Sesuai instruksi mutlak pengguna: 'jgn sekali kali open jika engga ada sinyal dari bot ya harus ikut dari pentujuk pdf'
+        # 3. KAWALAN KETAT 9 BUKU PDF: Tolak eksekusi jika belum tembus Grade A (65%)
+        # Sesuai instruksi mutlak pengguna: 'jgn sekali kali open jika engga ada sinyal dari bot ya harus ikut dari petunjuk 9 buku pdf'
         if score < 65.0:
             msg = (
-                f"❌ Eksekusi MT5 Ditolak: Skor konfluensi 7 Buku PDF ({score:.0f}%) "
-                f"belum tembus batas minimal Grade A (65%). Sinyal tanpa konfluensi 7 PDF dilarang dieksekusi!"
+                f"❌ Eksekusi MT5 Ditolak: Skor konfluensi 9 Buku PDF ({score:.0f}%) "
+                f"belum tembus batas minimal Grade A (65%). Sinyal tanpa konfluensi 9 PDF dilarang dieksekusi!"
             )
             logger.warning(msg)
             return {

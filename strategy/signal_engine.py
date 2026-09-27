@@ -22,7 +22,7 @@ class SignalResult:
     take_profit_price: Optional[float] = None
     stop_loss_price: Optional[float] = None
     risk_reward_ratio: Optional[float] = None
-    # Validasi & Telaah 7 Buku PDF untuk Sinyal Masuk (BUY)
+    # Validasi & Telaah 9 Buku PDF untuk Sinyal Masuk (BUY / SELL)
     pdf_confluence_score: float = 0.0
     setup_grade: str = ""
     pdf_confluence_details: List[str] = field(default_factory=list)
@@ -81,7 +81,7 @@ class SignalEngine:
         signal_type: str = "BUY",
     ) -> Tuple[bool, float, str, List[str], str]:
         """
-        Memvalidasi sinyal masuk (BUY / SELL) berdasarkan kaidah & teori lengkap 7 Buku PDF Trading:
+        Memvalidasi sinyal masuk (BUY / SELL) berdasarkan kaidah & teori lengkap 9 Buku PDF Trading:
         1. Fibonachi 99% Profit: Area pantulan Golden Pocket (50.0% - 61.8%).
         2. Ichimoku - Forex: Posisi tren Awan Kumo (Bullish/Bearish Cloud) & TK Cross.
         3. Under Standing Price Action (Bob Volman): Area Nilai 20 EMA, Rejection Wick, & Kompresi Buildup.
@@ -89,6 +89,8 @@ class SignalEngine:
         5. Technical Analysis Explained (Martin J. Pring): Tren Mayor 50/200 EMA & Ruang Momentum RSI.
         6. Technical Analysis Of Financial Markets (John J. Murphy): Konfirmasi Volume Buyer/Seller (>= 1.1x).
         7. Wave Principle - Forex: Identifikasi gelombang impulsif sehat & pencegahan entry di pucuk Wave 5.
+        8. CHART PATTERN: Pola Grafik Reversal & Continuation (Double Top/Bottom, H&S, Wedges, Triangles).
+        9. Trading Alchemist (Rizki Aditama): Struktur Pasar HH/HL vs LH/LL, BOS, Order Block, & FVG Imbalance.
 
         Returns:
             (is_approved, score_pct, setup_grade, validation_checks, market_direction_prediction)
@@ -120,6 +122,24 @@ class SignalEngine:
         ichi_cloud = bool(curr_row.get("ichimoku_above_cloud", 0))
         ichi_green = bool(curr_row.get("ichimoku_cloud_green", 0))
         ichi_tk = bool(curr_row.get("ichimoku_tk_cross", 0))
+
+        # Buku 8: CHART PATTERN
+        pat_db = bool(curr_row.get("pattern_double_bottom", 0))
+        pat_dt = bool(curr_row.get("pattern_double_top", 0))
+        pat_fwedge = bool(curr_row.get("pattern_falling_wedge", 0))
+        pat_rwedge = bool(curr_row.get("pattern_rising_wedge", 0))
+        pat_ihs = bool(curr_row.get("pattern_inv_head_shoulders", 0))
+        pat_hs = bool(curr_row.get("pattern_head_shoulders", 0))
+
+        # Buku 9: Trading Alchemist - Rizki Aditama (Market Structure & Smart Money)
+        struct_bull = bool(curr_row.get("structure_bullish", 0))
+        struct_bear = bool(curr_row.get("structure_bearish", 0))
+        bos_bull = bool(curr_row.get("structure_bos_bullish", 0))
+        bos_bear = bool(curr_row.get("structure_bos_bearish", 0))
+        ob_bull = bool(curr_row.get("order_block_bullish", 0))
+        ob_bear = bool(curr_row.get("order_block_bearish", 0))
+        fvg_bull = bool(curr_row.get("fvg_bullish", 0))
+        fvg_bear = bool(curr_row.get("fvg_bearish", 0))
 
         if signal_type == "BUY":
             # 1. Martin J. Pring: Tren Mayor Bullish (Close >= EMA 50)
@@ -196,6 +216,35 @@ class SignalEngine:
                 score += 5.0
                 checks.append(f"ℹ️ RSI Moderat ({rsi:.1f})")
 
+            # 8. CHART PATTERN (Pola Grafik Reversal & Continuation)
+            if pat_db:
+                score += 15.0
+                checks.append("📐 Chart Pattern: Pola Pembalikan Double Bottom (W Pattern) Terkonfirmasi")
+            elif pat_ihs:
+                score += 15.0
+                checks.append("📐 Chart Pattern: Pola Inverse Head & Shoulders Bullish Breakout")
+            elif pat_fwedge:
+                score += 12.0
+                checks.append("📐 Chart Pattern: Pola Falling Wedge (Penyempitan Rentang Bullish)")
+            else:
+                checks.append("ℹ️ Chart Pattern: Pola grafik mayor dalam pembentukan lanjutan")
+
+            # 9. Trading Alchemist - Rizki Aditama (Struktur Pasar & Smart Money)
+            if bos_bull:
+                score += 15.0
+                checks.append("🏛️ Trading Alchemist: Break of Structure (BOS Bullish) Menembus Swing High")
+            elif ob_bull:
+                score += 15.0
+                checks.append("🏛️ Trading Alchemist: Rebound di Area Bullish Order Block (Demand Zone)")
+            elif struct_bull:
+                score += 12.0
+                checks.append("🏛️ Trading Alchemist: Struktur Pasar Bullish (Higher High & Higher Low)")
+            elif fvg_bull:
+                score += 10.0
+                checks.append("🏛️ Trading Alchemist: Imbalance / Fair Value Gap (FVG) Bullish Mengisi Likuiditas")
+            else:
+                checks.append("ℹ️ Trading Alchemist: Struktur harga sehat / menunggu konfirmasi BOS lanjutan")
+
         else:
             # Evaluasi untuk sinyal SELL / SHORT Gold / Exit Saham
             # 1. Martin Pring: Tren Bearish (Close <= EMA 50)
@@ -250,6 +299,35 @@ class SignalEngine:
             else:
                 score += 5.0
 
+            # 8. CHART PATTERN (Pola Grafik Reversal & Continuation)
+            if pat_dt:
+                score += 15.0
+                checks.append("📐 Chart Pattern: Pola Pembalikan Double Top (M Pattern) Terkonfirmasi")
+            elif pat_hs:
+                score += 15.0
+                checks.append("📐 Chart Pattern: Pola Head & Shoulders Bearish Breakdown")
+            elif pat_rwedge:
+                score += 12.0
+                checks.append("📐 Chart Pattern: Pola Rising Wedge (Penyempitan Rentang Bearish)")
+            else:
+                checks.append("ℹ️ Chart Pattern: Pola grafik mayor dalam pembentukan lanjutan")
+
+            # 9. Trading Alchemist - Rizki Aditama (Struktur Pasar & Smart Money)
+            if bos_bear:
+                score += 15.0
+                checks.append("🏛️ Trading Alchemist: Break of Structure (BOS Bearish) Menembus Swing Low")
+            elif ob_bear:
+                score += 15.0
+                checks.append("🏛️ Trading Alchemist: Penolakan di Area Bearish Order Block (Supply Zone)")
+            elif struct_bear:
+                score += 12.0
+                checks.append("🏛️ Trading Alchemist: Struktur Pasar Bearish (Lower High & Lower Low)")
+            elif fvg_bear:
+                score += 10.0
+                checks.append("🏛️ Trading Alchemist: Imbalance / Fair Value Gap (FVG) Bearish Mengisi Likuiditas")
+            else:
+                checks.append("ℹ️ Trading Alchemist: Struktur harga tertekan / menunggu konfirmasi BOS lanjutan")
+
         score = max(0.0, min(100.0, score))
 
         # Penentuan Grade dan Keputusan Masuk Pasar (Gatekeeper Akurasi Tinggi)
@@ -261,7 +339,7 @@ class SignalEngine:
             is_approved = True
         elif score >= 65.0:
             setup_grade = "Grade A (Setup Kuat ⭐⭐⭐⭐)"
-            prediction = f"Arah market diprediksi {direction_name} bergerak searah dengan konfluensi 3+ buku trading."
+            prediction = f"Arah market diprediksi {direction_name} bergerak searah dengan konfluensi 9 buku trading."
             is_approved = True
         else:
             setup_grade = "Grade B / C (Konfluensi Belum Matang ⭐⭐)"
@@ -371,7 +449,7 @@ class SignalEngine:
         elif is_sell:
             target_sig_type = "SELL"
         elif is_gold:
-            # Biarkan 7 Buku PDF yang menentukan arah berdasarkan posisi harga terhadap EMA 50
+            # Biarkan 9 Buku PDF yang menentukan arah berdasarkan posisi harga terhadap EMA 50
             target_sig_type = "BUY" if curr_price >= snapshot.get("ema_50", curr_price) else "SELL"
         else:
             target_sig_type = "BUY"
@@ -412,23 +490,23 @@ class SignalEngine:
                 risk_dist = max(curr_price - sl_price, 1.0)
                 rrr = round((tp_price - curr_price) / risk_dist, 2)
 
-        # 5. Evaluasi 7 Buku PDF dengan arah yang sudah ditentukan di atas
+        # 5. Evaluasi 9 Buku PDF dengan arah yang sudah ditentukan di atas
         pdf_approved, pdf_score, setup_grade, pdf_checks, direction_pred = self.validate_pdf_entry_confluence(
             curr_row, prev_row, snapshot, signal_type=target_sig_type
         )
 
         if is_buy:
             if apply_pdf_filter and not pdf_approved:
-                # Sinyal BUY ditahan jika konfluensi 7 buku belum tembus Grade A (65%)
+                # Sinyal BUY ditahan jika konfluensi 9 buku belum tembus Grade A (65%)
                 signal = "HOLD"
                 reasons = [
-                    f"Sinyal beli ditahan (Filter 7 Buku PDF). Skor konfluensi {pdf_score:.0f}% < 65% ({setup_grade}). "
+                    f"Sinyal beli ditahan (Filter 9 Buku PDF). Skor konfluensi {pdf_score:.0f}% < 65% ({setup_grade}). "
                     f"Menunggu waktu masuk pasar yang benar-benar tepat demi menjaga Win Rate tinggi."
                 ]
             else:
                 signal = "BUY"
                 reasons = list(buy_reasons)
-                reasons.append(f"Telaah 7 Buku: {setup_grade} ({pdf_score:.0f}%)")
+                reasons.append(f"Telaah 9 Buku: {setup_grade} ({pdf_score:.0f}%)")
                 if patterns_detected:
                     reasons.append(f"Pola: {', '.join(patterns_detected[:2])}")
         elif is_sell:
@@ -443,21 +521,21 @@ class SignalEngine:
                 # Sinyal Short Gold ditahan jika konfluensi sell belum tembus Grade A (65%)
                 signal = "HOLD"
                 reasons = [
-                    f"Sinyal short ditahan (Filter 7 Buku PDF). Skor konfluensi {pdf_score:.0f}% < 65% ({setup_grade}). "
+                    f"Sinyal short ditahan (Filter 9 Buku PDF). Skor konfluensi {pdf_score:.0f}% < 65% ({setup_grade}). "
                     f"Menunggu konfirmasi pembalikan arah yang lebih solid demi menjaga Win Rate tinggi."
                 ]
             else:
                 signal = "SELL"
                 reasons = list(sell_reasons)
-                reasons.append(f"Telaah 7 Buku: {setup_grade} ({pdf_score:.0f}%)")
+                reasons.append(f"Telaah 9 Buku: {setup_grade} ({pdf_score:.0f}%)")
         else:
-            # Jika sinyal dasar masih netral namun telaah 7 Buku PDF membuktikan Grade A (>=65%)
+            # Jika sinyal dasar masih netral namun telaah 9 Buku PDF membuktikan Grade A (>=65%)
             # dengan konfluensi kuat dan arah tren terkonfirmasi, promosikan menjadi sinyal aktif!
             if apply_pdf_filter and pdf_score >= 65.0 and is_gold:
                 if target_sig_type == "BUY" and curr_price >= snapshot.get("ema_50", 0.0):
                     signal = "BUY"
                     reasons = [
-                        f"Konfluensi 7 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",
+                        f"Konfluensi 9 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",
                         f"Tren Bullish di atas EMA 50 ({snapshot.get('ema_50', 0):.2f})",
                     ]
                     if patterns_detected:
@@ -465,7 +543,7 @@ class SignalEngine:
                 elif target_sig_type == "SELL" and curr_price <= snapshot.get("ema_50", 0.0):
                     signal = "SELL"
                     reasons = [
-                        f"Konfluensi 7 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",
+                        f"Konfluensi 9 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",
                         f"Tren Bearish di bawah EMA 50 ({snapshot.get('ema_50', 0):.2f})",
                     ]
                     if patterns_detected:

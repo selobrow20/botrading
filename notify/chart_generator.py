@@ -1,10 +1,12 @@
 """
-Generator visualisasi Candlestick Chart real-time bertema gelap (TradingView style)
+Generator visualisasi Candlestick Chart real-time bertema gelap (Authentic TradingView Dark Mode)
 untuk Saham IDX dan Komoditas Emas Dunia (XAU/USD).
-Menampilkan Candlestick, EMA 20, EMA 50, Volume, RSI, serta garis level Entry, TP, dan SL.
+Menampilkan Candlestick, EMA 20, EMA 50, Volume, RSI, serta garis level Entry, TP, dan SL
+dengan skala harga di sisi kanan dan badge pill harga resmi standar TradingView.
 """
 
 import os
+import re
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
@@ -27,7 +29,7 @@ CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class ChartGenerator:
-    """Pembuat visual chart candlestick multi-panel beresolusi tinggi."""
+    """Pembuat visual chart candlestick multi-panel beresolusi tinggi dengan tema TradingView."""
 
     @staticmethod
     def cleanup_old_charts(max_age_hours: int = 12) -> None:
@@ -59,10 +61,12 @@ class ChartGenerator:
         num_candles: int = 50,
     ) -> Optional[str]:
         """
-        Menghasilkan file gambar PNG candlestick chart dengan indikator teknikal:
-        - Panel Atas: Candlestick + EMA 20 + EMA 50 + Garis Entry/TP/SL
-        - Panel Tengah: Volume Bar + Volume MA 20
-        - Panel Bawah: RSI 14 (Overbought/Oversold Zone)
+        Menghasilkan file gambar PNG candlestick chart dengan tata letak & palet TradingView Dark Theme:
+        - Skala harga berada di sisi KANAN (Right-aligned) standar TradingView.
+        - Panel Atas: Candlestick + EMA 20 + EMA 50 + Garis & Badge Pill Entry/TP/SL.
+        - Panel Tengah: Volume Bar + Volume SMA 20.
+        - Panel Bawah: RSI 14 dengan area overbought/oversold TradingView.
+        - Watermark TradingView di background chart.
 
         Mengembalikan path absolut file gambar yang dihasilkan.
         """
@@ -72,7 +76,7 @@ class ChartGenerator:
 
         cls.cleanup_old_charts()
 
-        # Gunakan N candle terakhir agar lilin tampak proporsional dan jelas di layar HP
+        # Gunakan N candle terakhir agar lilin tampak proporsional dan jelas di layar HP/Desktop
         df_plot = df.copy().tail(min(num_candles, len(df)))
         n_bars = len(df_plot)
 
@@ -90,39 +94,71 @@ class ChartGenerator:
         is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
         currency_prefix = "$" if is_gold else "Rp "
         price_format = "{:,.2f}" if is_gold else "{:,.0f}"
+        exchange_name = "OANDA" if is_gold else "IDX"
+        display_ticker = "XAUUSD" if is_gold else clean_ticker.replace(".JK", "")
 
-        # Konfigurasi Palet Warna Gelap TradingView Modern
-        bg_color = "#0f172a"      # Slate 900 (Background gambar)
-        canvas_color = "#1e293b"  # Slate 800 (Background canvas grafik)
-        grid_color = "#334155"    # Slate 700 (Garis grid)
-        text_color = "#f8fafc"    # Slate 50 (Teks)
-        subtext_color = "#94a3b8" # Slate 400 (Subteks)
-        bullish_color = "#10b981" # Hijau Emerald
-        bearish_color = "#ef4444" # Merah Rose
-        ema20_color = "#f59e0b"   # Amber (Bob Volman)
-        ema50_color = "#06b6d4"   # Cyan (Martin Pring)
+        # Konfigurasi Palet Warna Gelap TradingView Pro (Dark Theme #131722)
+        bg_color = "#131722"       # TradingView Canvas Background
+        canvas_color = "#131722"   # TradingView Subplot Background
+        grid_color = "#242832"     # TradingView Subtle Grid
+        text_color = "#d1d4dc"     # TradingView Primary Text
+        subtext_color = "#787b86"  # TradingView Secondary Subtext
+        tv_green = "#089981"       # TradingView Up Candle (Emerald)
+        tv_red = "#f23645"         # TradingView Down Candle (Rose Red)
+        tv_blue = "#2962ff"        # TradingView Active Blue Accent
+        ema20_color = "#f59e0b"    # Amber
+        ema50_color = "#00bcd4"    # Cyan
+        rsi_color = "#7e57c2"      # TradingView Purple
 
-        # Buat Figure dengan 3 Baris Subplot (Price 65%, Volume 15%, RSI 20%)
+        # Buat Figure dengan 3 Baris Subplot (Price 68%, Volume 15%, RSI 17%)
         fig, (ax_main, ax_vol, ax_rsi) = plt.subplots(
             nrows=3,
             ncols=1,
-            figsize=(12, 8.5),
-            dpi=120,
+            figsize=(13, 8.8),
+            dpi=130,
             sharex=True,
-            gridspec_kw={"height_ratios": [3.5, 0.9, 1.1], "hspace": 0.08},
+            gridspec_kw={"height_ratios": [3.6, 0.85, 1.0], "hspace": 0.04},
         )
-
         fig.patch.set_facecolor(bg_color)
+
         for ax in (ax_main, ax_vol, ax_rsi):
             ax.set_facecolor(canvas_color)
-            ax.grid(True, linestyle="--", linewidth=0.5, color=grid_color, alpha=0.6)
-            ax.tick_params(colors=subtext_color, labelsize=9)
+            # Skala Y di sisi KANAN persis seperti TradingView asli
+            ax.yaxis.tick_right()
+            ax.yaxis.set_label_position("right")
+            ax.grid(True, linestyle="--", linewidth=0.5, color=grid_color, alpha=0.45)
+            ax.tick_params(colors=subtext_color, labelsize=8.5, right=True, left=False)
             for spine in ax.spines.values():
                 spine.set_color(grid_color)
+            ax.spines["left"].set_visible(False)
 
         x_coords = np.arange(n_bars)
-        body_width = 0.65
-        wick_width = 1.2
+        body_width = 0.68
+        wick_width = 1.15
+
+        # Watermark TradingView di background tengah chart
+        ax_main.text(
+            0.5, 0.50,
+            f"{display_ticker}  {interval.upper()}",
+            transform=ax_main.transAxes,
+            color="#1c202e",
+            fontsize=36,
+            weight="heavy",
+            ha="center",
+            va="center",
+            zorder=0,
+        )
+        ax_main.text(
+            0.5, 0.35,
+            "TradingView",
+            transform=ax_main.transAxes,
+            color="#181c28",
+            fontsize=20,
+            weight="bold",
+            ha="center",
+            va="center",
+            zorder=0,
+        )
 
         # 1. Gambar Candlestick pada Panel Utama
         for i in range(n_bars):
@@ -133,9 +169,9 @@ class ChartGenerator:
             c_close = float(row["Close"])
 
             is_up = c_close >= c_open
-            color = bullish_color if is_up else bearish_color
+            color = tv_green if is_up else tv_red
 
-            # Garis Sumbu / Ekor (Wick)
+            # Sumbu / Ekor Candle (Wick)
             ax_main.vlines(
                 x=i,
                 ymin=c_low,
@@ -147,46 +183,79 @@ class ChartGenerator:
 
             # Badan Candle (Body)
             body_bottom = min(c_open, c_close)
-            body_height = max(abs(c_close - c_open), (c_high - c_low) * 0.01)  # Hindari doji 0-height
+            body_height = max(abs(c_close - c_open), (c_high - c_low) * 0.015)
             rect = Rectangle(
                 (i - body_width / 2.0, body_bottom),
                 body_width,
                 body_height,
                 facecolor=color,
                 edgecolor=color,
-                linewidth=0.8,
+                linewidth=0.6,
                 zorder=3,
             )
             ax_main.add_patch(rect)
 
         # Plot Garis EMA
-        ax_main.plot(x_coords, df_plot["EMA_20"], color=ema20_color, linewidth=1.5, label="EMA 20 (Support Dinamis)", zorder=4)
-        ax_main.plot(x_coords, df_plot["EMA_50"], color=ema50_color, linewidth=1.5, label="EMA 50 (Tren Mayor)", zorder=4)
+        ax_main.plot(x_coords, df_plot["EMA_20"], color=ema20_color, linewidth=1.3, label="EMA 20", zorder=4)
+        ax_main.plot(x_coords, df_plot["EMA_50"], color=ema50_color, linewidth=1.3, label="EMA 50", zorder=4)
+
+        # Status Harga Terakhir (TradingView Status Bar di pojok kiri atas chart)
+        last_close = float(df_plot["Close"].iloc[-1])
+        last_open = float(df_plot["Open"].iloc[-1])
+        last_high = float(df_plot["High"].iloc[-1])
+        last_low = float(df_plot["Low"].iloc[-1])
+        prev_close = float(df_plot["Close"].iloc[-2]) if n_bars > 1 else last_close
+        chg = last_close - prev_close
+        chg_pct = (chg / max(prev_close, 0.01)) * 100.0
+        chg_color = tv_green if chg >= 0 else tv_red
+        chg_sign = "+" if chg >= 0 else ""
+
+        ax_main.text(
+            0.015, 0.94,
+            f"{display_ticker} · {interval.upper()} · {exchange_name} · TradingView",
+            transform=ax_main.transAxes,
+            color=text_color,
+            fontsize=10.5,
+            weight="bold",
+            zorder=6,
+        )
+        ax_main.text(
+            0.015, 0.88,
+            f"O {price_format.format(last_open)}  H {price_format.format(last_high)}  L {price_format.format(last_low)}  C {price_format.format(last_close)}  {chg_sign}{price_format.format(chg)} ({chg_sign}{chg_pct:.2f}%)",
+            transform=ax_main.transAxes,
+            color=chg_color,
+            fontsize=9.0,
+            weight="bold",
+            zorder=6,
+        )
+        ema20_last = float(df_plot["EMA_20"].iloc[-1])
+        ema50_last = float(df_plot["EMA_50"].iloc[-1])
+        ax_main.text(
+            0.015, 0.82,
+            f"EMA 20 {price_format.format(ema20_last)}    EMA 50 {price_format.format(ema50_last)}",
+            transform=ax_main.transAxes,
+            color=subtext_color,
+            fontsize=8.5,
+            zorder=6,
+        )
 
         # Garis Entry, Take Profit, dan Stop Loss
-        last_close = float(df_plot["Close"].iloc[-1])
         ref_entry = entry_price if (entry_price and entry_price > 0) else last_close
+        is_sell_action = bool(signal_type and signal_type.upper() == "SELL")
 
         if entry_price and entry_price > 0:
-            ax_main.axhline(
-                y=entry_price,
-                color="#fbbf24",
-                linestyle="--",
-                linewidth=1.3,
-                label=f"Entry: {currency_prefix}{price_format.format(entry_price)}",
-                zorder=5,
-            )
+            ax_main.axhline(y=entry_price, color=tv_blue, linestyle="--", linewidth=1.1, alpha=0.9, zorder=5)
             ax_main.text(
-                n_bars - 1,
+                n_bars + 0.35,
                 entry_price,
-                f"  ENTRY {currency_prefix}{price_format.format(entry_price)}",
-                color="#fbbf24",
-                fontsize=8.5,
+                f" ENTRY {currency_prefix}{price_format.format(entry_price)} ",
+                color="#ffffff",
+                fontsize=8,
                 weight="bold",
                 va="center",
+                bbox=dict(facecolor=tv_blue, edgecolor="none", boxstyle="round,pad=0.25"),
+                zorder=7,
             )
-
-        is_sell_action = signal_type.upper() == "SELL"
 
         if tp_price and tp_price > 0:
             if is_sell_action:
@@ -194,22 +263,17 @@ class ChartGenerator:
             else:
                 tp_diff = ((tp_price - ref_entry) / ref_entry) * 100.0
             tp_sign = "+" if tp_diff > 0 else ""
-            ax_main.axhline(
-                y=tp_price,
-                color="#34d399",
-                linestyle="--",
-                linewidth=1.3,
-                label=f"TP Target: {currency_prefix}{price_format.format(tp_price)} ({tp_sign}{tp_diff:.2f}%)",
-                zorder=5,
-            )
+            ax_main.axhline(y=tp_price, color=tv_green, linestyle="--", linewidth=1.1, alpha=0.9, zorder=5)
             ax_main.text(
-                n_bars - 1,
+                n_bars + 0.35,
                 tp_price,
-                f"  TP {currency_prefix}{price_format.format(tp_price)} ({tp_sign}{tp_diff:.1f}%)",
-                color="#34d399",
-                fontsize=8.5,
+                f" TP {currency_prefix}{price_format.format(tp_price)} ({tp_sign}{tp_diff:.1f}%) ",
+                color="#ffffff",
+                fontsize=8,
                 weight="bold",
                 va="center",
+                bbox=dict(facecolor=tv_green, edgecolor="none", boxstyle="round,pad=0.25"),
+                zorder=7,
             )
 
         if sl_price and sl_price > 0:
@@ -218,75 +282,92 @@ class ChartGenerator:
             else:
                 sl_diff = ((sl_price - ref_entry) / ref_entry) * 100.0
             sl_sign = "+" if sl_diff > 0 else ""
-            ax_main.axhline(
-                y=sl_price,
-                color="#f87171",
-                linestyle="--",
-                linewidth=1.3,
-                label=f"SL Batas: {currency_prefix}{price_format.format(sl_price)} ({sl_sign}{sl_diff:.2f}%)",
-                zorder=5,
-            )
+            ax_main.axhline(y=sl_price, color=tv_red, linestyle="--", linewidth=1.1, alpha=0.9, zorder=5)
             ax_main.text(
-                n_bars - 1,
+                n_bars + 0.35,
                 sl_price,
-                f"  SL {currency_prefix}{price_format.format(sl_price)} ({sl_sign}{sl_diff:.1f}%)",
-                color="#f87171",
-                fontsize=8.5,
+                f" SL {currency_prefix}{price_format.format(sl_price)} ({sl_sign}{sl_diff:.1f}%) ",
+                color="#ffffff",
+                fontsize=8,
                 weight="bold",
                 va="center",
+                bbox=dict(facecolor=tv_red, edgecolor="none", boxstyle="round,pad=0.25"),
+                zorder=7,
             )
 
-        # Highlight Harga Terakhir di Y-Axis
+        # Badge Pill Harga Terakhir pada Sisi Kanan Skala Y (TradingView Live Price Pill)
+        live_pill_color = tv_green if chg >= 0 else tv_red
         ax_main.text(
-            0.015,
-            0.93,
-            f"LIVE: {currency_prefix}{price_format.format(last_close)}",
-            transform=ax_main.transAxes,
-            color="#38bdf8",
-            fontsize=12,
+            n_bars + 0.35,
+            last_close,
+            f" {currency_prefix}{price_format.format(last_close)} ",
+            color="#ffffff",
+            fontsize=8.5,
             weight="bold",
-            bbox=dict(facecolor="#0284c7", edgecolor="none", boxstyle="round,pad=0.3", alpha=0.3),
+            va="center",
+            bbox=dict(facecolor=live_pill_color, edgecolor="none", boxstyle="round,pad=0.25"),
+            zorder=8,
         )
 
-        ax_main.legend(
-            loc="upper left",
-            bbox_to_anchor=(0.01, 0.88),
-            facecolor="#0f172a",
-            edgecolor=grid_color,
-            fontsize=8,
-            labelcolor=text_color,
-        )
+        # Hitung rentang Y dengan margin aman agar tidak menabrak status bar di atas
+        all_y = [df_plot["High"].max(), df_plot["Low"].min(), last_close]
+        if entry_price and entry_price > 0:
+            all_y.append(entry_price)
+        if tp_price and tp_price > 0:
+            all_y.append(tp_price)
+        if sl_price and sl_price > 0:
+            all_y.append(sl_price)
+        raw_max = max(all_y)
+        raw_min = min(all_y)
+        y_span = max(raw_max - raw_min, 1.0)
+        ax_main.set_ylim(raw_min - (y_span * 0.06), raw_max + (y_span * 0.18))
 
-        # Format Y-Axis Panel Utama
+        # Format Label Sumbu Y Panel Utama
         if is_gold:
             ax_main.yaxis.set_major_formatter(ticker.FormatStrFormatter("$%.2f"))
         else:
             ax_main.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: f"Rp {x:,.0f}"))
 
-        # 2. Gambar Panel Volume
-        vol_colors = [bullish_color if df_plot["Close"].iloc[j] >= df_plot["Open"].iloc[j] else bearish_color for j in range(n_bars)]
-        ax_vol.bar(x_coords, df_plot["Volume"], color=vol_colors, width=body_width, alpha=0.75, zorder=2)
+        # 2. Gambar Panel Volume (TradingView Style)
+        vol_colors = [tv_green if df_plot["Close"].iloc[j] >= df_plot["Open"].iloc[j] else tv_red for j in range(n_bars)]
+        ax_vol.bar(x_coords, df_plot["Volume"], color=vol_colors, width=body_width, alpha=0.55, zorder=2)
         if "Volume_SMA_20" in df_plot.columns:
-            ax_vol.plot(x_coords, df_plot["Volume_SMA_20"], color="#f1f5f9", linewidth=1.0, linestyle=":", label="Vol MA20")
-        ax_vol.set_ylabel("Volume", color=subtext_color, fontsize=8)
+            ax_vol.plot(x_coords, df_plot["Volume_SMA_20"], color=tv_blue, linewidth=1.0, linestyle="-", label="Vol MA20", zorder=3)
+        vol_last = float(df_plot["Volume"].iloc[-1])
+        vol_ma_last = float(df_plot.get("Volume_SMA_20", df_plot["Volume"]).iloc[-1])
+        ax_vol.text(
+            0.015, 0.76,
+            f"Vol {vol_last:,.0f}   Vol MA20 {vol_ma_last:,.0f}",
+            transform=ax_vol.transAxes,
+            color=subtext_color,
+            fontsize=8,
+            zorder=4,
+        )
         ax_vol.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: f"{x/1e6:.1f}M" if x >= 1e6 else f"{x/1e3:.0f}K" if x >= 1e3 else f"{x:.0f}"))
 
-        # 3. Gambar Panel RSI
+        # 3. Gambar Panel RSI (TradingView Purple Style)
         rsi_series = df_plot.get("RSI")
         if rsi_series is None or rsi_series.isna().all():
-            # Hitung RSI 14 sederhana jika belum ada
             delta = df_plot["Close"].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14, min_periods=1).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14, min_periods=1).mean()
             rs = gain / (loss.replace(0, 1e-9))
             rsi_series = 100 - (100 / (1 + rs))
 
-        ax_rsi.plot(x_coords, rsi_series, color="#a855f7", linewidth=1.4, label="RSI 14")
-        ax_rsi.axhline(70, color="#f87171", linestyle="--", linewidth=0.8, alpha=0.8)
-        ax_rsi.axhline(30, color="#34d399", linestyle="--", linewidth=0.8, alpha=0.8)
-        ax_rsi.fill_between(x_coords, 30, 70, color="#334155", alpha=0.25)
+        ax_rsi.plot(x_coords, rsi_series, color=rsi_color, linewidth=1.3, zorder=3)
+        ax_rsi.axhline(70, color="#787b86", linestyle="--", linewidth=0.7, alpha=0.5)
+        ax_rsi.axhline(30, color="#787b86", linestyle="--", linewidth=0.7, alpha=0.5)
+        ax_rsi.fill_between(x_coords, 30, 70, color=rsi_color, alpha=0.08)
         ax_rsi.set_ylim(10, 90)
-        ax_rsi.set_ylabel("RSI (14)", color=subtext_color, fontsize=8)
+        rsi_last_val = float(rsi_series.iloc[-1])
+        ax_rsi.text(
+            0.015, 0.76,
+            f"RSI 14 close {rsi_last_val:.1f}",
+            transform=ax_rsi.transAxes,
+            color=subtext_color,
+            fontsize=8,
+            zorder=4,
+        )
 
         # Label Tanggal / Waktu pada Sumbu X
         date_indices = np.linspace(0, n_bars - 1, min(7, n_bars), dtype=int)
@@ -294,19 +375,18 @@ class ChartGenerator:
         for idx in date_indices:
             dt = df_plot.index[idx]
             dt_str = str(dt)
-            # Format: 'DD/MM HH:MM' atau 'HH:MM'
             if len(dt_str) >= 16:
                 time_labels.append(dt_str[5:16].replace("-", "/"))
             else:
                 time_labels.append(dt_str)
 
         ax_rsi.set_xticks(date_indices)
-        ax_rsi.set_xticklabels(time_labels, rotation=0, ha="center", fontsize=8.5, color=subtext_color)
-        ax_main.set_xlim(-1, n_bars + 4)  # Ruang kosong di kanan untuk label harga
+        ax_rsi.set_xticklabels(time_labels, rotation=0, ha="center", fontsize=8.0, color=subtext_color)
+        ax_main.set_xlim(-1, n_bars + 5)  # Berikan ruang kosong di kanan untuk pill harga
 
-        # Judul & Badge Potensi Header
-        display_name = "XAU/USD (Gold Spot)" if is_gold else clean_ticker.replace(".JK", "")
-        clean_grade = str(setup_grade).replace("GRADE ", "").replace("Grade ", "").strip() if setup_grade else ""
+        # Judul & Header Chart (Dibersihkan dari karakter emoji untuk mencegah missing glyph DejaVu Sans)
+        raw_grade = str(setup_grade or "").replace("GRADE ", "").replace("Grade ", "").strip()
+        clean_grade = re.sub(r"[^\x20-\x7E]+", "", raw_grade).strip()
         grade_badge = f" [GRADE {clean_grade}]" if clean_grade else ""
         if pdf_confluence_score:
             score_num = pdf_confluence_score if pdf_confluence_score > 1.0 else pdf_confluence_score * 100.0
@@ -315,16 +395,19 @@ class ChartGenerator:
             confluence_badge = ""
         sig_badge = f" • {signal_type.upper()}" if signal_type in ["BUY", "SELL"] else ""
 
-        title_text = f"{display_name} • {interval.upper()} Live Chart{sig_badge}{grade_badge}{confluence_badge}"
+        title_text = f"{display_ticker} • {interval.upper()} Live Chart{sig_badge}{grade_badge}{confluence_badge}"
         fig.suptitle(
             title_text,
-            fontsize=13,
+            fontsize=12.5,
             weight="bold",
             color=text_color,
             x=0.03,
-            y=0.975,
+            y=0.98,
             ha="left",
         )
+
+        # TradingView Engine Watermark di pojok kanan bawah
+        fig.text(0.985, 0.012, "TradingView Style Pro Engine", color="#363a45", fontsize=8, ha="right", weight="bold")
 
         # Simpan Gambar ke Direktori Charts
         timestamp_slug = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:18]
@@ -338,10 +421,10 @@ class ChartGenerator:
                 facecolor=fig.get_facecolor(),
                 edgecolor="none",
                 bbox_inches="tight",
-                pad_inches=0.2,
-                dpi=120,
+                pad_inches=0.15,
+                dpi=130,
             )
-            logger.info(f"Berhasil membuat chart visual: {output_path}")
+            logger.info(f"Berhasil membuat chart visual TradingView: {output_path}")
             return output_path
         except Exception as e:
             logger.error(f"Gagal menyimpan chart gambar: {e}")
@@ -363,6 +446,7 @@ class ChartGenerator:
         2. Mendekati pantulan Support Dinamis 20 EMA (Volman Pullback) dengan Rejection Wick.
         3. Berada di Fibonacci Golden Zone (50%-61.8%) dengan momentum RSI sehat.
         4. Volman Buildup (kompresi harga) siap breakout dengan kenaikan volume.
+        5. Terkonfirmasi pola Chart Pattern (Buku 8) atau Break of Structure Trading Alchemist (Buku 9).
         """
         if df.empty or len(df) < 5:
             return False, "Data tidak cukup", ""
@@ -372,10 +456,10 @@ class ChartGenerator:
         conf_score = getattr(sig, "pdf_confluence_score", 0.0) or 0.0
         signal = getattr(sig, "signal", "HOLD")
 
-        # 1. Sinyal BUY / SELL resmi yang lolos telaah PDF
+        # 1. Sinyal BUY / SELL resmi yang lolos telaah 9 Buku PDF
         if signal in ["BUY", "SELL"] and (conf_score >= 0.50 or setup_grade in ["A+", "A"]):
             grade_str = f"Grade {setup_grade}" if setup_grade else f"{int(conf_score*100)}%"
-            return True, f"Sinyal {signal} ({grade_str})", f"Sinyal {signal} terkonfirmasi dengan konfluensi 7 buku PDF."
+            return True, f"Sinyal {signal} ({grade_str})", f"Sinyal {signal} terkonfirmasi dengan konfluensi 9 buku PDF."
 
         # 2. Pola Pullback Bob Volman + Penolakan Support
         volman_pb = bool(last_row.get("volman_pullback", 0))
@@ -395,8 +479,14 @@ class ChartGenerator:
         if volman_bd and vol_ratio >= 1.1:
             return True, "Volman Buildup Breakout", "Konsolidasi ketat (kompresi) disertai peningkatan volume pembeli, siap meledak."
 
-        # 5. Khusus Sinyal BUY biasa
+        # 5. Break of Structure (Trading Alchemist) / Chart Pattern
+        bos_bull = bool(last_row.get("structure_bos_bullish", 0))
+        pat_db = bool(last_row.get("pattern_double_bottom", 0))
+        if bos_bull or pat_db:
+            return True, "BOS / Chart Pattern Breakout", "Break of structure atau pola grafik pembalikan terdeteksi siap melanjutkan tren."
+
+        # 6. Khusus Sinyal BUY biasa
         if signal == "BUY":
             return True, "Setup Sinyal BUY", "Indikator momentum dan tren memberikan sinyal beli aktif."
 
-        return False, "Netral / Tidak Ada Setup", "Pergerakan harga saat ini sideways / belum memenuhi konfluensi 7 buku."
+        return False, "Netral / Tidak Ada Setup", "Pergerakan harga saat ini sideways / belum memenuhi konfluensi 9 buku."

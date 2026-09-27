@@ -601,7 +601,7 @@ class PipelineRunner:
                 exit_time_wib = datetime.fromtimestamp(deal["time"], tz=timezone.utc).astimezone(tz_wib).strftime("%Y-%m-%d %H:%M WIB")
 
                 if outcome == "WIN":
-                    note = f"🎯 Transaksi MT5 #{pos_id} sukses Take Profit di ${exit_price:,.2f} ({pnl_cash:+.2f} USC). Target keuntungan 7 Buku PDF berhasil dikunci!"
+                    note = f"🎯 Transaksi MT5 #{pos_id} sukses Take Profit di ${exit_price:,.2f} ({pnl_cash:+.2f} USC). Target keuntungan 9 Buku PDF berhasil dikunci!"
                 elif reason_str == "SL":
                     note = f"🛑 Transaksi MT5 #{pos_id} menyentuh Stop Loss di ${exit_price:,.2f} ({pnl_cash:+.2f} USC). Batas toleransi risiko berhasil mengamankan modal trading Anda."
                 else:
@@ -610,7 +610,7 @@ class PipelineRunner:
                 rep_dict = {
                     "id": entry_sig.get("id") if entry_sig else deal_ticket,
                     "ticker": "XAUUSD",
-                    "strategy_name": "7 Buku PDF Confluence",
+                    "strategy_name": "9 Buku PDF Confluence",
                     "signal_type": sig_type,
                     "price": entry_price,
                     "exit_price": exit_price,

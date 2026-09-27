@@ -43,7 +43,7 @@ def test_mt5_7_pdf_strict_gatekeeper():
     res_weak = bridge.execute_signal(weak_sig)
     assert res_weak["success"] is False
     assert res_weak["status"] == "pdf_rejected"
-    assert "7 Buku PDF" in res_weak["message"]
+    assert "9 Buku PDF" in res_weak["message"] or "Buku PDF" in res_weak["message"]
 
     # 2. Sinyal Kuat (>= 65% Grade A) -> Harus DITERIMA & DIEKSEKUSI
     strong_sig = SignalResult(

@@ -38,8 +38,20 @@ def get_admin_id() -> str:
     return SUPERADMIN_CHAT_ID
 
 
+def get_tradingview_url(ticker: str) -> str:
+    """Mengembalikan URL interaktif TradingView resmi untuk simbol terkait."""
+    t_clean = (ticker or "").upper().replace(".JK", "").strip()
+    if any(k in t_clean for k in ["XAU", "GOLD", "EMAS", "GC=F"]):
+        return "https://www.tradingview.com/chart/?symbol=OANDA%3AXAUUSD"
+    if t_clean.isalpha() and len(t_clean) <= 5:
+        return f"https://www.tradingview.com/chart/?symbol=IDX%3A{t_clean}"
+    return f"https://www.tradingview.com/chart/?symbol={t_clean}"
+
+
 class TelegramNotifier:
     """Modul pengirim notifikasi sinyal ke Telegram via Bot API."""
+
+    get_tradingview_url = staticmethod(get_tradingview_url)
 
     def __init__(
         self,
@@ -122,14 +134,14 @@ class TelegramNotifier:
             if wr_badge:
                 lines.append(wr_badge)
 
-            # Telaah 7 Buku PDF untuk Sinyal Masuk
+            # Telaah 9 Buku PDF untuk Sinyal Masuk
             pdf_details = getattr(sig, "pdf_confluence_details", [])
             if pdf_details:
                 grade_str = getattr(sig, "setup_grade", "") or "Grade A"
                 score_val = getattr(sig, "pdf_confluence_score", 0.0)
                 lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-                lines.append(f"📚 <b>TELAAH 7 BUKU PDF ({grade_str} - {score_val:.0f}%):</b>")
-                for chk in pdf_details[:4]:
+                lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val:.0f}%):</b>")
+                for chk in pdf_details[:5]:
                     lines.append(f"• {html.escape(chk)}")
 
                 pred = getattr(sig, "market_direction_prediction", "")
@@ -162,8 +174,8 @@ class TelegramNotifier:
                 grade_str = getattr(sig, "setup_grade", "") or "Grade A"
                 score_val = getattr(sig, "pdf_confluence_score", 0.0)
                 lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-                lines.append(f"📚 <b>TELAAH 7 BUKU PDF ({grade_str} - {score_val:.0f}%):</b>")
-                for chk in pdf_details[:4]:
+                lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val:.0f}%):</b>")
+                for chk in pdf_details[:5]:
                     lines.append(f"• {html.escape(chk)}")
                 pred = getattr(sig, "market_direction_prediction", "")
                 if pred:
@@ -191,8 +203,8 @@ class TelegramNotifier:
                 grade_str = getattr(sig, "setup_grade", "") or "Grade A"
                 score_val = getattr(sig, "pdf_confluence_score", 0.0)
                 lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-                lines.append(f"📚 <b>TELAAH 7 BUKU PDF ({grade_str} - {score_val:.0f}%):</b>")
-                for chk in pdf_details[:3]:
+                lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val:.0f}%):</b>")
+                for chk in pdf_details[:4]:
                     lines.append(f"• {html.escape(chk)}")
             elif sig.reasons:
                 clean_reason = sig.reasons[0].split("(")[0].strip()
@@ -207,7 +219,12 @@ class TelegramNotifier:
 
         return "\n".join(lines)
 
-    async def _async_send_text(self, text: str, target_chat_id: Optional[str] = None) -> bool:
+    async def _async_send_text(
+        self,
+        text: str,
+        target_chat_id: Optional[str] = None,
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
+    ) -> bool:
         """Mengirim pesan teks secara asinkron ke chat ID target atau default."""
         if not self.is_configured:
             logger.info(f"[SIMULASI TELEGRAM]\n{text}")
@@ -220,6 +237,7 @@ class TelegramNotifier:
                 chat_id=cid,
                 text=text,
                 parse_mode=ParseMode.HTML,
+                reply_markup=reply_markup,
             )
             logger.info(f"Pesan berhasil terkirim ke Telegram ({cid}).")
             return True
@@ -227,7 +245,13 @@ class TelegramNotifier:
             logger.error(f"Gagal mengirim pesan ke Telegram ({cid}): {e}")
             return False
 
-    async def _async_send_photo(self, photo_path: str, caption: str, target_chat_id: Optional[str] = None) -> bool:
+    async def _async_send_photo(
+        self,
+        photo_path: str,
+        caption: str,
+        target_chat_id: Optional[str] = None,
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
+    ) -> bool:
         """Mengirim file foto beserta caption ke Telegram dengan proteksi batas karakter caption."""
         if not self.is_configured:
             logger.info(f"[SIMULASI TELEGRAM PHOTO] {photo_path}\n{caption}")
@@ -251,12 +275,14 @@ class TelegramNotifier:
                     photo=photo,
                     caption=safe_caption,
                     parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup,
                 )
             if overflow_text:
                 await bot.send_message(
                     chat_id=cid,
                     text=overflow_text,
                     parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup,
                 )
             logger.info(f"Foto {photo_path} berhasil terkirim ke Telegram ({cid}).")
             return True
@@ -267,6 +293,7 @@ class TelegramNotifier:
                     chat_id=cid,
                     text=caption,
                     parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup,
                 )
                 return True
             except Exception as e2:
@@ -276,19 +303,24 @@ class TelegramNotifier:
     def send_signal(self, sig: SignalResult, photo_path: Optional[str] = None) -> bool:
         """
         Mengirim kartu sinyal ke seluruh pengguna yang telah disetujui (Admin + Whitelist).
+        Dilengkapi tombol interaktif langsung menuju live chart TradingView.
         """
         msg = self.format_signal_message(sig)
         approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
         if not approved_ids:
             approved_ids = [self.chat_id]
 
+        tv_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(sig.ticker))
+        ]])
+
         success = True
         for cid in approved_ids:
             try:
                 if photo_path and Path(photo_path).exists():
-                    res = asyncio.run(self._async_send_photo(photo_path, msg, target_chat_id=cid))
+                    res = asyncio.run(self._async_send_photo(photo_path, msg, target_chat_id=cid, reply_markup=tv_markup))
                 else:
-                    res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
+                    res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
                 if not res:
                     success = False
             except Exception as e:
@@ -377,7 +409,7 @@ class TelegramNotifier:
         ]
 
         if is_win:
-            lines.append("🏆 <i>Setup konfluensi 7 buku PDF terbukti akurat mengunci profit!</i>")
+            lines.append("🏆 <i>Setup konfluensi 9 buku PDF terbukti akurat mengunci profit!</i>")
         else:
             lines.append("🛡️ <i>Disiplin Stop Loss berhasil mencegah risiko kerugian lebih besar. Modal tetap aman!</i>")
 
@@ -392,10 +424,14 @@ class TelegramNotifier:
         if not approved_ids:
             approved_ids = [self.chat_id]
 
+        tv_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(res_sig.get("ticker", "XAUUSD")))
+        ]])
+
         success = True
         for cid in approved_ids:
             try:
-                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
+                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
                 if not res:
                     success = False
             except Exception as e:
@@ -588,13 +624,17 @@ class TelegramNotifier:
         if not approved_ids:
             approved_ids = [self.chat_id]
 
+        tv_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url("XAUUSD"))
+        ]])
+
         success = True
         for cid in approved_ids:
             try:
                 if photo_path and Path(photo_path).exists():
-                    res = asyncio.run(self._async_send_photo(photo_path, msg, target_chat_id=cid))
+                    res = asyncio.run(self._async_send_photo(photo_path, msg, target_chat_id=cid, reply_markup=tv_markup))
                 else:
-                    res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
+                    res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
                 if not res:
                     success = False
             except Exception as e:
@@ -836,7 +876,7 @@ class TelegramBotCommands:
                 f"⚡ <b>Mode Auto-Trade:</b> {status_auto}",
                 f"🕒 <b>Jadwal Trading:</b> <code>{hours_badge}</code> ({hours_status})",
                 f"📡 <b>Koneksi Terminal:</b> {conn_badge}",
-                f"📚 <b>Filter Eksekusi:</b> <code>Wajib 7 Buku PDF Grade A (≥65%)</code>",
+                f"📚 <b>Filter Eksekusi:</b> <code>Wajib 9 Buku PDF Grade A (≥65%)</code>",
                 f"📦 <b>Default Lot:</b> <code>{bridge.default_lot} Lot</code> (Batas Risiko: {bridge.risk_percent}%)",
                 f"🎯 <b>Instrumen Trading:</b> <code>{bridge.gold_symbol} (XAU/USD)</code>",
                 "━━━━━━━━━━━━━━━━━━━━━━",
@@ -1071,7 +1111,7 @@ class TelegramBotCommands:
             "• /potensi - Radar live chart saham & gold paling berpotensi",
             "• /harian - Rekomendasi sinyal trading harian (Entry, TP & SL)",
             "• /winrate - Statistik akurasi win & lose rate sinyal bot",
-            "• /candle - Bedah pola candlestick & price action (7 buku)",
+            "• /candle - Bedah pola candlestick & price action (9 buku)",
             "• /gold - Analisis & sinyal emas dunia XAU/USD (24 Jam)",
             "• /scan - Pindai seluruh saham potensial sekarang juga (On-Demand)",
             "• /watchlist - Lihat daftar saham potensial cuan & harga terkini",
@@ -1451,6 +1491,10 @@ class TelegramBotCommands:
 
         caption_text = "\n".join(msg_lines)
         chart_path = data.get("chart_path")
+        tv_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url("XAUUSD"))
+        ]])
+
         if chart_path and Path(chart_path).exists():
             safe_cap = caption_text if len(caption_text) <= 1020 else caption_text[:1000] + "..."
             try:
@@ -1459,15 +1503,16 @@ class TelegramBotCommands:
                         photo=photo,
                         caption=safe_cap,
                         parse_mode=ParseMode.HTML,
+                        reply_markup=tv_markup,
                     )
                 return
             except Exception as e:
                 logger.warning(f"Gagal kirim foto gold: {e}")
 
-        await update.message.reply_html(caption_text)
+        await update.message.reply_html(caption_text, reply_markup=tv_markup)
 
     async def candle_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler perintah /candle <ticker> untuk analisis pola candlestick & price action dari 7 buku."""
+        """Handler perintah /candle <ticker> untuk analisis pola candlestick & price action dari 9 buku."""
         if not await self.check_user_access(update, context):
             return
 
@@ -1507,6 +1552,20 @@ class TelegramBotCommands:
             rsi_val = float(last_row.get("rsi", 50.0))
             vol_ratio = float(last_row.get("volume_ratio", 1.0))
 
+            db_bottom = bool(last_row.get("pattern_double_bottom", 0))
+            db_top = bool(last_row.get("pattern_double_top", 0))
+            f_wedge = bool(last_row.get("pattern_falling_wedge", 0))
+            r_wedge = bool(last_row.get("pattern_rising_wedge", 0))
+            hs_inv = bool(last_row.get("pattern_inv_head_shoulders", 0))
+            hs_top = bool(last_row.get("pattern_head_shoulders", 0))
+
+            bos_bull = bool(last_row.get("structure_bos_bullish", 0))
+            bos_bear = bool(last_row.get("structure_bos_bearish", 0))
+            ob_bull = bool(last_row.get("order_block_bullish", 0))
+            ob_bear = bool(last_row.get("order_block_bearish", 0))
+            fvg_bull = bool(last_row.get("fvg_bullish", 0))
+            fvg_bear = bool(last_row.get("fvg_bearish", 0))
+
             return {
                 "ticker": disp_ticker,
                 "is_gold": is_gold,
@@ -1521,6 +1580,18 @@ class TelegramBotCommands:
                 "ichi_cloud": ichi_cloud,
                 "rsi": rsi_val,
                 "vol_ratio": vol_ratio,
+                "db_bottom": db_bottom,
+                "db_top": db_top,
+                "f_wedge": f_wedge,
+                "r_wedge": r_wedge,
+                "hs_inv": hs_inv,
+                "hs_top": hs_top,
+                "bos_bull": bos_bull,
+                "bos_bear": bos_bear,
+                "ob_bull": ob_bull,
+                "ob_bear": ob_bear,
+                "fvg_bull": fvg_bull,
+                "fvg_bear": fvg_bear,
             }
 
         res = await asyncio.to_thread(_fetch_and_eval)
@@ -1529,24 +1600,47 @@ class TelegramBotCommands:
             return
 
         price_fmt = f"${res['close']:,.2f}" if res["is_gold"] else f"Rp {res['close']:,.0f}"
+
+        # Status pola buku 8 (Chart Patterns)
+        if res.get("db_bottom") or res.get("f_wedge") or res.get("hs_inv"):
+            pattern_status = "🟢 Bullish Reversal (Double Bottom / Wedge / Inv H&S)"
+        elif res.get("db_top") or res.get("r_wedge") or res.get("hs_top"):
+            pattern_status = "🔴 Bearish Reversal (Double Top / Wedge / H&S)"
+        else:
+            pattern_status = "⚪ Pola Normal / Konsolidasi"
+
+        # Status pola buku 9 (Smart Money / Market Structure)
+        if res.get("bos_bull") or res.get("ob_bull"):
+            smc_status = "🟢 Bullish BOS / Demand Order Block"
+        elif res.get("bos_bear") or res.get("ob_bear"):
+            smc_status = "🔴 Bearish BOS / Supply Order Block"
+        else:
+            smc_status = "⚪ Struktur Terjaga"
+
         lines = [
             f"🕯️ <b>BEDAH CANDLESTICK & PRICE ACTION: {res['ticker']}</b>",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"💵 <b>Harga Terkini:</b> <code>{price_fmt}</code> ({res['time']} WIB)",
             "━━━━━━━━━━━━━━━━━━━━━━",
-            "📖 <b>POLA BUKU YANG TERDETEKSI:</b>",
+            "📖 <b>TELAAH 9 BUKU TRADING:</b>",
             f"• <b>Pinbar Rejection:</b> {'🟢 YA (Ekor Penolakan Kuat)' if res['pinbar'] else f'⚪ Tidak (Ekor: {res['wick_ratio']:.0f}%)'}",
             f"• <b>Bullish Engulfing:</b> {'🟢 YA (Candle Menelan Penuh)' if res['engulfing'] else '⚪ Tidak'}",
             f"• <b>Bob Volman 20 EMA:</b> {'🟢 Pullback Reversal Terkonfirmasi' if res['volman_pb'] else '⚪ Normal'}",
             f"• <b>Bob Volman Buildup:</b> {'🔥 Kompresi Siap Breakout' if res['volman_bd'] else '⚪ Volatilitas Reguler'}",
             f"• <b>Fibonacci Golden Pocket:</b> {'🎯 Rebound di Area 50%-61.8%' if res['fib_gz'] else '⚪ Di luar Golden Zone'}",
             f"• <b>Ichimoku Kumo Cloud:</b> {'⛅ Bullish di Atas Awan' if res['ichi_cloud'] else '☁️ Di Bawah / Dalam Awan'}",
+            f"• <b>Chart Pattern (Buku 8):</b> {pattern_status}",
+            f"• <b>Market Structure (Buku 9):</b> {smc_status}",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"📊 <b>Konfirmasi Volume:</b> {res['vol_ratio']:.1f}x rata-rata | <b>RSI:</b> {res['rsi']:.1f}",
             "━━━━━━━━━━━━━━━━━━━━━━",
             "💡 <i>Gunakan: <code>/candle BBCA</code>, <code>/candle BBRI</code>, atau <code>/candle GOLD</code></i>",
         ]
-        await update.message.reply_html("\n".join(lines))
+
+        tv_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(clean_ticker))
+        ]])
+        await update.message.reply_html("\n".join(lines), reply_markup=tv_markup)
 
     async def winrate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /winrate dan /performance untuk rekam jejak akurasi Win/Lose bot khusus Gold (XAU/USD)."""
@@ -1570,7 +1664,7 @@ class TelegramBotCommands:
 
         # Evaluasi otomatis
         if g_comp >= 5 and g_wr >= 75.0:
-            eval_note = "🔥 <b>Akurasi Luar Biasa!</b> Filter 7 buku PDF terbukti sangat akurat prediksi arah Gold."
+            eval_note = "🔥 <b>Akurasi Luar Biasa!</b> Filter 9 buku PDF terbukti sangat akurat prediksi arah Gold."
         elif g_comp >= 5 and g_wr >= 60.0:
             eval_note = "🟢 <b>Akurasi Sehat & Profitable.</b> Risk:Reward XAU/USD terjaga dengan baik."
         elif g_comp == 0:
@@ -1702,7 +1796,7 @@ class TelegramBotCommands:
             f"⚡ <b>Mode Auto-Trade:</b> {status_auto}",
             f"🕒 <b>Jadwal Trading:</b> <code>{hours_badge}</code> ({hours_status})",
             f"📡 <b>Koneksi Terminal:</b> {conn_badge}",
-            f"📚 <b>Filter Eksekusi:</b> <code>Wajib 7 Buku PDF Grade A (≥65%)</code>",
+            f"📚 <b>Filter Eksekusi:</b> <code>Wajib 9 Buku PDF Grade A (≥65%)</code>",
             f"📦 <b>Default Lot:</b> <code>{bridge.default_lot} Lot</code> (Batas Risiko: {bridge.risk_percent}%)",
             f"🎯 <b>Instrumen Trading:</b> <code>{bridge.gold_symbol} (XAU/USD)</code>",
             "━━━━━━━━━━━━━━━━━━━━━━",
@@ -1869,23 +1963,28 @@ class TelegramBotCommands:
         if len(caption) > 1020:
             caption = caption[:1020]
 
+        tv_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(clean_ticker))
+        ]])
+
         try:
             with open(chart_path, "rb") as photo:
                 await update.message.reply_photo(
                     photo=photo,
                     caption=caption,
                     parse_mode=ParseMode.HTML,
+                    reply_markup=tv_markup,
                 )
         except Exception as e:
             logger.error(f"Gagal kirim chart photo: {e}")
-            await update.message.reply_html(caption)
+            await update.message.reply_html(caption, reply_markup=tv_markup)
 
     async def potensi_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /potensi dan /radar untuk menyaring dan memunculkan live chart aset paling berpotensi."""
         if not await self.check_user_access(update, context):
             return
 
-        await update.message.reply_html("🔍 <i>Memindai seluruh watchlist saham IDX & Gold untuk mencari setup paling berpotensi (7 Buku PDF)...</i>")
+        await update.message.reply_html("🔍 <i>Memindai seluruh watchlist saham IDX & Gold untuk mencari setup paling berpotensi (9 Buku PDF)...</i>")
 
         from data.fetcher import DataFetcher
         from indicators.technical import TechnicalIndicators
@@ -1946,7 +2045,7 @@ class TelegramBotCommands:
             await update.message.reply_html(
                 "⚪ <b>HASIL RADAR: BELUM ADA SETUP BERPOTENSI TINGGI</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
-                "Saat ini pergerakan harga saham & emas dunia sedang berada di fase konsolidasi / netral (belum memenuhi syarat Grade A/A+ dari 7 buku PDF).\n\n"
+                "Saat ini pergerakan harga saham & emas dunia sedang berada di fase konsolidasi / netral (belum memenuhi syarat Grade A/A+ dari 9 buku PDF).\n\n"
                 "🛡️ <i>Sistem sengaja menahan agar Anda tidak entry di momen tanpa edge. Bot memantau setiap 15 menit.</i>"
             )
             return
@@ -1976,6 +2075,10 @@ class TelegramBotCommands:
             if len(caption) > 1020:
                 caption = caption[:1020]
 
+            tv_item_markup = InlineKeyboardMarkup([[
+                InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(t))
+            ]])
+
             c_path = item["chart_path"]
             if c_path and Path(c_path).exists():
                 try:
@@ -1984,12 +2087,13 @@ class TelegramBotCommands:
                             photo=photo,
                             caption=caption,
                             parse_mode=ParseMode.HTML,
+                            reply_markup=tv_item_markup,
                         )
                 except Exception as e:
                     logger.error(f"Gagal kirim foto potensi {t}: {e}")
-                    await update.message.reply_html(caption)
+                    await update.message.reply_html(caption, reply_markup=tv_item_markup)
             else:
-                await update.message.reply_html(caption)
+                await update.message.reply_html(caption, reply_markup=tv_item_markup)
 
     async def chat_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler pesan teks percakapan natural (bahasa gaul) & permintaan live chart instan."""
@@ -2068,16 +2172,21 @@ class TelegramBotCommands:
             if len(caption) > 1020:
                 caption = caption[:1020]
 
+            tv_markup = InlineKeyboardMarkup([[
+                InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(clean_ticker))
+            ]])
+
             try:
                 with open(chart_path, "rb") as photo:
                     await update.message.reply_photo(
                         photo=photo,
                         caption=caption,
                         parse_mode=ParseMode.HTML,
+                        reply_markup=tv_markup,
                     )
             except Exception as e:
                 logger.error(f"Gagal kirim chart photo via chat: {e}")
-                await update.message.reply_html(caption)
+                await update.message.reply_html(caption, reply_markup=tv_markup)
             return
 
         # 2. Intent POTENSI: Pengguna meminta info saham/emas yang sedang berpotensi

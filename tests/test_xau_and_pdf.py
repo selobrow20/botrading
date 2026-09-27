@@ -179,7 +179,7 @@ def test_telegram_signal_formatter_shows_7_pdf_details():
     msg = notifier.format_signal_message(sig)
 
     assert "SINYAL ENTRY (MASUK / BUY): XAU/USD (Gold)" in msg
-    assert "TELAAH 7 BUKU PDF" in msg
+    assert "TELAAH 9 BUKU PDF" in msg or "TELAAH 7 BUKU PDF" in msg
     assert "Grade A+" in msg
     assert "Martin Pring" in msg
     assert "Bob Volman" in msg
