@@ -842,6 +842,58 @@ class TelegramBotCommands:
             except Exception:
                 pass
 
+        elif data.startswith("chart_"):
+            parts = data.split("_")
+            if len(parts) >= 3:
+                c_ticker = parts[1]
+                c_style = parts[2]
+                await query.answer(f"📊 Menyiapkan chart mode {c_style}...")
+                from data.fetcher import DataFetcher
+                from indicators.technical import TechnicalIndicators
+                from strategy.rules import get_strategy, DEFAULT_STRATEGY
+                from strategy.signal_engine import SignalEngine
+                from notify.chart_generator import ChartGenerator
+
+                fetcher = DataFetcher(storage=self.storage)
+                clean_t = fetcher.normalize_ticker(c_ticker)
+                is_gold = any(k in clean_t for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+                df = fetcher.get_data(clean_t, interval="15m", period="5d" if is_gold else "60d", force_fetch=True if is_gold else False)
+                if not df.empty:
+                    df_ind = TechnicalIndicators.add_all_indicators(df)
+                    strategy = get_strategy("DayTrading_Intraday_Momentum") or DEFAULT_STRATEGY
+                    engine = SignalEngine([strategy])
+                    sig = engine.evaluate_bar(df_ind, ticker=clean_t, strategy=strategy)
+                    c_path = ChartGenerator.generate_chart(
+                        df=df_ind,
+                        ticker_symbol=clean_t,
+                        interval="15m",
+                        chart_style="area" if c_style == "area" else "candlestick",
+                        signal_type=sig.signal,
+                        entry_price=sig.price,
+                        tp_price=sig.take_profit_price,
+                        sl_price=sig.stop_loss_price,
+                        setup_grade=sig.setup_grade,
+                        pdf_confluence_score=sig.pdf_confluence_score,
+                    )
+                    if c_path and Path(c_path).exists():
+                        other_style = "candles" if c_style == "area" else "area"
+                        other_label = "🕯️ Mode Candles" if c_style == "area" else "📈 Mode Area"
+                        tv_btn = InlineKeyboardMarkup([
+                            [
+                                InlineKeyboardButton(other_label, callback_data=f"chart_{clean_t}_{other_style}"),
+                                InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(clean_t)),
+                            ]
+                        ])
+                        price_display = f"${sig.price:,.3f}" if is_gold else f"Rp {sig.price:,.0f}"
+                        with open(c_path, "rb") as photo:
+                            await query.message.reply_photo(
+                                photo=photo,
+                                caption=f"📊 <b>LIVE {c_style.upper()} CHART: {clean_t}</b>\n💵 <b>Harga:</b> <code>{price_display}</code>",
+                                parse_mode=ParseMode.HTML,
+                                reply_markup=tv_btn,
+                            )
+            return
+
         elif data in ["mt5_toggle_on", "mt5_toggle_off", "mt5_refresh", "mt5_mode_24h", "mt5_mode_night"]:
             from trading.mt5_bridge import MT5Bridge
             bridge = MT5Bridge()
@@ -1390,6 +1442,12 @@ class TelegramBotCommands:
                 tp_pct_val = abs((tp_calc - last_close) / last_close) * 100.0
                 sl_pct_val = abs((last_close - sl_calc) / last_close) * 100.0
 
+            tv_quote = df.attrs.get("tradingview_quote") or {}
+            prev_close = tv_quote.get("prev_close")
+            chg_pct = float(tv_quote.get("change", 0.0))
+            chg_val = (last_close - prev_close) if prev_close else 0.0
+            chg_sign = "+" if chg_val >= 0 else ""
+
             chart_path = None
             try:
                 from notify.chart_generator import ChartGenerator
@@ -1412,6 +1470,10 @@ class TelegramBotCommands:
                 "time": time_str,
                 "high_24h": high_24h,
                 "low_24h": low_24h,
+                "prev_close": prev_close,
+                "chg_pct": chg_pct,
+                "chg_val": chg_val,
+                "chg_sign": chg_sign,
                 "rsi": rsi,
                 "ema20": ema20,
                 "ema50": ema50,
@@ -1465,35 +1527,53 @@ class TelegramBotCommands:
         else:
             sig_badge = "⚪ <b>WAIT / WAIT & SEE (Netral)</b>"
 
+        prev_close_line = ""
+        if data.get("prev_close"):
+            pc = data["prev_close"]
+            cs = data["chg_sign"]
+            cv = data["chg_val"]
+            cp = data["chg_pct"]
+            prev_close_line = f"📉 <b>Prev Close (TradingView):</b> <code>${pc:,.3f}</code> ({cs}${cv:,.3f} / {cs}{cp:.2f}%)"
+
         msg_lines = [
             "🥇 <b>ANALISIS PASAR XAU/USD (GOLD)</b> 🌎",
             "━━━━━━━━━━━━━━━━━━━━━━",
-            f"💵 <b>Harga Terkini:</b> <code>${close:,.2f}</code>",
+            f"💵 <b>Harga Terkini:</b> <code>${close:,.3f}</code>",
             f"⏰ <b>Waktu Candle:</b> {data['time']}",
-            f"📊 <b>Rentang 24 Jam:</b> ${data['low_24h']:,.2f} - ${data['high_24h']:,.2f}",
+            f"📊 <b>Rentang 24 Jam:</b> ${data['low_24h']:,.3f} - ${data['high_24h']:,.3f}",
+        ]
+        if prev_close_line:
+            msg_lines.append(prev_close_line)
+        msg_lines.extend([
             "━━━━━━━━━━━━━━━━━━━━━━",
             "📈 <b>INDIKATOR TEKNIKAL (15m):</b>",
             f"• <b>RSI (14):</b> {rsi:.1f} ({rsi_desc})",
-            f"• <b>EMA 20:</b> ${ema20:,.2f}",
-            f"• <b>EMA 50:</b> ${ema50:,.2f}",
+            f"• <b>EMA 20:</b> ${ema20:,.3f}",
+            f"• <b>EMA 50:</b> ${ema50:,.3f}",
             f"• <b>Tren MA:</b> {trend_desc}",
-            f"• <b>Bollinger Bands:</b> Upper ${data['bb_upper']:,.2f} | Lower ${data['bb_lower']:,.2f}",
+            f"• <b>Bollinger Bands:</b> Upper ${data['bb_upper']:,.3f} | Lower ${data['bb_lower']:,.3f}",
             f"• <b>Volume 15m:</b> {data['vol_ratio']:.1f}x rata-rata",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"🎯 <b>STATUS SINYAL:</b> {sig_badge}",
-            f"  • Entry Ref: <b>${close:,.2f}</b>",
-            f"  • Target Profit (TP): <b>${data['tp']:,.2f}</b> (+{data['tp_pct']:.2f}%)",
-            f"  • Stop Loss (SL): <b>${data['sl']:,.2f}</b> (-{data['sl_pct']:.2f}%)",
+            f"  • Entry Ref: <b>${close:,.3f}</b>",
+            f"  • Target Profit (TP): <b>${data['tp']:,.3f}</b> (+{data['tp_pct']:.2f}%)",
+            f"  • Stop Loss (SL): <b>${data['sl']:,.3f}</b> (-{data['sl_pct']:.2f}%)",
             f"  • Risk/Reward Ratio: <b>1 : {data['rrr']}</b>",
             "━━━━━━━━━━━━━━━━━━━━━━",
             "💡 <i>Pasar emas global aktif 23 jam sehari (Senin-Jumat). Kelola leverage secara bijak!</i>",
-        ]
+        ])
 
         caption_text = "\n".join(msg_lines)
         chart_path = data.get("chart_path")
-        tv_markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url("XAUUSD"))
-        ]])
+        tv_markup = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📈 Mode Area", callback_data="chart_XAUUSD_area"),
+                InlineKeyboardButton("🕯️ Mode Candles", callback_data="chart_XAUUSD_candles"),
+            ],
+            [
+                InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url("XAUUSD")),
+            ]
+        ])
 
         if chart_path and Path(chart_path).exists():
             safe_cap = caption_text if len(caption_text) <= 1020 else caption_text[:1000] + "..."
@@ -1859,11 +1939,16 @@ class TelegramBotCommands:
         await update.message.reply_html("\n".join(lines), reply_markup=reply_markup)
 
     async def chart_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler perintah /chart <ticker> untuk menampilkan live candlestick chart (TradingView style)."""
+        """Handler perintah /chart <ticker> [area|candles] untuk menampilkan live chart (TradingView style)."""
         if not await self.check_user_access(update, context):
             return
 
-        ticker_arg = context.args[0].upper().strip() if context.args else "XAUUSD"
+        raw_args = context.args or []
+        args_lower = [a.lower() for a in raw_args]
+        req_style = "area" if "area" in args_lower else "candlestick"
+        filtered_args = [a for a in raw_args if a.lower() not in ["area", "candle", "candles", "candlestick"]]
+        ticker_arg = filtered_args[0].upper().strip() if filtered_args else "XAUUSD"
+
         from data.fetcher import DataFetcher
         from indicators.technical import TechnicalIndicators
         from strategy.rules import get_strategy, DEFAULT_STRATEGY
@@ -1876,7 +1961,7 @@ class TelegramBotCommands:
         is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
         disp_ticker = "XAU/USD (Gold Spot)" if is_gold else clean_ticker.replace(".JK", "")
 
-        await update.message.reply_html(f"📈 <i>Menyiapkan visual live chart untuk <b>{disp_ticker}</b>...</i>")
+        await update.message.reply_html(f"📈 <i>Menyiapkan visual live chart ({req_style.upper()}) untuk <b>{disp_ticker}</b>...</i>")
 
         def _generate():
             interval = "15m"
@@ -1885,7 +1970,7 @@ class TelegramBotCommands:
             if df.empty or len(df) < 15:
                 df = fetcher.get_data(clean_ticker, interval="1d", period="1y", force_fetch=True if is_gold else False)
             if df.empty or len(df) < 15:
-                return None, None, None, None
+                return None, None, None, None, None
 
             df_ind = TechnicalIndicators.add_all_indicators(df)
             strategy = get_strategy("DayTrading_Intraday_Momentum") or DEFAULT_STRATEGY
@@ -1900,11 +1985,11 @@ class TelegramBotCommands:
             if not tp_val or not sl_val:
                 if is_gold:
                     if is_bearish:
-                        tp_val = round(sig.price * (1.0 - 0.008), 2)
-                        sl_val = round(sig.price * (1.0 + 0.004), 2)
+                        tp_val = round(sig.price * (1.0 - 0.008), 3)
+                        sl_val = round(sig.price * (1.0 + 0.004), 3)
                     else:
-                        tp_val = round(sig.price * (1.0 + 0.008), 2)
-                        sl_val = round(sig.price * (1.0 - 0.004), 2)
+                        tp_val = round(sig.price * (1.0 + 0.008), 3)
+                        sl_val = round(sig.price * (1.0 - 0.004), 3)
                 else:
                     tp_val = round(sig.price * 1.03, 0)
                     sl_val = round(sig.price * 0.98, 0)
@@ -1913,6 +1998,7 @@ class TelegramBotCommands:
                 df=df_ind,
                 ticker_symbol=clean_ticker,
                 interval=interval,
+                chart_style=req_style,
                 signal_type=sig.signal if sig.signal in ["BUY", "SELL"] else ("SELL" if is_bearish else "BUY"),
                 entry_price=sig.price,
                 tp_price=tp_val,
@@ -1920,14 +2006,15 @@ class TelegramBotCommands:
                 setup_grade=sig.setup_grade,
                 pdf_confluence_score=sig.pdf_confluence_score,
             )
-            return chart_path, sig, tp_val, sl_val
+            tv_quote = df.attrs.get("tradingview_quote") or {}
+            return chart_path, sig, tp_val, sl_val, tv_quote
 
-        chart_path, sig, tp_val, sl_val = await asyncio.to_thread(_generate)
+        chart_path, sig, tp_val, sl_val, tv_quote = await asyncio.to_thread(_generate)
         if not chart_path or not Path(chart_path).exists():
             await update.message.reply_text(f"Gagal mengambil data pasar atau membuat chart untuk {ticker_arg}.")
             return
 
-        price_fmt = f"${sig.price:,.2f}" if is_gold else f"Rp {sig.price:,.0f}"
+        price_fmt = f"${sig.price:,.3f}" if is_gold else f"Rp {sig.price:,.0f}"
 
         # Hitung persentase TP & SL acuan
         is_sell_dir = tp_val < sig.price
@@ -1938,16 +2025,29 @@ class TelegramBotCommands:
             tp_pct = abs((tp_val - sig.price) / sig.price) * 100.0
             sl_pct = abs((sig.price - sl_val) / sig.price) * 100.0
 
-        tp_str = f"${tp_val:,.2f} (+{tp_pct:.2f}%)" if is_gold else f"Rp {tp_val:,.0f} (+{tp_pct:.1f}%)"
-        sl_str = f"${sl_val:,.2f} (-{sl_pct:.2f}%)" if is_gold else f"Rp {sl_val:,.0f} (-{sl_pct:.1f}%)"
+        tp_str = f"${tp_val:,.3f} (+{tp_pct:.2f}%)" if is_gold else f"Rp {tp_val:,.0f} (+{tp_pct:.1f}%)"
+        sl_str = f"${sl_val:,.3f} (-{sl_pct:.2f}%)" if is_gold else f"Rp {sl_val:,.0f} (-{sl_pct:.1f}%)"
 
+        prev_close_line = ""
+        if tv_quote and "prev_close" in tv_quote:
+            pc = float(tv_quote["prev_close"])
+            cp = float(tv_quote.get("change", 0.0))
+            cv = sig.price - pc
+            cs = "+" if cv >= 0 else ""
+            prev_close_line = f"📉 <b>Prev Close (TradingView):</b> <code>${pc:,.3f}</code> ({cs}${cv:,.3f} / {cs}{cp:.2f}%)\n"
+
+        style_title = "AREA" if req_style == "area" else "CANDLESTICK"
         caption_lines = [
-            f"📈 <b>LIVE CANDLESTICK CHART: {disp_ticker}</b>",
+            f"📈 <b>LIVE {style_title} CHART: {disp_ticker}</b>",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"💵 <b>Harga Terkini:</b> <code>{price_fmt}</code>",
+        ]
+        if prev_close_line:
+            caption_lines.append(prev_close_line.strip())
+        caption_lines.extend([
             f"🎯 <b>Target TP:</b> <code>{tp_str}</code>",
             f"🛑 <b>Batas SL:</b> <code>{sl_str}</code>",
-        ]
+        ])
         if sig.setup_grade:
             grade_clean = sig.setup_grade.replace("Grade Grade ", "").replace("Grade ", "")
             score_num = sig.pdf_confluence_score or 0.0
@@ -1963,9 +2063,14 @@ class TelegramBotCommands:
         if len(caption) > 1020:
             caption = caption[:1020]
 
-        tv_markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(clean_ticker))
-        ]])
+        other_style = "candles" if req_style == "area" else "area"
+        other_label = "🕯️ Mode Candles" if req_style == "area" else "📈 Mode Area"
+        tv_markup = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(other_label, callback_data=f"chart_{clean_ticker}_{other_style}"),
+                InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(clean_ticker)),
+            ]
+        ])
 
         try:
             with open(chart_path, "rb") as photo:

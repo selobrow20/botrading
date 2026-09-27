@@ -1,5 +1,7 @@
 import time
-from typing import Optional
+import json
+import urllib.request
+from typing import Optional, Dict, Any
 import pandas as pd
 import requests
 import yfinance as yf
@@ -38,6 +40,44 @@ class DataFetcher:
 
         # Default saham Indonesia Bursa Efek Indonesia (BEI)
         return f"{ticker_clean}.JK"
+
+    @staticmethod
+    def fetch_tradingview_quote(ticker: str = "XAUUSD") -> Dict[str, Any]:
+        """
+        Mengambil live quote resmi langsung dari TradingView Scanner API:
+        Open, High, Low, Close, Volume, Change (%), dan Prev Close.
+        """
+        try:
+            t_upper = ticker.upper()
+            if any(k in t_upper for k in ["XAU", "GOLD", "EMAS", "GC=F"]):
+                tv_symbol = "OANDA:XAUUSD"
+            elif ".JK" in t_upper or (t_upper.isalpha() and len(t_upper) <= 5):
+                clean_idx = t_upper.replace(".JK", "")
+                tv_symbol = f"IDX:{clean_idx}"
+            else:
+                tv_symbol = t_upper
+
+            url = f"https://scanner.tradingview.com/symbol?symbol={tv_symbol}&fields=close,open,high,low,volume,change"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                if data and "close" in data:
+                    c = float(data["close"])
+                    chg = float(data.get("change", 0.0))
+                    prev_c = c / (1.0 + chg / 100.0) if chg != -100.0 else c
+                    return {
+                        "symbol": tv_symbol,
+                        "close": c,
+                        "open": float(data.get("open", c)),
+                        "high": float(data.get("high", c)),
+                        "low": float(data.get("low", c)),
+                        "volume": float(data.get("volume", 0)),
+                        "change": chg,
+                        "prev_close": round(prev_c, 3),
+                    }
+        except Exception as e:
+            logger.debug(f"Gagal mengambil quote TradingView untuk {ticker}: {e}")
+        return {}
 
     def fetch_spot_gold(self, interval: str = "15m", limit: int = 100) -> pd.DataFrame:
         """
@@ -155,19 +195,31 @@ class DataFetcher:
         normalized_ticker = self.normalize_ticker(ticker)
 
         # Jika instrumen adalah Emas Spot (XAUUSD):
-        # 1. Utamakan direct Spot Gold feed (TradingView)
-        # 2. Jika ada kendala jaringan, fallback langsung ke terminal MT5 HFM
-        # 3. Terakhir fallback ke COMEX Gold Futures (GC=F)
+        # 1. Ambil live quote resmi dari TradingView Scanner API (OANDA:XAUUSD)
+        # 2. Utamakan terminal MT5 lokal (HFM Live) untuk data candlestick real-time paling update
+        # 3. Sinkronkan harga candle terakhir dengan live quote TradingView agar 100% presisi
+        # 4. Fallback ke direct spot feed jika MT5 tidak tersedia
+        # 5. Terakhir fallback ke COMEX Gold Futures (GC=F)
         if normalized_ticker == "XAUUSD":
-            spot_df = self.fetch_spot_gold(interval=interval, limit=100)
-            if not spot_df.empty and len(spot_df) >= 15:
-                return spot_df
+            tv_quote = self.fetch_tradingview_quote("XAUUSD")
 
+            # 1. Prioritaskan MT5 terminal lokal karena paling real-time dan terhubung live
             mt5_df = self.fetch_from_mt5(interval=interval, limit=100)
             if not mt5_df.empty and len(mt5_df) >= 15:
+                if tv_quote and "close" in tv_quote:
+                    mt5_df.loc[mt5_df.index[-1], "Close"] = tv_quote["close"]
+                    mt5_df.attrs["tradingview_quote"] = tv_quote
                 return mt5_df
 
-            logger.warning("Gagal fetch dari direct Spot Gold feed dan MT5, fallback ke COMEX Gold Futures (GC=F)...")
+            # 2. Fallback: Direct Spot Gold feed
+            spot_df = self.fetch_spot_gold(interval=interval, limit=100)
+            if not spot_df.empty and len(spot_df) >= 15:
+                if tv_quote and "close" in tv_quote:
+                    spot_df.loc[spot_df.index[-1], "Close"] = tv_quote["close"]
+                    spot_df.attrs["tradingview_quote"] = tv_quote
+                return spot_df
+
+            logger.warning("Gagal fetch dari MT5 dan direct Spot Gold feed, fallback ke COMEX Gold Futures (GC=F)...")
             normalized_ticker = "GC=F"
 
         if period is None and start is None:

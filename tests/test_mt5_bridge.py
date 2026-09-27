@@ -27,6 +27,7 @@ def test_mt5_7_pdf_strict_gatekeeper():
     """Memastikan order DITOLAK jika belum memenuhi standar konfluensi Grade A (>=65%) 7 Buku PDF."""
     bridge = MT5Bridge(simulation_mode=True)
     bridge.enabled = True
+    bridge.trading_hours = "all"
 
     # 1. Sinyal Lemah (< 65%) -> Harus DITOLAK demi menjaga modal & win rate
     weak_sig = SignalResult(
@@ -70,6 +71,7 @@ def test_mt5_order_lifecycle_and_positions():
     """Menguji siklus buka posisi, cek posisi terbuka, dan tutup posisi di MT5."""
     bridge = MT5Bridge(simulation_mode=True)
     bridge.enabled = True
+    bridge.trading_hours = "all"
     bridge._simulated_positions.clear()
 
     # Buka order SELL Gold
@@ -127,6 +129,7 @@ def test_mt5_dynamic_lot_sizing_by_confluence():
     """Menguji penentuan ukuran lot: 0.05 lot untuk momen super bagus (Grade A+), 0.01 lot untuk standar/riskan."""
     bridge = MT5Bridge(simulation_mode=True)
     bridge.enabled = True
+    bridge.trading_hours = "all"
 
     # 1. Momen Super Bagus (Grade A+ >= 80%) -> 0.05 lot
     super_sig = SignalResult(
