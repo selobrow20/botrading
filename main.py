@@ -45,10 +45,13 @@ logger = setup_logger("main")
 
 
 def cmd_scan(args: argparse.Namespace) -> None:
-    """Pemindaian manual satu kali untuk seluruh watchlist."""
+    """Pemindaian manual satu kali untuk seluruh watchlist atau aset spesifik."""
     print("\n🔍 Memulai Pemindaian Watchlist Terkini...")
     runner = PipelineRunner()
-    res = runner.run_pipeline(force_run=True)
+    target_wl = None
+    if getattr(args, "ticker", None):
+        target_wl = [DataFetcher.normalize_ticker(args.ticker)]
+    res = runner.run_pipeline(force_run=True, watchlist=target_wl)
 
     details = res.get("details", [])
     if not details:
@@ -57,10 +60,12 @@ def cmd_scan(args: argparse.Namespace) -> None:
 
     table_rows = []
     for d in details:
+        is_gold = any(k in d["ticker"].upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        price_str = f"${d['price']:,.2f}" if is_gold else f"Rp {d['price']:,.0f}"
         table_rows.append([
             d["ticker"],
             d["signal"],
-            f"Rp {d['price']:,.0f}",
+            price_str,
             d["candle_time"],
             "YA" if d["notified"] else "TIDAK",
         ])
@@ -304,7 +309,8 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Perintah yang tersedia")
 
     # Command: scan
-    subparsers.add_parser("scan", help="Pemindaian watchlist secara manual satu kali")
+    p_scan = subparsers.add_parser("scan", help="Pemindaian watchlist secara manual satu kali")
+    p_scan.add_argument("--ticker", "-t", type=str, help="Kode saham atau komoditas spesifik untuk dipindai (contoh: XAUUSD, BBCA)")
 
     # Command: fetch
     p_fetch = subparsers.add_parser("fetch", help="Ambil & perbarui data pasar dari yfinance")

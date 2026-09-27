@@ -153,7 +153,11 @@ class PipelineRunner:
         self.notifier = notifier or TelegramNotifier(storage=self.storage)
         self.signal_engine = SignalEngine()
 
-    def run_pipeline(self, force_run: bool = False) -> Dict[str, Any]:
+    def run_pipeline(
+        self,
+        force_run: bool = False,
+        watchlist: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """
         Menjalankan 1 siklus penuh pipeline:
         1. Validasi jam bursa IDX & jam pasar Emas global.
@@ -178,7 +182,8 @@ class PipelineRunner:
             return {"status": "skipped", "reason": f"IDX: {idx_reason} | Gold: {gold_reason}"}
 
         # 2. Baca Konfigurasi Trading & Watchlist
-        watchlist = self.config.get("watchlist", ["BBCA.JK"])
+        if watchlist is None:
+            watchlist = self.config.get("watchlist", ["BBCA.JK"])
         trading_cfg = self.config.get("trading", {})
         trading_mode = trading_cfg.get("mode", "intraday")
 
