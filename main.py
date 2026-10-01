@@ -269,8 +269,29 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         name="Pemantauan Real-Time TP/SL MT5",
         replace_existing=True,
     )
+
+    # Auto-Pull Git Updates berkala (tiap 5 menit) untuk auto-sync dari GitHub Collab
+    git_cfg = cfg.get("git_sync", {})
+    if git_cfg.get("enabled", True):
+        from scheduler.auto_updater import GitAutoUpdater
+        git_updater = GitAutoUpdater(
+            base_dir=BASE_DIR,
+            branch=git_cfg.get("branch", "main"),
+            auto_restart=git_cfg.get("auto_restart", True),
+            notifier=runner.telegram_notifier if git_cfg.get("notify_telegram", True) else None,
+        )
+        pull_interval_mins = int(git_cfg.get("interval_minutes", 5))
+        scheduler.add_job(
+            git_updater.check_and_pull,
+            trigger=IntervalTrigger(minutes=pull_interval_mins),
+            id="git_auto_pull_job",
+            name=f"Auto-Pull Git Updates ({pull_interval_mins} Menit)",
+            replace_existing=True,
+        )
+        logger.info(f"Git Auto-Puller aktif: memeriksa commit origin/{git_cfg.get('branch', 'main')} tiap {pull_interval_mins} menit.")
+
     scheduler.start()
-    logger.info(f"BackgroundScheduler aktif (interval: {interval_mins}m, news: 1m, MT5 watcher: 15s LIVE).")
+    logger.info(f"BackgroundScheduler aktif (interval: {interval_mins}m, news: 1m, MT5 watcher: 15s LIVE, git auto-pull: 5m).")
 
     # Jalankan initial run & sync kalender di thread terpisah agar tidak menahan startup listener Telegram
     def _initial_startup_tasks():

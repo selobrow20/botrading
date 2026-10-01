@@ -241,3 +241,10 @@ logging:
   level: INFO
   log_dir: logs
   retention_days: 14
+
+git_sync:
+  enabled: true
+  interval_minutes: 5   # Interval auto git pull per 5 menit
+  branch: main
+  auto_restart: true    # Otomatis reload/restart proses agar kode baru langsung aktif di RAM
+  notify_telegram: true # Kirim info commit baru ke Telegram Owner

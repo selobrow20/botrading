@@ -1394,6 +1394,26 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
+    # Auto-Pull Git Updates berkala (tiap 5 menit) untuk auto-sync dari GitHub Collab
+    git_cfg = runner.config.get("git_sync", {})
+    if git_cfg.get("enabled", True):
+        from scheduler.auto_updater import GitAutoUpdater
+        git_updater = GitAutoUpdater(
+            base_dir=BASE_DIR,
+            branch=git_cfg.get("branch", "main"),
+            auto_restart=git_cfg.get("auto_restart", True),
+            notifier=runner.telegram_notifier if git_cfg.get("notify_telegram", True) else None,
+        )
+        pull_interval_mins = int(git_cfg.get("interval_minutes", 5))
+        scheduler.add_job(
+            git_updater.check_and_pull,
+            trigger=IntervalTrigger(minutes=pull_interval_mins),
+            id="git_auto_pull_job",
+            name=f"Auto-Pull Git Updates ({pull_interval_mins} Menit)",
+            replace_existing=True,
+        )
+        logger.info(f"Git Auto-Puller aktif: memeriksa commit origin/{git_cfg.get('branch', 'main')} tiap {pull_interval_mins} menit.")
+
     # Jalankan 1 kali saat startup jika jam pasar buka
     logger.info("Menjalankan pipeline inisial pertama kali saat startup...")
     runner.run_pipeline(force_run=False)
