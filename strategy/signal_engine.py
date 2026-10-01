@@ -775,7 +775,7 @@ class SignalEngine:
             mt5_cfg = self.config.get("mt5", {})
             short_tp_usd = float(mt5_cfg.get("gold_short_tp_pips", 48.0)) / 10.0  # 4.80 USD (48 pips, rentang 45-50 pips)
             short_sl_usd = float(mt5_cfg.get("gold_short_sl_pips", 42.0)) / 10.0  # 4.20 USD (42 pips)
-            long_tp_usd = float(mt5_cfg.get("gold_long_tp_pips", 50.0)) / 10.0    # 5.00 USD (50 pips)
+            long_tp_usd = float(mt5_cfg.get("gold_long_tp_pips", 135.0)) / 10.0   # 13.50 USD (135 pips)
             long_sl_usd = float(mt5_cfg.get("gold_long_sl_pips", 45.0)) / 10.0    # 4.50 USD (45 pips)
 
             # Deteksi Kualitas Momen Tren Panjang Bagus (Kaidah 9 Buku PDF Trading):
@@ -789,18 +789,18 @@ class SignalEngine:
                 is_good_long_momentum = False
 
             if is_good_long_momentum:
-                # Sesuai arahan pengguna: "tp nya 45-50 pips aja tp jangan gede gede nanti ga kena"
-                # Target TP Momen Kuat: 50 Pips ($5.00 USD) agar tidak gantung dan pasti tercapai
-                # Stop Loss Ketat: 45 Pips ($4.50 USD) -> R:R 1:1.11 (Profit selalu lebih besar dari Loss!)
-                tp_distance = round(min(5.00, max(4.50, long_tp_usd)), 2)
-                sl_distance = round(min(4.50, long_sl_usd), 2)
-                market_regime = f"{session_name} Momentum Kuat (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R >= 1:1)"
+                # Sesuai arahan pengguna: "kalo tp jauh si gpp 3:1 tpnya 3 sl nya 1"
+                # Target TP Jauh Rasio 3:1: SL dipatok ketat 45 pips ($4.50 USD),
+                # dan TP dipasang persis 3x lipat jarak SL (135 pips / $13.50 USD)!
+                sl_distance = round(min(4.50, max(4.00, long_sl_usd)), 2)
+                tp_distance = round(sl_distance * 3.0, 2)  # Rasio 3:1 mutlak (TP 3, SL 1)
+                market_regime = f"{session_name} Momentum Tren Jauh (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R 3:1)"
             else:
-                # Sesuai arahan pengguna: "tp nya 45-50 pips aja tp jangan gede gede nanti ga kena" & "rr minimal 1:1 lah"
-                # Target Take Profit: 45 - 48 Pips ($4.50 - $4.80 USD)
-                # Stop Loss Ketat: 40 - 42 Pips ($4.00 - $4.20 USD) -> R:R 1:1.14 (Profit selalu lebih besar dari Loss!)
+                # Sesuai arahan pengguna: "minimal bgt 1:1 lah jangan tp 1 sl 2" & "tp nya 45-50 pips aja tp jangan gede gede nanti ga kena"
+                # Target Take Profit: 45 - 50 Pips ($4.50 - $5.00 USD)
+                # Stop Loss Ketat: 40 - 45 Pips ($4.00 - $4.50 USD) -> R:R >= 1:1 (Dilarang keras TP 1 SL 2!)
                 tp_distance = round(min(5.00, max(4.50, short_tp_usd)), 2)
-                sl_distance = round(min(4.50, max(3.50, short_sl_usd)), 2)
+                sl_distance = round(min(tp_distance, max(3.50, short_sl_usd)), 2)
                 market_regime = f"{session_name} Momen Cepat (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R >= 1:1)"
 
             # KAIDAH BAKU 9 BUKU PDF TRADING (Risk:Reward Ratio Guard):

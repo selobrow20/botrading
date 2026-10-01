@@ -375,13 +375,13 @@ def test_adaptive_dynamic_tp_sl_modes():
     }, index=pd.date_range("2026-09-29 07:00", periods=25, freq="15min"))
 
     sig_trend = engine.evaluate_bar(df_trend, "XAUUSD", apply_pdf_filter=False)
-    assert "Momentum Kuat" in sig_trend.market_regime or "Momentum" in sig_trend.market_regime
+    assert "Momentum Tren Jauh" in sig_trend.market_regime or "Momentum" in sig_trend.market_regime
     tp_dist_trend = abs(sig_trend.take_profit_price - sig_trend.price)
     sl_dist_trend = abs(sig_trend.price - sig_trend.stop_loss_price)
-    # Target Momentum Terukur: 50 pips ($5.00 USD) agar pasti kena
-    assert 4.5 <= tp_dist_trend <= 5.0
-    assert 4.0 <= sl_dist_trend <= 4.5
-    assert sig_trend.risk_reward_ratio >= 1.0
+    # Sesuai arahan pengguna: "kalo tp jauh si gpp 3:1 tpnya 3 sl nya 1"
+    assert 12.0 <= tp_dist_trend <= 15.0  # 120 - 150 pips ($12.00 - $15.00 USD)
+    assert 4.0 <= sl_dist_trend <= 4.5    # 40 - 45 pips ($4.00 - $4.50 USD)
+    assert sig_trend.risk_reward_ratio == 3.0  # Rasio mutlak 3:1!
 
 
 def test_trailing_stop_alert_formatting():
@@ -638,6 +638,54 @@ def test_london_h1_window_limit():
     res = engine.evaluate_bar(df_m15, ticker="XAUUSD", bar_idx=-1, df_h1=df_h1_bearish)
     # Setelah jam 17:00 WIB, sinyal BUY tidak boleh ditahan oleh H1
     assert "Sesi London Wajib Konfirmasi H1" not in " ".join(res.reasons)
+
+
+def test_risk_reward_rules_never_tp1_sl2_and_long_3_to_1():
+    """
+    Memastikan kaidah mutlak Risk to Reward:
+    1. Jika TP jauh / momentum: Wajib Rasio 3:1 (TP 3, SL 1, misal TP 135 pips, SL 45 pips).
+    2. Sinyal cepat / reguler: Wajib minimal 1:1 (TP 45-50 pips, SL 40-45 pips).
+    3. DILARANG KERAS TP 1 SL 2 (SL tidak boleh pernah lebih besar dari TP).
+    """
+    from strategy.signal_engine import SignalEngine
+
+    engine = SignalEngine()
+
+    # 1. Kasus Sinyal Cepat (Sideways/Normal)
+    df_quick = pd.DataFrame({
+        "Open": [4200.0 + (i % 2) for i in range(20)],
+        "High": [4205.0] * 20,
+        "Low": [4198.0] * 20,
+        "Close": [4202.0] * 20,
+        "Volume": [1000] * 20,
+    }, index=pd.date_range("2026-10-01 10:00", periods=20, freq="15min"))
+
+    sig_quick = engine.evaluate_bar(df_quick, "XAUUSD", apply_pdf_filter=False)
+    tp_quick = abs(sig_quick.take_profit_price - sig_quick.price)
+    sl_quick = abs(sig_quick.price - sig_quick.stop_loss_price)
+
+    assert 4.5 <= tp_quick <= 5.0  # 45 - 50 pips
+    assert 4.0 <= sl_quick <= 4.5  # 40 - 45 pips
+    assert tp_quick >= sl_quick    # Wajib TP >= SL (Dilarang TP 1 SL 2!)
+    assert sig_quick.risk_reward_ratio >= 1.0
+
+    # 2. Kasus Sinyal Jauh / Trending Momentum (R:R 3:1)
+    df_long = pd.DataFrame({
+        "Open": [4100.0 + i * 3 for i in range(25)],
+        "High": [4105.0 + i * 3 for i in range(25)],
+        "Low": [4098.0 + i * 3 for i in range(25)],
+        "Close": [4104.0 + i * 3 for i in range(25)],
+        "Volume": [1000] * 25,
+    }, index=pd.date_range("2026-10-01 14:00", periods=25, freq="15min"))
+
+    sig_long = engine.evaluate_bar(df_long, "XAUUSD", apply_pdf_filter=False)
+    tp_long = abs(sig_long.take_profit_price - sig_long.price)
+    sl_long = abs(sig_long.price - sig_long.stop_loss_price)
+
+    assert 12.0 <= tp_long <= 15.0  # 120 - 150 pips
+    assert 4.0 <= sl_long <= 4.5    # 40 - 45 pips
+    assert sig_long.risk_reward_ratio == 3.0  # Rasio persis 3:1 (TP 3, SL 1)
+
 
 
 
