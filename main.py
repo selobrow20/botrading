@@ -201,8 +201,40 @@ def cmd_telegram(args: argparse.Namespace) -> None:
     run_telegram_bot_polling()
 
 
+def ensure_single_instance() -> None:
+    """
+    Memastikan hanya ada 1 instance 'main.py run-all' yang aktif di sistem.
+    Jika terdeteksi instance lama yang masih berjalan (misal dari sesi terminal lain),
+    instance lama otomatis dihentikan agar tidak terjadi tabrakan koneksi Telegram (HTTP 409 Conflict).
+    """
+    import os
+    try:
+        import psutil
+        curr_pid = os.getpid()
+        parent_pid = os.getppid()
+
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                pid = proc.info["pid"]
+                if pid in (curr_pid, parent_pid):
+                    continue
+
+                cmdline = proc.info.get("cmdline") or []
+                cmd_str = " ".join(cmdline).lower()
+                if "python" in proc.info.get("name", "").lower() and "main.py" in cmd_str and "run-all" in cmd_str:
+                    logger.info(f"🔄 Terdeteksi instance bot lama (PID {pid}). Menutup instance lama agar proses baru mengambil alih...")
+                    p = psutil.Process(pid)
+                    p.terminate()
+                    p.wait(timeout=3)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
 def cmd_run_all(args: argparse.Namespace) -> None:
     """Menjalankan Scheduler dan Bot Telegram bersamaan secara optimal."""
+    ensure_single_instance()
     import time
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.interval import IntervalTrigger
@@ -232,13 +264,13 @@ def cmd_run_all(args: argparse.Namespace) -> None:
     )
     scheduler.add_job(
         runner.check_and_report_mt5_deals,
-        trigger=IntervalTrigger(seconds=30),
+        trigger=IntervalTrigger(seconds=15),
         id="mt5_deal_watcher_job",
         name="Pemantauan Real-Time TP/SL MT5",
         replace_existing=True,
     )
     scheduler.start()
-    logger.info(f"BackgroundScheduler aktif (interval: {interval_mins}m, news: 1m, MT5 watcher: 30s).")
+    logger.info(f"BackgroundScheduler aktif (interval: {interval_mins}m, news: 1m, MT5 watcher: 15s LIVE).")
 
     # Jalankan initial run & sync kalender di thread terpisah agar tidak menahan startup listener Telegram
     def _initial_startup_tasks():
@@ -248,7 +280,8 @@ def cmd_run_all(args: argparse.Namespace) -> None:
             cal.sync_calendar()
         except Exception as e:
             logger.warning(f"Gagal sinkronisasi kalender ekonomi di startup: {e}")
-        runner.run_pipeline(force_run=False)
+        # Warmup scan saat startup: hanya ambil data & catat baseline candle, DILARANG eksekusi order MT5 langsung
+        runner.run_pipeline(force_run=False, is_startup_warmup=True)
 
     t_init = threading.Thread(
         target=_initial_startup_tasks,
@@ -258,12 +291,27 @@ def cmd_run_all(args: argparse.Namespace) -> None:
     t_init.start()
 
     # Jalankan Telegram Bot Polling di main thread
-    app = build_telegram_application()
-    if app:
+    has_telegram = bool(build_telegram_application())
+    if has_telegram:
+        import asyncio
         logger.info("Telegram Bot Polling listener berjalan di main thread...")
         while True:
             try:
-                app.run_polling(drop_pending_updates=True, stop_signals=None)
+                # Pastikan event loop selalu baru dan bersih agar tidak terjadi 'Event loop is closed'
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                except Exception:
+                    pass
+
+                app = build_telegram_application()
+                if not app:
+                    break
+                app.run_polling(
+                    drop_pending_updates=True,
+                    stop_signals=None,
+                    bootstrap_retries=-1,
+                )
                 break
             except (KeyboardInterrupt, SystemExit):
                 logger.info("Mematikan bot...")

@@ -64,13 +64,22 @@ class NewsPredictor:
             "description": "Data tenaga kerja AS. NFP rendah / pengangguran tinggi = USD anjlok & Gold terbang. NFP tinggi = USD menguat & Gold tertekan.",
         },
         "CPI": {
-            "name": "Consumer Price Index (Inflasi AS)",
+            "name": "Consumer Price Index (Inflasi Utama AS)",
             "volatility_pct": 2.0,
             "tp1_pct": 1.0,
             "tp2_pct": 2.2,
             "breakout_offset_pct": 0.40,
             "sl_offset_pct": 0.35,
             "description": "Indikator utama inflasi The Fed. CPI rendah = Peluang cut rate naik (Gold Bullish). CPI tinggi = Inflasi panas (Gold Bearish).",
+        },
+        "PCE": {
+            "name": "Core PCE Price Index (Indikator Inflasi Favorit The Fed)",
+            "volatility_pct": 1.8,
+            "tp1_pct": 0.9,
+            "tp2_pct": 2.0,
+            "breakout_offset_pct": 0.38,
+            "sl_offset_pct": 0.32,
+            "description": "Indikator inflasi nomor 1 paling diperhatikan Jerome Powell & FOMC (PCE Deflator). PCE mendingin = Peluang rate cut melonjak tajam (Gold Bullish Spike). PCE naik = USD rally & Gold tertekan.",
         },
         "FOMC": {
             "name": "FOMC Statement & Fed Rate Decision",
@@ -80,6 +89,24 @@ class NewsPredictor:
             "breakout_offset_pct": 0.45,
             "sl_offset_pct": 0.40,
             "description": "Kebijakan moneter bank sentral AS. Pernyataan dovish / cut rate = Gold reli kencang. Pernyataan hawkish = Gold terkoreksi tajam.",
+        },
+        "TRUMP": {
+            "name": "Trump Tariff & Geopolitical Policy Spike",
+            "volatility_pct": 2.5,
+            "tp1_pct": 1.2,
+            "tp2_pct": 2.8,
+            "breakout_offset_pct": 0.45,
+            "sl_offset_pct": 0.38,
+            "description": "Pengumuman tarif impor, ancaman perang dagang, atau manuver geopolitik Donald Trump. Ketidakpastian global & risiko devaluasi mata uang memicu lonjakan safe-haven Gold (Trump Spike Rally).",
+        },
+        "OIL": {
+            "name": "Crude Oil (WTI/Brent) & EIA Inventories Spike",
+            "volatility_pct": 1.6,
+            "tp1_pct": 0.8,
+            "tp2_pct": 1.8,
+            "breakout_offset_pct": 0.35,
+            "sl_offset_pct": 0.30,
+            "description": "Data pasokan minyak mentah mingguan EIA & kebijakan kuota OPEC+. Lonjakan harga minyak mentah mengerek ekspektasi inflasi global (cost-push inflation), memicu reli lindung nilai Emas (Gold Bullish).",
         },
     }
 
@@ -99,7 +126,7 @@ class NewsPredictor:
         pv = _parse_num(previous_str)
         t_lower = (title or "").lower()
 
-        # 1. CPI (Data Inflasi AS)
+        # 1. CPI (Data Inflasi Umum AS)
         if news_type == "CPI":
             if fc is not None and pv is not None:
                 if fc < pv:
@@ -126,7 +153,34 @@ class NewsPredictor:
                 "reason": "Tren inflasi jangka menengah AS condong melandai, memberi angin segar bagi Emas.",
             }
 
-        # 2. NFP & Unemployment Rate (Tenaga Kerja AS)
+        # 2. PCE / CPE (Core PCE Price Index - Indikator Inflasi Utama Pilihan The Fed)
+        elif news_type == "PCE":
+            if fc is not None and pv is not None:
+                if fc < pv:
+                    return {
+                        "score": 38,
+                        "sentiment": "STRONG_BULLISH",
+                        "reason": f"Core PCE ({forecast_str}) melambat dibanding periode lalu ({previous_str}). Indikator inflasi favorit The Fed mendingin -> Kepastian pemangkasan suku bunga Fed melonjak -> Dolar anjlok -> Strong Gold BUY / Spike Rally.",
+                    }
+                elif fc > pv:
+                    return {
+                        "score": -38,
+                        "sentiment": "STRONG_BEARISH",
+                        "reason": f"Core PCE ({forecast_str}) memanas melampaui periode lalu ({previous_str}). Inflasi inti The Fed bandel -> Suku bunga ditahan tinggi lebih lama (Higher for Longer) -> USD melonjak -> Gold Bearish.",
+                    }
+                else:
+                    return {
+                        "score": 5,
+                        "sentiment": "SLIGHTLY_BULLISH",
+                        "reason": f"Konsensus Core PCE ({forecast_str}) stabil sesuai rilis lalu ({previous_str}). Menjaga tren disinflasi jangka menengah tetap kondusif bagi Emas.",
+                    }
+            return {
+                "score": 15,
+                "sentiment": "BULLISH",
+                "reason": "Tren Core PCE tahunan dalam jalur penurunan menuju target 2% The Fed, mendukung penguatan berkelanjutan harga Emas.",
+            }
+
+        # 3. NFP & Unemployment Rate (Tenaga Kerja AS)
         elif news_type == "NFP":
             is_unemployment = "unemployment" in t_lower
             if fc is not None and pv is not None:
@@ -164,7 +218,7 @@ class NewsPredictor:
                 "reason": "Konsensus tenaga kerja NFP seimbang, pergerakan awal akan sangat reaktif terhadap rilis data aktual.",
             }
 
-        # 3. FOMC (Suku Bunga & Kebijakan The Fed)
+        # 4. FOMC (Suku Bunga & Kebijakan The Fed)
         elif news_type == "FOMC":
             if fc is not None and pv is not None:
                 if fc < pv:
@@ -183,6 +237,44 @@ class NewsPredictor:
                 "score": 15,
                 "sentiment": "BULLISH",
                 "reason": "The Fed berada dalam fase siklus pemangkasan/dovish, sentimen makro global condong menguntungkan Emas.",
+            }
+
+        # 5. TRUMP SPIKE (Tarif Dagang, Perang Dagang, Pernyataan Geopolitik)
+        elif news_type == "TRUMP":
+            is_deescalation = any(k in t_lower for k in ["deal", "peace", "ceasefire", "agreement", "waiver"])
+            if is_deescalation:
+                return {
+                    "score": -20,
+                    "sentiment": "BEARISH",
+                    "reason": "Sinyal de-eskalasi tarif atau kesepakatan damai dagang -> Selera risiko global pulih (Risk-on) -> Kebutuhan safe-haven emas mereda sementara.",
+                }
+            else:
+                return {
+                    "score": 40,
+                    "sentiment": "STRONG_BULLISH",
+                    "reason": "Retorika proteksionisme tarif & ketegangan geopolitik Trump -> Ketidakpastian rantai pasok dunia meningkat -> Lonjakan masif permintaan safe-haven Emas (Trump Spike Rally).",
+                }
+
+        # 6. OIL (Minyak Mentah, WTI/Brent, EIA Crude Inventories)
+        elif news_type == "OIL":
+            # Pada data EIA, nilai negatif (drawdown) atau forecast < previous = cadangan minyak berkurang -> Minyak naik -> Inflasi naik -> Gold naik
+            if fc is not None and pv is not None:
+                if fc < pv or fc < 0:
+                    return {
+                        "score": 30,
+                        "sentiment": "BULLISH",
+                        "reason": f"Stok minyak EIA menyusut (fc {forecast_str} vs prev {previous_str}). Pasokan minyak mentah ketat -> Harga energi naik mengerek ekspektasi inflasi global -> Emas diburu sebagai inflation hedge (Gold Bullish).",
+                    }
+                elif fc > pv and fc > 0:
+                    return {
+                        "score": -20,
+                        "sentiment": "BEARISH",
+                        "reason": f"Stok minyak EIA surplus melimpah ({forecast_str} vs prev {previous_str}). Harga minyak tertekan -> Tekanan inflasi energi mereda -> Sentimen emas cenderung netral-koreksi.",
+                    }
+            return {
+                "score": 15,
+                "sentiment": "BULLISH",
+                "reason": "Ketegangan suplai minyak global di Timur Tengah dan kuota ketat OPEC+ mempertahankan premi risiko inflasi pada Emas.",
             }
 
         return {"score": 0, "sentiment": "NEUTRAL", "reason": "Data fundamental netral."}

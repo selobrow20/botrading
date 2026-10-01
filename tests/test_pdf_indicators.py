@@ -100,7 +100,7 @@ def test_master_confluence_strategy():
 
 
 def test_pdf_confluence_entry_validator():
-    """Menguji validator konfluensi 7 buku PDF sebelum mengizinkan sinyal masuk (BUY)."""
+    """Menguji validator konfluensi 9 buku PDF sebelum mengizinkan sinyal masuk (BUY)."""
     # 1. Kasus Setup Ideal (Grade A+)
     row_ideal = pd.Series({
         "Close": 105.0,
@@ -141,7 +141,7 @@ def test_pdf_confluence_entry_validator():
     assert score_w < 55.0
     assert "Grade B" in grade_w
 
-    # 3. Format pesan notifikasi sinyal masuk (BUY) memuat telaah 7 buku
+    # 3. Format pesan notifikasi sinyal masuk (BUY) memuat telaah 9 buku
     from notify.telegram_bot import TelegramNotifier
     from strategy.signal_engine import SignalResult
     notifier = TelegramNotifier()
@@ -161,6 +161,6 @@ def test_pdf_confluence_entry_validator():
     )
     msg = notifier.format_signal_message(sig_buy)
     assert "SINYAL ENTRY (MASUK / BUY)" in msg
-    assert "TELAAH 9 BUKU PDF" in msg or "TELAAH 7 BUKU PDF" in msg
+    assert "TELAAH 9 BUKU PDF" in msg
     assert "Prediksi Arah" in msg
 

@@ -40,6 +40,63 @@ class TechnicalIndicators:
         return rsi
 
     @staticmethod
+    def atr(
+        high_s: pd.Series,
+        low_s: pd.Series,
+        close_s: pd.Series,
+        period: int = 14,
+    ) -> pd.Series:
+        """
+        Average True Range (ATR) dengan Wilder's smoothing.
+        TR = max(High - Low, abs(High - Close_prev), abs(Low - Close_prev))
+        """
+        prev_close = close_s.shift(1)
+        tr1 = high_s - low_s
+        tr2 = (high_s - prev_close).abs()
+        tr3 = (low_s - prev_close).abs()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        atr_series = tr.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+        return atr_series.fillna(tr1)
+
+    @staticmethod
+    def adx(
+        high_s: pd.Series,
+        low_s: pd.Series,
+        close_s: pd.Series,
+        period: int = 14,
+    ) -> Tuple[pd.Series, pd.Series, pd.Series]:
+        """
+        Average Directional Index (ADX) & Directional Movement (+DI, -DI).
+        Returns: (adx, plus_di, minus_di)
+        """
+        prev_high = high_s.shift(1)
+        prev_low = low_s.shift(1)
+        prev_close = close_s.shift(1)
+
+        plus_dm = high_s - prev_high
+        minus_dm = prev_low - low_s
+
+        plus_dm_val = np.where((plus_dm > minus_dm) & (plus_dm > 0), plus_dm, 0.0)
+        minus_dm_val = np.where((minus_dm > plus_dm) & (minus_dm > 0), minus_dm, 0.0)
+
+        plus_dm_s = pd.Series(plus_dm_val, index=high_s.index)
+        minus_dm_s = pd.Series(minus_dm_val, index=low_s.index)
+
+        tr1 = high_s - low_s
+        tr2 = (high_s - prev_close).abs()
+        tr3 = (low_s - prev_close).abs()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+        atr_val = tr.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean().replace(0, np.nan)
+        plus_di = (plus_dm_s.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean() / atr_val) * 100.0
+        minus_di = (minus_dm_s.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean() / atr_val) * 100.0
+
+        dx = ((plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)) * 100.0
+        adx_val = dx.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean().fillna(20.0)
+
+        return adx_val, plus_di.fillna(20.0), minus_di.fillna(20.0)
+
+    @staticmethod
     def macd(
         series: pd.Series,
         fast_period: int = 12,
@@ -429,6 +486,16 @@ class TechnicalIndicators:
         res["bb_upper"] = upper
         res["bb_middle"] = middle
         res["bb_lower"] = lower
+
+        # 4b. ATR & ADX (Volatilitas & Kekuatan Tren Adaptif)
+        atr_series = cls.atr(res["High"], res["Low"], res["Close"], 14)
+        adx_series, plus_di, minus_di = cls.adx(res["High"], res["Low"], res["Close"], 14)
+        res["ATR_14"] = atr_series
+        res["atr"] = atr_series
+        res["ADX_14"] = adx_series
+        res["adx"] = adx_series
+        res["plus_di"] = plus_di
+        res["minus_di"] = minus_di
 
         # 5. Volume Analysis
         vol_cfg = cfg.get("volume", {})

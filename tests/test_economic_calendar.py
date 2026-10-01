@@ -18,8 +18,15 @@ def test_categorize_news_type():
     assert EconomicCalendar.categorize_news_type("Federal Funds Rate Decision", "USD") == "FOMC"
     assert EconomicCalendar.categorize_news_type("Core CPI m/m", "USD") == "CPI"
     assert EconomicCalendar.categorize_news_type("Consumer Price Index y/y", "USD") == "CPI"
+    assert EconomicCalendar.categorize_news_type("Core PCE Price Index m/m", "USD") == "PCE"
+    assert EconomicCalendar.categorize_news_type("PCE Deflator y/y", "USD") == "PCE"
+    assert EconomicCalendar.categorize_news_type("CPE Price Index", "USD") == "PCE"
     assert EconomicCalendar.categorize_news_type("Non-Farm Employment Change", "USD") == "NFP"
     assert EconomicCalendar.categorize_news_type("Unemployment Rate", "USD") == "NFP"
+    assert EconomicCalendar.categorize_news_type("Trump Tariff Announcement on China", "USD") == "TRUMP"
+    assert EconomicCalendar.categorize_news_type("US Trade Policy & Tariff Shock", "USD") == "TRUMP"
+    assert EconomicCalendar.categorize_news_type("EIA Crude Oil Inventories", "USD") == "OIL"
+    assert EconomicCalendar.categorize_news_type("OPEC+ Petroleum Meeting", "USD") == "OIL"
     assert EconomicCalendar.categorize_news_type("Trade Balance", "USD") == "OTHER"
     assert EconomicCalendar.categorize_news_type("CPI", "EUR") == "OTHER"
 
@@ -32,10 +39,13 @@ def test_economic_calendar_storage_and_schedule():
 
         # 1. Test official schedule generation
         events = calendar.generate_official_schedule_events(2026)
-        assert len(events) >= 30
+        assert len(events) >= 50
         assert any(e["news_type"] == "FOMC" for e in events)
         assert any(e["news_type"] == "CPI" for e in events)
         assert any(e["news_type"] == "NFP" for e in events)
+        assert any(e["news_type"] == "PCE" for e in events)
+        assert any(e["news_type"] == "OIL" for e in events)
+        assert any(e["news_type"] == "TRUMP" for e in events)
 
         # 2. Save events to storage
         saved = storage.save_economic_events(events)
@@ -129,6 +139,38 @@ def test_fundamental_bias_cpi_and_nfp():
     assert bias_nfp_bear["score"] < 0
 
 
+def test_fundamental_bias_pce_trump_oil():
+    # 1. PCE forecast < previous -> USD weak -> Strong Bullish Gold
+    bias_pce_bull = NewsPredictor.calculate_fundamental_bias("PCE", "Core PCE Price Index", "0.2%", "0.3%")
+    assert bias_pce_bull["sentiment"] == "STRONG_BULLISH"
+    assert bias_pce_bull["score"] > 30
+
+    # PCE forecast > previous -> USD strong -> Strong Bearish Gold
+    bias_pce_bear = NewsPredictor.calculate_fundamental_bias("PCE", "Core PCE Price Index", "0.4%", "0.2%")
+    assert bias_pce_bear["sentiment"] == "STRONG_BEARISH"
+    assert bias_pce_bear["score"] < -30
+
+    # 2. Trump Tariff Announcement -> Safe Haven Demand -> Strong Bullish Gold
+    bias_trump_bull = NewsPredictor.calculate_fundamental_bias("TRUMP", "Trump Tariff Announcement on China & BRICS")
+    assert bias_trump_bull["sentiment"] == "STRONG_BULLISH"
+    assert bias_trump_bull["score"] >= 30
+
+    # Trump Peace/Deal -> Risk on -> Bearish Gold
+    bias_trump_bear = NewsPredictor.calculate_fundamental_bias("TRUMP", "Trump Signs Trade Deal & Peace Agreement")
+    assert bias_trump_bear["sentiment"] == "BEARISH"
+    assert bias_trump_bear["score"] < 0
+
+    # 3. Oil Inventory Drawdown -> Supply tight -> Inflation up -> Bullish Gold
+    bias_oil_bull = NewsPredictor.calculate_fundamental_bias("OIL", "EIA Crude Oil Inventories", "-2.5M", "+1.0M")
+    assert bias_oil_bull["sentiment"] == "BULLISH"
+    assert bias_oil_bull["score"] > 0
+
+    # Oil Inventory Surplus -> Supply excess -> Inflation eases -> Bearish Gold
+    bias_oil_bear = NewsPredictor.calculate_fundamental_bias("OIL", "EIA Crude Oil Inventories", "+3.5M", "+0.5M")
+    assert bias_oil_bear["sentiment"] == "BEARISH"
+    assert bias_oil_bear["score"] < 0
+
+
 def test_pdf_technical_confluence():
     # Create synthetic gold dataframe
     n = 35
@@ -175,4 +217,8 @@ def test_chat_agent_news_intent():
     assert ChatAgent.classify_intent("jadwal cpi kapan bor")["intent"] == "NEWS"
     assert ChatAgent.classify_intent("prediksi nfp dong bor")["intent"] == "NEWS"
     assert ChatAgent.classify_intent("fomc jam berapa bor")["intent"] == "NEWS"
+    assert ChatAgent.classify_intent("kapan data pce rilis bor")["intent"] == "NEWS"
+    assert ChatAgent.classify_intent("cpe pengaruh ke gold gimana")["intent"] == "NEWS"
+    assert ChatAgent.classify_intent("efek trump spike ke emas")["intent"] == "NEWS"
+    assert ChatAgent.classify_intent("harga oil naik ngaruh ke xauusd ga")["intent"] == "NEWS"
     assert ChatAgent.classify_intent("berita ekonomi emas apa aja")["intent"] == "NEWS"

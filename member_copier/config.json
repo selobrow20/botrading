@@ -1,0 +1,17 @@
+{
+  "bot_username": "selo_saham_bot",
+  "gold_symbol": "XAUUSD",
+  "symbol_suffix": "",
+  "default_lot": 0.05,
+  "max_positions_cent": 3,
+  "max_positions_standard": 1,
+  "min_grid_spacing": 1.0,
+  "max_price_drift": 8.0,
+  "max_slippage": 20,
+  "magic_number": 888888,
+  "auto_tp_sl": true,
+  "enable_reversal_auto_close": true,
+  "enable_break_even": true,
+  "break_even_long_pips": 100.0,
+  "break_even_buffer_pips": 3.0
+}

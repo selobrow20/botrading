@@ -126,11 +126,12 @@ class ChatAgent:
                 "ticker": None,
             }
 
-        # 4. Deteksi Pertanyaan High-Impact News (FOMC, CPI, NFP, Berita Ekonomi)
+        # 4. Deteksi Pertanyaan High-Impact News (FOMC, CPI, PCE, NFP, Trump, Oil, Berita Ekonomi)
         news_keywords = [
-            "news", "fomc", "cpi", "nfp", "inflasi", "suku bunga", "the fed",
+            "news", "fomc", "cpi", "pce", "cpe", "nfp", "inflasi", "suku bunga", "the fed",
             "non farm", "nonfarm", "unemployment", "kalender", "berita ekonomi",
             "jadwal news", "prediksi news", "kapan news", "berita",
+            "trump", "trump spike", "tarif", "trade war", "oil", "minyak", "wti", "brent", "opec",
         ]
         if any(k in text_lower for k in news_keywords):
             return {

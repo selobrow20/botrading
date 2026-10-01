@@ -623,8 +623,10 @@ class StockStorage:
         """
         return len(self.resolve_open_signals(ticker, df))
 
-    def find_signal_by_mt5_ticket(self, ticket: int) -> Optional[Dict[str, Any]]:
-        """Mencari sinyal awal berdasarkan nomor tiket order MT5."""
+    def find_signal_by_mt5_ticket(
+        self, ticket: int, ticker: Optional[str] = None, signal_type: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Mencari sinyal awal berdasarkan nomor tiket order MT5, atau menghubungkan ke sinyal OPEN yang sesuai."""
         query = """
             SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time,
                    take_profit_price, stop_loss_price, outcome, is_notified, mt5_ticket
@@ -638,6 +640,32 @@ class StockStorage:
             row = cursor.fetchone()
             if row:
                 return dict(row)
+
+            # Fallback cerdas: Jika belum terkait mt5_ticket, kaitkan sinyal OPEN terbaru
+            if ticker:
+                if signal_type:
+                    cursor.execute("""
+                        SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time,
+                               take_profit_price, stop_loss_price, outcome, is_notified, mt5_ticket
+                        FROM signals
+                        WHERE ticker = ? AND signal_type = ? AND outcome = 'OPEN'
+                        ORDER BY id DESC LIMIT 1
+                    """, (ticker.upper(), signal_type.upper()))
+                else:
+                    cursor.execute("""
+                        SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time,
+                               take_profit_price, stop_loss_price, outcome, is_notified, mt5_ticket
+                        FROM signals
+                        WHERE ticker = ? AND outcome = 'OPEN'
+                        ORDER BY id DESC LIMIT 1
+                    """, (ticker.upper(),))
+                fb_row = cursor.fetchone()
+                if fb_row:
+                    res = dict(fb_row)
+                    cursor.execute("UPDATE signals SET mt5_ticket = ? WHERE id = ?", (int(ticket), res["id"]))
+                    conn.commit()
+                    res["mt5_ticket"] = int(ticket)
+                    return res
         return None
 
     def is_mt5_deal_reported(self, deal_ticket: int) -> bool:
@@ -691,6 +719,58 @@ class StockStorage:
                     ORDER BY exit_time DESC, id DESC
                     LIMIT ?
                 """, (limit,))
+            return [dict(r) for r in cursor.fetchall()]
+
+    def get_consecutive_losses(self, ticker: str = "XAUUSD") -> Tuple[int, Optional[str]]:
+        """
+        Menghitung berapa kali Stop Loss (LOSE) beruntun yang terjadi terakhir kali,
+        serta waktu exit transaksi terakhir. Digunakan untuk proteksi cooldown semalaman.
+        """
+        is_gold = any(k in ticker.upper() for k in ["XAUUSD", "GC=F", "GOLD", "EMAS"])
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if is_gold:
+                cursor.execute("""
+                    SELECT outcome, exit_time
+                    FROM signals
+                    WHERE (ticker LIKE '%XAUUSD%' OR ticker LIKE '%GOLD%' OR ticker LIKE '%GC=F%')
+                      AND outcome IN ('WIN', 'LOSE')
+                    ORDER BY id DESC
+                    LIMIT 10
+                """)
+            else:
+                cursor.execute("""
+                    SELECT outcome, exit_time
+                    FROM signals
+                    WHERE ticker = ? AND outcome IN ('WIN', 'LOSE')
+                    ORDER BY id DESC
+                    LIMIT 10
+                """, (ticker.upper(),))
+            rows = cursor.fetchall()
+
+        consec = 0
+        last_exit = None
+        for r in rows:
+            if r["outcome"] == "LOSE":
+                consec += 1
+                if last_exit is None:
+                    last_exit = r["exit_time"]
+            else:
+                break
+        return consec, last_exit
+
+    def get_today_realized_deals(self) -> List[Dict[str, Any]]:
+        """Mengambil seluruh transaksi MT5 yang selesai hari ini (sejak 00:00 WIB)."""
+        from zoneinfo import ZoneInfo
+        today_prefix = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%Y-%m-%d")
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT deal_ticket, position_id, outcome, pnl_pct, reported_at
+                FROM mt5_reported_deals
+                WHERE reported_at LIKE ?
+                ORDER BY deal_ticket DESC
+            """, (f"{today_prefix}%",))
             return [dict(r) for r in cursor.fetchall()]
 
     def get_win_rate_stats(self, ticker: Optional[str] = None) -> Dict[str, Any]:
@@ -814,6 +894,7 @@ class StockStorage:
         """Mengambil N riwayat sinyal terakhir untuk command /lasthistory."""
         query = """
             SELECT * FROM signals
+            WHERE is_notified = 1
             ORDER BY id DESC
             LIMIT ?
         """
@@ -995,15 +1076,32 @@ class StockStorage:
             return True, new_expires_at, duration_label
 
     def reject_user(self, chat_id: str) -> bool:
-        """Menolak atau mencabut akses pengguna."""
+        """Menolak atau mencabut akses pengguna serta membatalkan seluruh masa aktifnya."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE authorized_users 
-                SET status = 'rejected' 
+                SET status = 'rejected', expires_at = '2000-01-01 00:00:00' 
                 WHERE chat_id = ?
             """, (str(chat_id).strip(),))
+            if cursor.rowcount == 0:
+                now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute("""
+                    INSERT INTO authorized_users (chat_id, username, full_name, status, requested_at, approved_at, expires_at)
+                    VALUES (?, '-', 'Blocked User', 'rejected', ?, ?, '2000-01-01 00:00:00')
+                """, (str(chat_id).strip(), now_s, now_s))
+            conn.commit()
+            return True
+
+    def delete_user(self, chat_id: str) -> bool:
+        """Menghapus total data pengguna dari database secara permanen."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM authorized_users WHERE chat_id = ?", (str(chat_id).strip(),))
+            conn.commit()
             return cursor.rowcount > 0
+
+
 
     def get_approved_chat_ids(self, admin_id: Optional[str] = None) -> List[str]:
         """Daftar chat ID yang aktif diizinkan menerima sinyal (belum kedaluwarsa)."""
@@ -1069,7 +1167,8 @@ class StockStorage:
                 forecast = excluded.forecast,
                 previous = excluded.previous,
                 impact = excluded.impact,
-                date_wib = excluded.date_wib
+                date_wib = excluded.date_wib,
+                news_type = excluded.news_type
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -1107,7 +1206,7 @@ class StockStorage:
         query = """
             SELECT * FROM economic_calendar
             WHERE date_utc >= ? AND date_utc <= ? AND alert_sent = 0
-            AND news_type IN ('FOMC', 'CPI', 'NFP')
+            AND news_type IN ('FOMC', 'CPI', 'NFP', 'PCE', 'TRUMP', 'OIL')
             ORDER BY date_utc ASC
         """
         with self._get_connection() as conn:
@@ -1118,7 +1217,8 @@ class StockStorage:
     def get_this_week_news(self, limit: int = 15, high_only: bool = True) -> List[Dict[str, Any]]:
         """Mendapatkan daftar berita ekonomi pekan ini."""
         now_utc = datetime.now(timezone.utc)
-        start_str = (now_utc - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+        # Hanya ambil event yang AKAN DATANG atau sedang berlangsung (30 menit terakhir)
+        start_str = (now_utc - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
         end_str = (now_utc + timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
 
         query = """
@@ -1127,8 +1227,14 @@ class StockStorage:
         """
         params = [start_str, end_str]
         if high_only:
-            query += " AND (impact = 'High' OR news_type IN ('FOMC', 'CPI', 'NFP'))"
-        query += " ORDER BY date_utc ASC LIMIT ?"
+            # Utamakan event High Impact (Red Folder Forex Factory) & rilis resmi utama
+            query += " AND (impact = 'High' OR news_type IN ('NFP', 'CPI', 'FOMC', 'PCE', 'OIL', 'TRUMP'))"
+        query += """
+            ORDER BY 
+                CASE WHEN impact = 'High' THEN 0 ELSE 1 END ASC,
+                date_utc ASC 
+            LIMIT ?
+        """
         params.append(limit)
 
         with self._get_connection() as conn:

@@ -1,11 +1,11 @@
 import os
 import asyncio
 import html
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
-from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 
@@ -300,6 +300,134 @@ class TelegramNotifier:
                 logger.error(f"Fallback teks juga gagal: {e2}")
                 return False
 
+    async def _async_send_document(
+        self,
+        doc_path: str,
+        caption: str = "",
+        target_chat_id: Optional[str] = None,
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
+    ) -> bool:
+        """Mengirim file dokumen (misal .zip copier) ke chat target via Telegram Bot API."""
+        if not self.is_configured:
+            logger.info(f"[SIMULASI TELEGRAM DOC] {doc_path}\n{caption}")
+            return True
+
+        bot = Bot(token=self.token)
+        cid = str(target_chat_id or self.chat_id).strip()
+        try:
+            safe_caption = caption
+            overflow_text = None
+            if len(caption) > 1020:
+                cut_idx = caption.rfind("\n", 0, 950)
+                if cut_idx == -1:
+                    cut_idx = 950
+                safe_caption = caption[:cut_idx] + "...\n<i>(Rincian lanjut di bawah)</i>"
+                overflow_text = caption[cut_idx:].strip()
+
+            max_retries = 2
+            for attempt in range(max_retries + 1):
+                try:
+                    with open(doc_path, "rb") as doc_file:
+                        await bot.send_document(
+                            chat_id=cid,
+                            document=doc_file,
+                            caption=safe_caption,
+                            parse_mode=ParseMode.HTML,
+                            reply_markup=reply_markup,
+                            read_timeout=30.0,
+                            write_timeout=30.0,
+                            connect_timeout=20.0,
+                        )
+                    if overflow_text:
+                        await bot.send_message(
+                            chat_id=cid,
+                            text=overflow_text,
+                            parse_mode=ParseMode.HTML,
+                            read_timeout=20.0,
+                        )
+                    logger.info(f"Dokumen {doc_path} berhasil terkirim ke Telegram ({cid}).")
+                    return True
+                except Exception as ex_attempt:
+                    if attempt < max_retries:
+                        logger.warning(f"Percobaan {attempt+1} kirim dokumen ke {cid} gagal ({ex_attempt}). Mencoba lagi...")
+                        await asyncio.sleep(2)
+                    else:
+                        raise ex_attempt
+        except Exception as e:
+            logger.error(f"Gagal mengirim dokumen ke Telegram ({cid}): {e}")
+            return False
+
+    def broadcast_copier_update(
+        self,
+        zip_path: str = "member_copier.zip",
+        custom_caption: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Mengirim file zip auto-copier terbaru ke seluruh member aktif (approved & belum expired).
+        """
+        p = Path(zip_path)
+        if not p.is_absolute():
+            from config.settings import BASE_DIR
+            p = BASE_DIR / zip_path
+
+        if not p.exists():
+            logger.error(f"File zip copier tidak ditemukan di {p}")
+            return {"success": False, "sent_count": 0, "recipients": [], "error": f"File {p} tidak ditemukan."}
+
+        caption = custom_caption or (
+            "📦 <b>UPDATE PENTING: AUTO-COPIER MT5 MEMBER (VIP 9 BUKU PDF)</b> 🚀\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Halo Trader VIP! Master Provider baru saja merilis pembaruan file Auto-Copier MT5 Anda.\n\n"
+            "✨ <b>FITUR & LOGIKA BARU DI UPDATE INI:</b>\n"
+            "1. ⚖️ <b>Kaidah 9 PDF Risk:Reward:</b> Target TP dipastikan selalu seimbang atau lebih besar dari SL (R:R >= 1:1 s/d 1:1.3).\n"
+            "2. 🔒 <b>Auto-Close Reversal Guard:</b> MT5 Anda otomatis ikut mengamankan keuntungan saat Master Bot menutup posisi lebih awal.\n"
+            "3. 🔄 <b>Proteksi Anti-Tabrakan:</b> Posisi berlawanan otomatis ditutup sebelum membuka arah baru (bebas risiko hedging/bentrok).\n"
+            "4. 🛡️ <b>Deteksi Akun Cent & USD:</b> Adaptif untuk akun Cent (USC) dan akun Standard.\n"
+            "5. ⚡ <b>Eksekusi Real-Time & Anti-Delay:</b> Sinyal instan tanpa lag dan proteksi slippage harga.\n\n"
+            "🛠️ <b>CARA UPDATE (SANGAT MUDAH):</b>\n"
+            "1. Ekstrak isi file <code>member_copier.zip</code> ini ke folder copier Anda.\n"
+            "2. Timpa file <code>client_copier.py</code> yang lama.\n"
+            "3. Jalankan kembali <code>START_COPIER.bat</code>!\n"
+            "<i>(Lisensi akun Telegram Anda tetap aktif dan tersambung otomatis)</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━"
+        )
+
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        try:
+            with self.storage._get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT chat_id FROM authorized_users WHERE status = 'approved'")
+                db_ids = [str(r["chat_id"]).strip() for r in c.fetchall()]
+        except Exception:
+            db_ids = []
+
+        target_ids = list(dict.fromkeys(approved_ids + db_ids))
+
+        sent_recipients = []
+        failed_recipients = []
+
+        for cid in target_ids:
+            try:
+                res = asyncio.run(self._async_send_document(str(p), caption=caption, target_chat_id=cid))
+                if res:
+                    sent_recipients.append(cid)
+                else:
+                    failed_recipients.append(cid)
+            except Exception as e:
+                logger.error(f"Error saat mengirim file copier ke {cid}: {e}")
+                failed_recipients.append(cid)
+
+        return {
+            "success": len(sent_recipients) > 0,
+            "sent_count": len(sent_recipients),
+            "failed_count": len(failed_recipients),
+            "recipients": sent_recipients,
+            "failed": failed_recipients,
+        }
+
     def send_signal(self, sig: SignalResult, photo_path: Optional[str] = None) -> bool:
         """
         Mengirim kartu sinyal ke seluruh pengguna yang telah disetujui (Admin + Whitelist).
@@ -349,6 +477,11 @@ class TelegramNotifier:
         sl_p = float(res_sig.get("stop_loss_price") or 0.0)
         pnl_pct = float(res_sig.get("pnl_pct") or 0.0)
 
+        # Koreksi otomatis: Jika harga keluar menguntungkan atau PnL positif, status MUTLAK WIN (bukan LOSE!)
+        if (sig_type == "BUY" and exit_p > entry_p) or (sig_type == "SELL" and exit_p < entry_p) or pnl_pct > 0:
+            is_win = True
+            outcome = "WIN"
+
         entry_str = format_currency(entry_p, ticker)
         exit_str = format_currency(exit_p, ticker)
         tp_str = format_currency(tp_p, ticker) if tp_p else "-"
@@ -357,6 +490,8 @@ class TelegramNotifier:
         candle_time = res_sig.get("candle_time", "-")
         exit_time = res_sig.get("exit_time", "-")
         note = res_sig.get("outcome_note", "")
+        note_upper = (note or "").upper()
+        is_trailing_win = is_win and ("TRAILING" in note_upper or "BEP" in note_upper)
 
         stats = current_stats or self.storage.get_win_rate_stats()
         # Selaras dengan instruksi pengguna: Win rate hanya khusus XAU/USD (Gold).
@@ -373,9 +508,18 @@ class TelegramNotifier:
             lose_c = stats.get("lose_count", 0)
             total_pnl = stats.get("total_pnl", 0.0)
 
+        is_early_close = is_win and ("DIAMANKAN LEBIH AWAL" in note_upper or "SEBELUM TARGET" in note_upper or "REVERSAL GUARD" in note_upper or "EARLY TP" in note_upper)
+
         if is_win:
-            header = "🎯 <b>[LAPORAN HASIL] TAKE PROFIT TERCAPAI!</b> 🚀"
-            outcome_badge = "🟢 <b>HASIL: WIN / PROFIT MAKSIMAL</b>"
+            if is_trailing_win:
+                header = "🎯 <b>[LAPORAN HASIL] PROFIT TERKUNCI (TRAILING STOP / BEP)!</b> 🛡️"
+                outcome_badge = "🟢 <b>HASIL: WIN / PROFIT TERKUNCI</b>"
+            elif is_early_close:
+                header = "🛡️ <b>[LAPORAN HASIL] PROFIT DIAMANKAN LEBIH AWAL!</b> 💰"
+                outcome_badge = "🟢 <b>HASIL: WIN / DIAMANKAN LEBIH AWAL</b>"
+            else:
+                header = "🎯 <b>[LAPORAN HASIL] TAKE PROFIT TERCAPAI!</b> 🚀"
+                outcome_badge = "🟢 <b>HASIL: WIN / PROFIT MAKSIMAL</b>"
             pnl_badge = f"💰 <b>Keuntungan (PnL):</b> <code>+{abs(pnl_pct):.2f}%</code>"
         else:
             header = "🛑 <b>[LAPORAN HASIL] STOP LOSS TERSENTUH!</b> ⚠️"
@@ -467,7 +611,7 @@ class TelegramNotifier:
             f"🎯 <b>Take Profit (TP):</b> <code>${tp:,.2f}</code>",
             f"🛑 <b>Stop Loss (SL):</b> <code>${sl:,.2f}</code>",
             "━━━━━━━━━━━━━━━━━━━━━━",
-            f"⭐ <b>Konfluensi 7 PDF:</b> {score:.0f}% ({grade})",
+            f"⭐ <b>Konfluensi 9 PDF:</b> {score:.0f}% ({grade})",
             "🛡️ <i>Order diproteksi SL & TP otomatis. Terhubung langsung ke MT5 akun Anda!</i>",
         ]
         return "\n".join(lines)
@@ -489,6 +633,265 @@ class TelegramNotifier:
                     success = False
             except Exception as e:
                 logger.error(f"Error kirim laporan eksekusi MT5 ke {cid}: {e}")
+                success = False
+        return success
+
+    def format_gold_reversal_alert(self, info: Dict[str, Any]) -> str:
+        """
+        Menyusun kartu alert saat terdeteksi pembalikan tren XAU/USD
+        dan sistem melakukan Ambil Untung Otomatis (Early Take Profit) di MT5.
+        """
+        ticket = info.get("ticket", "-")
+        action = info.get("action", "SELL")
+        symbol = info.get("symbol", "XAUUSD")
+        volume = float(info.get("volume", 0.05))
+        entry_p = float(info.get("entry_price", 0.0))
+        exit_p = float(info.get("exit_price", 0.0))
+        profit_usd = float(info.get("profit_usd", 0.0))
+        pnl_pct = float(info.get("pnl_pct", 0.0))
+        reversal_type = info.get("reversal_type", "Pembalikan Tren Terdeteksi")
+        reasons = info.get("reasons", [])
+        cooldown_mins = int(info.get("cooldown_mins", 45))
+        is_profit = profit_usd >= 0
+
+        title_icon = "🎯 [AMBIL UNTUNG OTOMATIS]" if is_profit else "🛡️ [PENGAMANAN AWAL]"
+        pnl_icon = "🟢 PROFIT DIKUNCI" if is_profit else "🔴 CUT LOSS DINI"
+        pnl_sign = "+" if profit_usd >= 0 else ""
+        action_icon = "🔴 SELL" if action == "SELL" else "🟢 BUY"
+
+        lines = [
+            f"⚡ <b>{title_icon} XAU/USD REVERSAL GUARD!</b> ⚡",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"🎫 <b>Ticket ID:</b> <code>#{ticket}</code>",
+            f"📊 <b>Instrumen:</b> <code>{symbol} (Gold Spot)</code>",
+            f"📦 <b>Posisi Ditutup:</b> <b>{action_icon} {volume:.2f} Lot</b>",
+            f"💵 <b>Harga Masuk:</b> <code>${entry_p:,.2f}</code> ➔ <b>Keluar:</b> <code>${exit_p:,.2f}</code>",
+            f"💰 <b>Hasil Realisasi:</b> <code>{pnl_sign}${profit_usd:,.2f} USD ({pnl_sign}{pnl_pct:+.2f}%)</code> [{pnl_icon}]",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "⚠️ <b>100% PEMBALIKAN TREN TERKONFIRMASI:</b>",
+            f"<i>{reversal_type}</i>",
+
+        ]
+        for r in reasons[:4]:
+            lines.append(f"• {r}")
+
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        if cooldown_mins > 0:
+            lines.extend([
+                f"⏸️ <b>Proteksi Trading:</b> Bot masuk mode <b>JEDA / OBSERVASI ({cooldown_mins} Menit)</b> agar keuntungan tidak tergerus pembalikan pasar.",
+                "💡 <i>Ketik /mt5 untuk melihat ringkasan atau /mt5 resume untuk melanjutkan trading.</i>",
+            ])
+        else:
+            lines.extend([
+                "⚡ <b>Status Auto-Trader:</b> <b>STANDBY REAL-TIME (Tanpa Jeda)</b>",
+                "🎯 <i>Momen berikutnya siap dieksekusi: Begitu muncul sinyal Grade A+ baru dari 9 Buku PDF, bot langsung GAS masuk lagi!</i>",
+            ])
+        return "\n".join(lines)
+
+
+    def send_gold_reversal_alert(self, info: Dict[str, Any]) -> bool:
+        """
+        Mengirimkan notifikasi Ambil Untung Otomatis karena pembalikan tren ke Telegram.
+        """
+        msg = self.format_gold_reversal_alert(info)
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        tv_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Buka Live Chart TradingView", url=get_tradingview_url("XAUUSD"))
+        ]])
+
+        success = True
+        for cid in approved_ids:
+            try:
+                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
+                if not res:
+                    success = False
+            except Exception as e:
+                logger.error(f"Error kirim alert reversal XAUUSD ke {cid}: {e}")
+                success = False
+        return success
+
+    def format_early_reversal_warning(self, info: Dict[str, Any]) -> str:
+        ticket = info.get("ticket", "-")
+        action = info.get("action", "BUY")
+        symbol = info.get("symbol", "XAUUSD")
+        volume = float(info.get("volume", 0.05))
+        entry_p = float(info.get("entry_price", 0.0))
+        curr_p = float(info.get("current_price", 0.0))
+        score = float(info.get("score", 45.0))
+        reasons = info.get("reasons", [])
+        action_icon = "🟢 BUY" if action == "BUY" else "🔴 SELL"
+        target_dir = "SELL / SHORT 📉" if action == "BUY" else "BUY / LONG 🚀"
+
+        lines = [
+            "⚠️ <b>PERINGATAN DINI PEMBALIKAN ARAH TREN (XAU/USD)!</b> ⚠️",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"🎫 <b>Posisi Aktif:</b> <code>#{ticket}</code> ({action_icon} {volume:.2f} Lot)",
+            f"💵 <b>Harga Masuk:</b> <code>${entry_p:,.2f}</code> ➔ <b>Live:</b> <code>${curr_p:,.2f}</code>",
+            f"🔄 <b>Potensi Berbalik Arah Ke:</b> <b>{target_dir}</b>",
+            f"📊 <b>Skor Indikasi Awal:</b> <b>{score:.0f}%</b>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "🔍 <b>Sinyal Awal Terdeteksi (9 Buku PDF):</b>",
+        ]
+        for r in reasons[:4]:
+            lines.append(f"• {r}")
+
+        lines.extend([
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "💡 <b>Status Tindakan Sistem:</b>",
+            "• Posisi saat ini <b>MASIH DIBIARKAN BERJALAN</b>.",
+            "• Bot dalam status <b>SIAGA PENGAWALAN</b> memantau candle berikutnya.",
+            "• Jika pembalikan arah <b>100% TERKONFIRMASI</b>, bot baru akan otomatis mengamankan posisi / switch arah.",
+        ])
+        return "\n".join(lines)
+
+    def send_early_reversal_warning(self, info: Dict[str, Any]) -> bool:
+        """Mengirimkan notifikasi peringatan dini pembalikan tren ke Telegram."""
+        msg = self.format_early_reversal_warning(info)
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        tv_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Buka Live Chart TradingView", url=get_tradingview_url("XAUUSD"))
+        ]])
+
+        success = True
+        for cid in approved_ids:
+            try:
+                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
+                if not res:
+                    success = False
+            except Exception as e:
+                logger.error(f"Error kirim early reversal warning ke {cid}: {e}")
+                success = False
+        return success
+
+    def format_trailing_stop_alert(self, info: Dict[str, Any]) -> str:
+        ticket = info.get("ticket", "-")
+        action = info.get("action", "BUY")
+        symbol = info.get("symbol", "XAUUSD")
+        volume = float(info.get("volume", 0.05))
+        price_open = float(info.get("price_open", 0.0))
+        price_curr = float(info.get("price_curr", 0.0))
+        new_sl = float(info.get("new_sl", 0.0))
+        profit_dist = float(info.get("profit_dist", 0.0))
+        alert_type = info.get("type", "BEP_LOCK")
+
+        is_bep = alert_type == "BEP_LOCK"
+        title_icon = "🛡️ [BREAK-EVEN PROTECTION AKTIF]" if is_bep else "📈 [TRAILING STOP NAIK - PROFIT TERKUNCI]"
+        action_icon = "🟢 BUY" if action == "BUY" else "🔴 SELL"
+
+        if is_bep:
+            badge = "FREE TRADE (TRANSAKSI BEBAS RISIKO)"
+            desc = (
+                f"Harga telah bergerak menguntungkan <b>+{profit_dist:,.2f} USD</b> (+{int(profit_dist*10)} pips) dari harga masuk.\n"
+                f"Stop Loss berhasil digeser ke <b>${new_sl:,.2f}</b> (di atas entry).\n"
+                f"✅ <b>Modal Anda 100% terlindungi. Transaksi tidak akan pernah rugi!</b>"
+            )
+        else:
+            badge = "PROFIT DIKUNCI SECARA DINAMIS"
+            desc = (
+                f"Harga terus melesat menguntungkan <b>+{profit_dist:,.2f} USD</b> (+{int(profit_dist*10)} pips)!\n"
+                f"Stop Loss dinaikkan mengikuti tren ke <b>${new_sl:,.2f}</b>.\n"
+                f"💰 <b>Akumulasi profit telah aman terkunci mengawal lari harga menuju TP!</b>"
+            )
+
+        lines = [
+            f"⚡ <b>{title_icon}</b> ⚡",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"🎫 <b>Ticket ID:</b> <code>#{ticket}</code>",
+            f"📊 <b>Instrumen:</b> <code>{symbol} (Gold Spot)</code>",
+            f"📦 <b>Posisi:</b> <b>{action_icon} {volume:.2f} Lot</b>",
+            f"💵 <b>Harga Entry:</b> <code>${price_open:,.2f}</code> ➔ <b>Harga Live:</b> <code>${price_curr:,.2f}</code>",
+            f"🛡️ <b>SL Pengaman Baru:</b> <code>${new_sl:,.2f}</code>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"🎖️ <b>Status Proteksi:</b> <b>{badge}</b>",
+            desc,
+        ]
+        return "\n".join(lines)
+
+    def send_trailing_stop_alert(self, info: Dict[str, Any]) -> bool:
+        """Mengirimkan notifikasi BEP Lock / Trailing Stop ke Telegram."""
+        msg = self.format_trailing_stop_alert(info)
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        tv_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Buka Live Chart TradingView", url=get_tradingview_url("XAUUSD"))
+        ]])
+
+        success = True
+        for cid in approved_ids:
+            try:
+                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
+                if not res:
+                    success = False
+            except Exception as e:
+                logger.error(f"Error kirim trailing stop alert ke {cid}: {e}")
+                success = False
+        return success
+
+    def send_circuit_breaker_alert(self, loss_today: float, max_loss: float, unit: str = "USC") -> bool:
+        """Mengirimkan peringatan darurat saat batas maksimal kerugian harian tercapai."""
+        msg = (
+            f"🚨 <b>PERINGATAN PENGAMANAN: CIRCUIT BREAKER AKTIF!</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ <b>Total Kerugian Hari Ini:</b> <code>-{loss_today:.2f} {unit}</code>\n"
+            f"🛑 <b>Batas Maksimal Toleransi:</b> <code>{max_loss:.2f} {unit}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🛡️ <b>Tindakan Otomatis Bot:</b>\n"
+            f"• Seluruh eksekusi order baru <b>DIHENTIKAN SEMENTARA</b> demi melindungi sisa modal trading Anda saat server aktif semalaman.\n"
+            f"• Posisi aktif yang sedang berjalan tetap dikawal disiplin oleh TP & SL.\n"
+            f"• Bot akan otomatis mereset batas risiko pada awal sesi perdagangan berikutnya.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💡 <i>Kaidah 9 Buku PDF: Melindungi modal adalah prioritas nomor satu. Istirahat sejenak adalah bagian dari disiplin trading.</i>"
+        )
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        success = True
+        for cid in approved_ids:
+            try:
+                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
+                if not res:
+                    success = False
+            except Exception as e:
+                logger.error(f"Error kirim circuit breaker alert ke {cid}: {e}")
+                success = False
+        return success
+
+    def send_midnight_guard_alert(self, loss_midnight: float, max_loss: float, unit: str = "USC") -> bool:
+        """Mengirimkan peringatan saat batas kerugian jam tidur tengah malam (02:00 - 04:30 WIB) tercapai."""
+        msg = (
+            f"🌙 <b>PENGAMANAN TIDUR MALAM: MIDNIGHT SLEEP GUARD AKTIF!</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ <b>Kerugian Sesi Tengah Malam:</b> <code>-{loss_midnight:.2f} {unit}</code>\n"
+            f"🛑 <b>Batas Maksimal Jam Tidur (02:00 - 04:30 WIB):</b> <code>{max_loss:.2f} {unit}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🛡️ <b>Tindakan Otomatis Bot:</b>\n"
+            f"• Eksekusi transaksi baru <b>DIKUNCI SEMENTARA</b> hingga sesi pagi.\n"
+            f"• Melindungi saldo dari ombak sideways & likuiditas tipis dini hari saat Anda beristirahat.\n"
+            f"• Saat Anda bangun dan memantau di siang hari, batas harian USC otomatis bebas kembali.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💡 <i>Kaidah 9 Buku PDF: Di jam sepi likuiditas malam, lebih baik tidur tenang menjaga modal daripada memaksakan trading di pasar berombak.</i>"
+        )
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        success = True
+        for cid in approved_ids:
+            try:
+                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
+                if not res:
+                    success = False
+            except Exception as e:
+                logger.error(f"Error kirim midnight guard alert ke {cid}: {e}")
                 success = False
         return success
 
@@ -688,13 +1091,18 @@ class TelegramBotCommands:
             self.storage.approve_user(user_id, duration="lifetime")
             return True
 
-        # 2. Cek apakah sudah disetujui di database & belum expired
+        # 2. Cek apakah pengguna telah diblokir / dicabut aksesnya oleh Admin (SILENT DROP TOTAL)
+        all_u = {u["chat_id"]: u for u in self.storage.list_all_users()}
+        curr_u = all_u.get(user_id)
+        if curr_u and curr_u.get("status") == "rejected":
+            logger.info(f"🚫 [BLOKIR TOTAL] Pesan/perintah dari user rejected {user_id} ({full_name}) diabaikan total tanpa balasan.")
+            return False
+
+        # 3. Cek apakah sudah disetujui di database & belum expired
         if self.storage.is_user_authorized(user_id, admin_id=self.admin_id):
             return True
 
         # Cek apakah user sebelumnya approved tapi sudah kedaluwarsa
-        all_u = {u["chat_id"]: u for u in self.storage.list_all_users()}
-        curr_u = all_u.get(user_id)
         if curr_u and curr_u.get("status") == "approved":
             exp_str = curr_u.get("expires_at", "")
             await update.message.reply_html(
@@ -704,6 +1112,7 @@ class TelegramBotCommands:
             )
             return False
 
+
         # 3. User belum terdaftar / berstatus pending
         status = self.storage.register_or_get_user(
             chat_id=user_id,
@@ -712,10 +1121,7 @@ class TelegramBotCommands:
         )
 
         if status == "rejected":
-            await update.message.reply_html(
-                "🚫 <b>Akses Ditolak</b>\n\n"
-                "Maaf, akses Anda ke bot ini telah ditolak oleh Admin."
-            )
+            logger.info(f"🚫 [BLOKIR TOTAL] User terblokir {user_id} ({full_name}) diabaikan total tanpa balasan.")
             return False
 
         # Status 'pending'
@@ -768,19 +1174,76 @@ class TelegramBotCommands:
 
         return False
 
+    async def _send_approved_welcome_and_copier(
+        self, bot, target_id: str, dur_label: str, exp_display: str
+    ) -> None:
+        """Mengirim pesan ucapan selamat dan otomatis melampirkan file member_copier.zip terbaru."""
+        from pathlib import Path
+
+        welcome_text = (
+            f"🎉 <b>Selamat! Permintaan akses Anda telah disetujui oleh Admin (@selobrow).</b>\n\n"
+            f"⏱️ <b>Masa Aktif Lisensi:</b> <b>{dur_label}</b>\n"
+            f"📅 <b>Berlaku s/d:</b> <code>{exp_display}</code>\n\n"
+            f"Ketik /start untuk mulai menggunakan bot sinyal!"
+        )
+        try:
+            await bot.send_message(
+                chat_id=target_id,
+                text=welcome_text,
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception as e:
+            logger.warning(f"Gagal kirim pesan approved ke {target_id}: {e}")
+
+        # Otomatis kirim file copier terbaru ke member agar langsung bisa trading tanpa error
+        zip_path = Path(__file__).resolve().parent.parent / "member_copier.zip"
+        if zip_path.exists():
+            try:
+                caption_text = (
+                    "🚀 <b>FILE RESMI MT5 AUTO-COPIER (VIP 9 BUKU PDF)</b>\n\n"
+                    "✅ <b>Fitur & Proteksi Terpasang:</b>\n"
+                    "• Auto-Detect Filling Mode (FOK / IOC / RETURN - Bebas Error 10030)\n"
+                    "• Handshake Lisensi Otomatis & Bersih (Bebas Spam Chat)\n"
+                    "• Terkunci Resmi ke Akun Telegram Anda\n\n"
+                    "<b>Petunjuk Menjalankan Copier:</b>\n"
+                    "1. Unduh dan <b>Ekstrak</b> file ZIP ini di folder laptop/PC Anda.\n"
+                    "2. Pastikan aplikasi <b>MetaTrader 5</b> Anda sudah login & terbuka.\n"
+                    "3. Klik 2x file <b>START_COPIER.bat</b>.\n"
+                    "4. Masukkan nomor HP Telegram Anda (awalan +62) & kode OTP (hanya 1x di awal).\n\n"
+                    "<i>Copier otomatis standby dan siap menduplikasi sinyal 9 Buku PDF ke akun MT5 Anda!</i>"
+                )
+                with open(zip_path, "rb") as doc:
+                    await bot.send_document(
+                        chat_id=target_id,
+                        document=doc,
+                        caption=caption_text,
+                        parse_mode=ParseMode.HTML,
+                    )
+                logger.info(f"Auto-dispatch member_copier.zip sukses dikirim ke member {target_id}")
+            except Exception as e:
+                logger.error(f"Gagal auto-dispatch member_copier.zip ke {target_id}: {e}")
+
     async def button_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler klik tombol interaktif (Izinkan / Tolak / Durasi Akses) khusus Admin."""
         query = update.callback_query
         if not query:
             return
-        await query.answer()
-
-        if not self._is_admin(update):
-            await query.answer("⛔ Hanya Admin yang berhak memproses akses.", show_alert=True)
-            return
-
         data = query.data or ""
         msg_text = query.message.text or ""
+
+        # Blokir total user yang telah di-kick / rejected
+        cb_uid = str(query.from_user.id).strip() if query.from_user else ""
+        if cb_uid:
+            all_u = {u["chat_id"]: u for u in self.storage.list_all_users()}
+            curr_u = all_u.get(cb_uid)
+            if curr_u and curr_u.get("status") == "rejected":
+                await query.answer("🚫 Akses Anda telah diblokir total oleh Admin.", show_alert=True)
+                return
+
+        # Chart style switching dapat diakses oleh semua pengguna yang terdaftar
+        if not data.startswith("chart_") and not self._is_admin(update):
+            await query.answer("⛔ Hanya Admin yang berhak memproses tindakan ini.", show_alert=True)
+            return
 
         if data.startswith("apprdur_"):
             parts = data.split("_")
@@ -788,59 +1251,192 @@ class TelegramBotCommands:
             dur = parts[2] if len(parts) > 2 else "30d"
             success, expires_at, dur_label = self.storage.approve_user(target_id, dur)
             exp_display = expires_at if expires_at else "Permanen (Tanpa Batas Waktu)"
+
+            manage_kb = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("➕ Tambah 30 Hari", callback_data=f"apprdur_{target_id}_30d"),
+                    InlineKeyboardButton("♾️ Jadikan Permanen", callback_data=f"apprdur_{target_id}_lifetime"),
+                ],
+                [
+                    InlineKeyboardButton("🛑 Cabut Akses (Kick)", callback_data=f"reject_{target_id}"),
+                    InlineKeyboardButton("📦 Kirim Copier Zip", callback_data=f"sendzip_{target_id}"),
+                ],
+                [
+                    InlineKeyboardButton("👥 Lihat Daftar Semua Member", callback_data="listusers"),
+                ]
+            ])
+
+            base_txt = msg_text.split("✅ STATUS:")[0].split("🚫 STATUS:")[0].strip()
             await query.edit_message_text(
-                text=f"{msg_text}\n\n✅ <b>STATUS: DISETUJUI ({dur_label})</b> 🎉\n"
+                text=f"{base_txt}\n\n✅ <b>STATUS: DISETUJUI ({dur_label})</b> 🎉\n"
                      f"⏱️ Masa Aktif: <code>{dur_label}</code>\n"
                      f"📅 Berlaku s/d: <code>{exp_display}</code>",
                 parse_mode=ParseMode.HTML,
+                reply_markup=manage_kb,
             )
-            try:
-                await context.bot.send_message(
-                    chat_id=target_id,
-                    text=f"🎉 <b>Selamat! Permintaan akses Anda telah disetujui oleh Admin.</b>\n\n"
-                         f"⏱️ <b>Masa Aktif:</b> <b>{dur_label}</b>\n"
-                         f"📅 <b>Berlaku s/d:</b> <code>{exp_display}</code>\n\n"
-                         f"Ketik /start untuk mulai menggunakan bot!",
-                    parse_mode=ParseMode.HTML,
-                )
-            except Exception as e:
-                logger.warning(f"Gagal kirim pesan approved ke {target_id}: {e}")
+            await self._send_approved_welcome_and_copier(context.bot, target_id, dur_label, exp_display)
 
         elif data.startswith("approve_"):
             target_id = data.replace("approve_", "").strip()
             success, expires_at, dur_label = self.storage.approve_user(target_id, "30d")
             exp_display = expires_at if expires_at else "Permanen (Tanpa Batas Waktu)"
+
+            manage_kb = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("➕ Tambah 30 Hari", callback_data=f"apprdur_{target_id}_30d"),
+                    InlineKeyboardButton("♾️ Jadikan Permanen", callback_data=f"apprdur_{target_id}_lifetime"),
+                ],
+                [
+                    InlineKeyboardButton("🛑 Cabut Akses (Kick)", callback_data=f"reject_{target_id}"),
+                    InlineKeyboardButton("📦 Kirim Copier Zip", callback_data=f"sendzip_{target_id}"),
+                ]
+            ])
+
+            base_txt = msg_text.split("✅ STATUS:")[0].split("🚫 STATUS:")[0].strip()
             await query.edit_message_text(
-                text=f"{msg_text}\n\n✅ <b>STATUS: DISETUJUI ({dur_label})</b> 🎉\n"
+                text=f"{base_txt}\n\n✅ <b>STATUS: DISETUJUI ({dur_label})</b> 🎉\n"
                      f"📅 Berlaku s/d: <code>{exp_display}</code>",
                 parse_mode=ParseMode.HTML,
+                reply_markup=manage_kb,
             )
-            try:
-                await context.bot.send_message(
-                    chat_id=target_id,
-                    text=f"🎉 <b>Selamat! Permintaan akses Anda telah disetujui oleh Admin.</b>\n\n"
-                         f"⏱️ <b>Masa Aktif:</b> <b>{dur_label}</b> (s/d {exp_display})\n"
-                         f"Ketik /start untuk mulai menggunakan bot!",
-                    parse_mode=ParseMode.HTML,
-                )
-            except Exception as e:
-                logger.warning(f"Gagal kirim pesan approved ke {target_id}: {e}")
+            await self._send_approved_welcome_and_copier(context.bot, target_id, dur_label, exp_display)
 
         elif data.startswith("reject_"):
             target_id = data.replace("reject_", "").strip()
             self.storage.reject_user(target_id)
+            restore_kb = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("♻️ Pulihkan Akses (30 Hari)", callback_data=f"apprdur_{target_id}_30d"),
+                    InlineKeyboardButton("♾️ Pulihkan Permanen", callback_data=f"apprdur_{target_id}_lifetime"),
+                ],
+                [
+                    InlineKeyboardButton("👥 Lihat Daftar Member", callback_data="listusers"),
+                ]
+            ])
+            base_txt = msg_text.split("✅ STATUS:")[0].split("🚫 STATUS:")[0].strip()
             await query.edit_message_text(
-                text=f"{msg_text}\n\n🚫 <b>STATUS: DITOLAK OLEH ADMIN</b>\nAkses pengguna ini telah diblokir.",
+                text=f"{base_txt}\n\n🚫 <b>STATUS: AKSES DICABUT / DITOLAK</b>\nAkses pengguna ini telah dinonaktifkan.",
                 parse_mode=ParseMode.HTML,
+                reply_markup=restore_kb,
             )
             try:
                 await context.bot.send_message(
                     chat_id=target_id,
-                    text="🚫 <b>Akses Ditolak</b>\nMaaf, permintaan akses Anda ke bot ini ditolak oleh Admin.",
+                    text="🚫 <b>Akses Dicabut</b>\nMaaf, akses Anda ke bot ini telah dinonaktifkan oleh Admin.",
                     parse_mode=ParseMode.HTML,
+                    reply_markup=ReplyKeyboardRemove(),
                 )
             except Exception:
                 pass
+
+        elif data.startswith("sendzip_"):
+            target_id = data.replace("sendzip_", "").strip()
+            from pathlib import Path
+            zip_path = Path(__file__).resolve().parent.parent / "member_copier.zip"
+            if zip_path.exists():
+                try:
+                    caption_text = (
+                        "📦 <b>Halo! Berikut file VIP MT5 Auto-Copier untuk Anda.</b>\n\n"
+                        "Ekstrak file ZIP ini di laptop/PC Anda, buka file <code>PANDUAN_MEMBER.txt</code>, "
+                        "dan jalankan <code>START_COPIER.bat</code> untuk mulai copy trading otomatis!"
+                    )
+                    with open(zip_path, "rb") as doc:
+                        await context.bot.send_document(
+                            chat_id=target_id,
+                            document=doc,
+                            caption=caption_text,
+                            parse_mode=ParseMode.HTML,
+                        )
+                    await query.answer("📦 File member_copier.zip berhasil dikirim ke member!", show_alert=True)
+                except Exception as e:
+                    await query.answer(f"❌ Gagal kirim file: {e}", show_alert=True)
+            else:
+                await query.answer("❌ File member_copier.zip tidak ditemukan di server.", show_alert=True)
+            return
+
+        elif data.startswith("deleteuser_"):
+            target_id = data.replace("deleteuser_", "").strip()
+            self.storage.delete_user(target_id)
+            await query.answer("Pengguna berhasil dihapus total dari database!", show_alert=True)
+            await query.edit_message_text(
+                text=f"🗑️ <b>PENGGUNA DIHAPUS TOTAL</b>\nUser ID <code>{target_id}</code> telah dibersihkan sepenuhnya dari sistem bot.",
+                parse_mode=ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("👥 Kembali ke Daftar Member", callback_data="listusers")]])
+            )
+            return
+
+        elif data.startswith("manageuser_"):
+
+            target_id = data.replace("manageuser_", "").strip()
+            all_u = {u["chat_id"]: u for u in self.storage.list_all_users()}
+            u = all_u.get(target_id)
+            if not u:
+                await query.answer("Pengguna tidak ditemukan.", show_alert=True)
+                return
+
+            st = u.get("status", "pending")
+            name = u.get("full_name") or u.get("username") or f"User #{target_id[-4:]}"
+            uname = f"@{u['username']}" if u.get("username") and u['username'] != "-" else "-"
+            rem = u.get("remaining_label", "")
+            exp = u.get("expires_at") or "Permanen"
+
+            card_lines = [
+                f"👤 <b>KONTROL MEMBER: {html.escape(name)}</b>",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+                f"🆔 <b>Chat ID:</b> <code>{target_id}</code>",
+                f"💬 <b>Username:</b> {uname}",
+                f"📊 <b>Status:</b> <b>{st.upper()}</b>",
+                f"⏱️ <b>Masa Aktif:</b> <code>{rem}</code> (s/d {exp})",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+                "<i>Pilih tindakan 1-klik di bawah ini tanpa perlu ketik ID manual:</i>"
+            ]
+
+            card_kb = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("➕ Tambah 7 Hari", callback_data=f"apprdur_{target_id}_7d"),
+                    InlineKeyboardButton("➕ Tambah 30 Hari", callback_data=f"apprdur_{target_id}_30d"),
+                ],
+                [
+                    InlineKeyboardButton("♾️ Jadikan Permanen", callback_data=f"apprdur_{target_id}_lifetime"),
+                    InlineKeyboardButton("🛑 Cabut / Kick", callback_data=f"reject_{target_id}"),
+                ],
+                [
+                    InlineKeyboardButton("📦 Kirim member_copier.zip", callback_data=f"sendzip_{target_id}"),
+                    InlineKeyboardButton("🗑️ Hapus Total dari DB", callback_data=f"deleteuser_{target_id}"),
+                ],
+                [
+                    InlineKeyboardButton("🔙 Kembali ke Daftar Member", callback_data="listusers"),
+                ]
+            ])
+
+
+            try:
+                await query.edit_message_text(
+                    text="\n".join(card_lines),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=card_kb,
+                )
+            except Exception:
+                await query.message.reply_html(
+                    text="\n".join(card_lines),
+                    reply_markup=card_kb,
+                )
+            return
+
+        elif data == "listusers":
+            text, reply_markup = self._build_users_list_view()
+            try:
+                await query.edit_message_text(
+                    text=text,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup,
+                )
+            except Exception:
+                await query.message.reply_html(
+                    text=text,
+                    reply_markup=reply_markup,
+                )
+            return
 
         elif data.startswith("chart_"):
             parts = data.split("_")
@@ -934,12 +1530,17 @@ class TelegramBotCommands:
                 "━━━━━━━━━━━━━━━━━━━━━━",
             ]
             if acc:
+                curr = str(acc.get("currency", "USD")).upper()
+                is_cent = bridge.is_cent_account() or "USC" in curr or "CENT" in curr
+                type_badge = "Cent (USC)" if is_cent else "Standard (USD)"
+                unit_label = "USC" if is_cent else "USD"
+                equiv_usd = f" (~ ${acc['balance']/100.0:,.2f} USD)" if is_cent else ""
                 lines.extend([
-                    f"👤 <b>Akun MT5:</b> <code>#{acc['login']}</code> ({acc['server']} - {acc['trade_mode']})",
-                    f"💵 <b>Balance:</b> <code>${acc['balance']:,.2f}</code>",
-                    f"📊 <b>Equity:</b> <code>${acc['equity']:,.2f}</code>",
-                    f"📈 <b>Floating Profit:</b> <code>${acc['profit']:+,.2f}</code>",
-                    f"🛡️ <b>Free Margin:</b> <code>${acc['margin_free']:,.2f}</code>",
+                    f"👤 <b>Akun MT5:</b> <code>#{acc['login']}</code> ({acc['server']} - {acc['trade_mode']} | <b>{type_badge}</b>)",
+                    f"💵 <b>Balance:</b> <code>{acc['balance']:,.2f} {unit_label}</code>{equiv_usd}",
+                    f"📊 <b>Equity:</b> <code>{acc['equity']:,.2f} {unit_label}</code>",
+                    f"📈 <b>Floating Profit:</b> <code>{acc['profit']:+,.2f} {unit_label}</code>",
+                    f"🛡️ <b>Free Margin:</b> <code>{acc['margin_free']:,.2f} {unit_label}</code>",
                     "━━━━━━━━━━━━━━━━━━━━━━",
                 ])
             else:
@@ -952,10 +1553,11 @@ class TelegramBotCommands:
             positions = bridge.get_open_positions()
             if positions:
                 lines.append("📋 <b>POSISI TERBUKA SAAT INI (MT5):</b>")
+                pos_unit = "USC" if (bridge.is_cent_account() or (acc and ("USC" in str(acc.get("currency", "")).upper() or "CENT" in str(acc.get("currency", "")).upper()))) else "USD"
                 for p in positions[:8]:
                     icon = "🟢" if p["type"] == "BUY" else "🔴"
                     lines.append(
-                        f"• {icon} <b>#{p['ticket']} {p['type']} {p['volume']} {p['symbol']}</b> | Floating: <b>${p['profit']:+,.2f}</b>"
+                        f"• {icon} <b>#{p['ticket']} {p['type']} {p['volume']} {p['symbol']}</b> | Floating: <b>{p['profit']:+,.2f} {pos_unit}</b>"
                     )
                 lines.append("━━━━━━━━━━━━━━━━━━━━━━")
             else:
@@ -992,68 +1594,150 @@ class TelegramBotCommands:
                 )
             except Exception:
                 pass
+            return
+
+        elif data.startswith("exec_chart_"):
+            parts = data.split("_")
+            if len(parts) >= 7:
+                c_action = parts[2].upper()
+                c_ticker = parts[3]
+                try:
+                    c_price = float(parts[4])
+                    c_tp = float(parts[5])
+                    c_sl = float(parts[6])
+                except Exception:
+                    await query.answer("❌ Parameter sinyal tidak valid.", show_alert=True)
+                    return
+
+                from trading.mt5_bridge import MT5Bridge
+                bridge = MT5Bridge()
+                open_pos = [p for p in bridge.get_open_positions() if "XAUUSD" in p.get("symbol", "").upper()]
+                if open_pos:
+                    await query.answer("⚠️ Sudah ada posisi XAU/USD aktif di MT5! Tidak membuka order duplikat.", show_alert=True)
+                    return
+
+                sig_payload = {
+                    "ticker": c_ticker,
+                    "signal": c_action,
+                    "price": c_price,
+                    "take_profit_price": c_tp,
+                    "stop_loss_price": c_sl,
+                    "setup_grade": "Grade A+",
+                    "pdf_confluence_score": 100.0,
+                }
+                res = bridge.execute_signal(sig_payload)
+                if res.get("success"):
+                    ticket_id = res.get("ticket", "-")
+                    await query.answer(f"⚡ Sukses! Order #{ticket_id} {c_action} berhasil dibuka di MT5!", show_alert=True)
+                    await query.message.reply_html(
+                        f"🤖 <b>EKSEKUSI MT5 INSTAN BERHASIL!</b> 🚀\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🎫 <b>Ticket ID:</b> <code>#{ticket_id}</code>\n"
+                        f"📦 <b>Posisi:</b> <b>{c_action} {bridge.default_lot:.2f} Lot</b> {bridge.gold_symbol}\n"
+                        f"💵 <b>Harga Masuk:</b> <code>${c_price:,.2f}</code>\n"
+                        f"🎯 <b>Take Profit:</b> <code>${c_tp:,.2f}</code>\n"
+                        f"🛑 <b>Stop Loss:</b> <code>${c_sl:,.2f}</code>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🛡️ <i>Posisi aktif dipantau oleh Reversal Guard 9 Buku PDF.</i>"
+                    )
+                else:
+                    err_msg = res.get("message", "Gagal eksekusi order.")
+                    await query.answer(f"❌ Gagal: {err_msg}", show_alert=True)
+            return
+
+        elif data.startswith("close_pos_"):
+            ticket_str = data.replace("close_pos_", "").strip()
+            if ticket_str.isdigit():
+                t_id = int(ticket_str)
+                from trading.mt5_bridge import MT5Bridge
+                bridge = MT5Bridge()
+                res = bridge.close_position(t_id)
+                if res.get("success"):
+                    await query.answer(f"✅ Posisi #{t_id} berhasil ditutup di MT5!", show_alert=True)
+                    await query.message.reply_html(
+                        f"🛑 <b>ORDER MT5 BERHASIL DITUTUP!</b>\n"
+                        f"🎫 Posisi <code>#{t_id}</code> telah ditutup dari terminal MT5."
+                    )
+                else:
+                    await query.answer(f"❌ Gagal menutup posisi: {res.get('message', 'Error')}", show_alert=True)
+            return
+
+    def _resolve_target_user(self, target_input: str) -> Optional[Dict[str, Any]]:
+        """Mencari user berdasarkan chat_id, username, atau nama panggilan."""
+        target_str = target_input.strip().lstrip("@").lower()
+        all_users = self.storage.list_all_users()
+        for u in all_users:
+            if str(u.get("chat_id", "")).strip() == target_str:
+                return u
+        for u in all_users:
+            if (u.get("username") or "").lower().lstrip("@") == target_str:
+                return u
+        for u in all_users:
+            fn = (u.get("full_name") or "").lower()
+            if target_str in fn or target_str in fn.split():
+                return u
+        return None
 
     async def approve_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler perintah /approve <chat_id> [durasi] khusus Admin."""
+        """Handler perintah /approve <nama/username/id> [durasi] khusus Admin."""
         if not self._is_admin(update):
             await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
             return
 
         if not context.args:
-            await update.message.reply_html(
-                "⚠️ Format salah. Gunakan: <code>/approve &lt;chat_id&gt; [durasi]</code>\n\n"
-                "<b>Pilihan durasi:</b>\n"
-                "• Jam: <code>1h</code>, <code>2h</code>, <code>6h</code>, <code>12h</code>\n"
-                "• Hari: <code>1d</code>, <code>7d</code>, <code>30d</code>, <code>90d</code>\n"
-                "• Permanen: <code>lifetime</code> atau <code>permanen</code>\n"
-                "<i>(Default jika kosong: 30d)</i>"
-            )
+            await self.users_command(update, context)
             return
 
-        target_id = context.args[0].strip()
+        target_arg = context.args[0].strip()
+        matched = self._resolve_target_user(target_arg)
+        target_id = matched["chat_id"] if matched else target_arg
+        target_name = matched.get("full_name") or matched.get("username") or target_id if matched else target_id
+
         dur = context.args[1].strip() if len(context.args) > 1 else "30d"
         success, expires_at, dur_label = self.storage.approve_user(target_id, dur)
         exp_display = expires_at if expires_at else "Permanen (Tanpa Batas Waktu)"
         if success:
+            quick_kb = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("➕ +30 Hari", callback_data=f"apprdur_{target_id}_30d"),
+                    InlineKeyboardButton("♾️ Permanen", callback_data=f"apprdur_{target_id}_lifetime"),
+                ],
+                [
+                    InlineKeyboardButton("🛑 Cabut / Kick", callback_data=f"reject_{target_id}"),
+                    InlineKeyboardButton("📦 Kirim Copier Zip", callback_data=f"sendzip_{target_id}"),
+                ]
+            ])
             await update.message.reply_html(
-                f"✅ <b>Pengguna {target_id} berhasil disetujui!</b>\n"
+                f"✅ <b>Akses {html.escape(target_name)} berhasil diaktifkan!</b>\n"
                 f"⏱️ <b>Masa Aktif:</b> <code>{dur_label}</code>\n"
-                f"📅 <b>Berlaku s/d:</b> <code>{exp_display}</code>"
+                f"📅 <b>Berlaku s/d:</b> <code>{exp_display}</code>",
+                reply_markup=quick_kb,
             )
-            try:
-                await context.bot.send_message(
-                    chat_id=target_id,
-                    text=f"🎉 <b>Selamat! Akses Anda telah disetujui oleh Admin.</b>\n\n"
-                         f"⏱️ <b>Masa Aktif:</b> <b>{dur_label}</b>\n"
-                         f"📅 <b>Berlaku s/d:</b> <code>{exp_display}</code>\n\n"
-                         f"Ketik /start untuk mulai menggunakan bot!",
-                    parse_mode=ParseMode.HTML,
-                )
-            except Exception as e:
-                logger.warning(f"Gagal notif ke {target_id}: {e}")
+            await self._send_approved_welcome_and_copier(context.bot, target_id, dur_label, exp_display)
         else:
-            await update.message.reply_text(f"Gagal menyetujui Chat ID {target_id}.")
+            await update.message.reply_text(f"Gagal menyetujui user '{target_arg}'.")
 
     async def extend_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler perintah /extend <chat_id> <durasi> khusus Admin untuk memperpanjang waktu akses."""
+        """Handler perintah /extend <nama/id> [durasi] khusus Admin."""
         if not self._is_admin(update):
             await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
             return
 
-        if not context.args or len(context.args) < 2:
-            await update.message.reply_html(
-                "⚠️ Format salah. Gunakan: <code>/extend &lt;chat_id&gt; &lt;durasi&gt;</code>\n"
-                "Contoh: <code>/extend 123456 7d</code> atau <code>/extend 123456 2h</code>"
-            )
+        if not context.args:
+            await self.users_command(update, context)
             return
 
-        target_id = context.args[0].strip()
-        dur = context.args[1].strip()
+        target_arg = context.args[0].strip()
+        matched = self._resolve_target_user(target_arg)
+        target_id = matched["chat_id"] if matched else target_arg
+        target_name = matched.get("full_name") or matched.get("username") or target_id if matched else target_id
+
+        dur = context.args[1].strip() if len(context.args) > 1 else "30d"
         success, expires_at, dur_label = self.storage.extend_user(target_id, dur)
         exp_display = expires_at if expires_at else "Permanen (Tanpa Batas Waktu)"
         if success:
             await update.message.reply_html(
-                f"🔄 <b>Akses pengguna {target_id} berhasil diperpanjang!</b>\n"
+                f"🔄 <b>Akses {html.escape(target_name)} berhasil diperpanjang!</b>\n"
                 f"➕ <b>Tambahan:</b> <code>{dur_label}</code>\n"
                 f"📅 <b>Masa Aktif Baru s/d:</b> <code>{exp_display}</code>"
             )
@@ -1068,54 +1752,183 @@ class TelegramBotCommands:
             except Exception as e:
                 logger.warning(f"Gagal notif perpanjangan ke {target_id}: {e}")
         else:
-            await update.message.reply_text(f"Pengguna {target_id} tidak ditemukan.")
+            await update.message.reply_text(f"Pengguna '{target_arg}' tidak ditemukan.")
 
     async def reject_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler perintah /reject <chat_id> khusus Admin."""
+        """Handler perintah /reject atau /kick <nama/id> khusus Admin."""
         if not self._is_admin(update):
             await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
             return
 
         if not context.args:
-            await update.message.reply_html("⚠️ Format salah. Gunakan: <code>/reject &lt;chat_id&gt;</code>")
+            await self.users_command(update, context)
             return
 
-        target_id = context.args[0].strip()
+        target_arg = context.args[0].strip()
+        matched = self._resolve_target_user(target_arg)
+        target_id = matched["chat_id"] if matched else target_arg
+        target_name = matched.get("full_name") or matched.get("username") or target_id if matched else target_id
+
         self.storage.reject_user(target_id)
-        await update.message.reply_html(f"🚫 <b>Pengguna {target_id} telah ditolak/dicabut.</b>")
+        restore_kb = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("♻️ Pulihkan Akses (30 Hari)", callback_data=f"apprdur_{target_id}_30d"),
+                InlineKeyboardButton("♾️ Pulihkan Permanen", callback_data=f"apprdur_{target_id}_lifetime"),
+            ]
+        ])
+        await update.message.reply_html(
+            f"🚫 <b>Akses {html.escape(target_name)} telah dicabut / diblokir.</b>",
+            reply_markup=restore_kb,
+        )
         try:
             await context.bot.send_message(
                 chat_id=target_id,
-                text="🚫 <b>Akses Ditolak</b>\nAdmin telah menolak atau mencabut akses Anda ke bot ini.",
+                text="🚫 <b>Akses Dicabut</b>\nAdmin telah menonaktifkan akses Anda ke bot ini.",
                 parse_mode=ParseMode.HTML,
+                reply_markup=ReplyKeyboardRemove(),
             )
         except Exception:
             pass
 
-    async def users_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler perintah /users untuk melihat daftar pengguna & masa aktifnya (khusus Admin)."""
+    async def delete_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /delete atau /hapus <nama/id> khusus Admin untuk menghapus member total dari database."""
         if not self._is_admin(update):
             await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
             return
 
-        users = self.storage.list_all_users()
-        if not users:
-            await update.message.reply_text("Belum ada pengguna lain yang meminta akses.")
+        if not context.args:
+            await update.message.reply_html("⚠️ Format salah. Contoh penggunaan: <code>/delete Dipan</code> atau <code>/hapus 7393485645</code>")
             return
 
-        lines = ["👥 <b>DAFTAR PENGGUNA & MASA AKTIF BOT:</b>", "━━━━━━━━━━━━━━━━━━━━━━"]
-        for u in users:
-            st = u.get("status", "pending")
-            emoji = "🟢" if st == "approved" else "🔴" if st == "rejected" else "🟡"
-            cid = u.get("chat_id", "-")
-            name = u.get("full_name") or u.get("username") or "-"
-            rem = u.get("remaining_label", "")
-            lines.append(f"{emoji} <b>{html.escape(name)}</b> (<code>{cid}</code>)")
-            lines.append(f"   Status: <i>{st.upper()}</i> | Masa Aktif: <b>{rem}</b>")
-            lines.append("──────────────────────")
-        lines.append("👉 Ketik <code>/approve &lt;id&gt; [durasi]</code> (misal: <code>1h</code>, <code>6h</code>, <code>7d</code>, <code>30d</code>, <code>lifetime</code>)")
-        lines.append("👉 Ketik <code>/extend &lt;id&gt; [durasi]</code> untuk memperpanjang waktu")
-        await update.message.reply_html("\n".join(lines))
+        target_arg = context.args[0].strip()
+        matched = self._resolve_target_user(target_arg)
+        target_id = matched["chat_id"] if matched else target_arg
+        target_name = matched.get("full_name") or matched.get("username") or target_id if matched else target_id
+
+        self.storage.delete_user(target_id)
+        await update.message.reply_html(
+            f"🗑️ <b>Pengguna {html.escape(target_name)} (ID: <code>{target_id}</code>) telah DIHAPUS TOTAL dari database bot.</b>\n"
+            f"Data pengguna dan riwayat izinnya telah dibersihkan sepenuhnya dari sistem."
+        )
+
+    async def sendcopier_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /sendcopier khusus Admin untuk broadcast file zip copier ke seluruh member aktif."""
+        if not self._is_admin(update):
+            await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
+            return
+
+        status_msg = await update.message.reply_html("⏳ <b>Mengirim file update Auto-Copier MT5 ke seluruh member aktif...</b>")
+        res = self.notifier.broadcast_copier_update()
+        if res.get("success"):
+            await status_msg.edit_text(
+                f"✅ <b>File Auto-Copier MT5 Berhasil Dikirim!</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📤 <b>Terkirim ke:</b> <b>{res.get('sent_count')} Member Aktif</b>\n"
+                f"⚠️ <b>Gagal:</b> {res.get('failed_count')}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"<i>Seluruh member aktif telah menerima file member_copier.zip terbaru beserta panduan update.</i>",
+                parse_mode=ParseMode.HTML,
+            )
+        else:
+            await status_msg.edit_text(f"❌ <b>Gagal mengirim:</b> {res.get('error', 'Terjadi kesalahan')}")
+
+
+    def _build_users_list_view(self) -> Tuple[str, InlineKeyboardMarkup]:
+        """Menyusun tampilan daftar pengguna terbagi rapi: VIP Aktif, Menunggu Persetujuan, dan Diblokir."""
+        users = self.storage.list_all_users()
+        if not users:
+            return "Belum ada pengguna lain yang meminta akses.", InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Daftar Member", callback_data="listusers")]])
+
+        approved_users = [u for u in users if u.get("status") == "approved"]
+        pending_users = [u for u in users if u.get("status") == "pending"]
+        rejected_users = [u for u in users if u.get("status") == "rejected"]
+
+        lines = [
+            "👥 <b>PANEL KONTROL MEMBER VIP (@Selobrow_bot):</b>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+        ]
+        keyboard = []
+
+        # 1. Member Aktif VIP
+        lines.append(f"🟢 <b>MEMBER VIP AKTIF ({len(approved_users)} Orang):</b>")
+        if approved_users:
+            for i, u in enumerate(approved_users, 1):
+                cid = u.get("chat_id", "-")
+                name = u.get("full_name") or u.get("username") or f"User #{cid[-4:]}"
+                rem = u.get("remaining_label", "")
+                uname_str = f" (@{u['username']})" if u.get("username") and u['username'] != "-" else ""
+                lines.append(f"  {i}. <b>{html.escape(name)}</b>{uname_str}")
+                lines.append(f"     Sisa Masa Aktif: <code>{rem}</code>")
+                if cid != str(self.admin_id) and cid != SUPERADMIN_CHAT_ID and cid != "8754997836":
+                    keyboard.append([InlineKeyboardButton(f"⚙️ Kelola: {name[:14]}", callback_data=f"manageuser_{cid}")])
+        else:
+            lines.append("  <i>Belum ada member aktif selain Admin.</i>")
+
+        # 2. Menunggu Persetujuan (Pending)
+        if pending_users:
+            lines.append("\n🟡 <b>MENUNGGU PERSETUJUAN:</b>")
+            for u in pending_users:
+                cid = u.get("chat_id", "-")
+                name = u.get("full_name") or u.get("username") or f"User #{cid[-4:]}"
+                uname_str = f" (@{u['username']})" if u.get("username") and u['username'] != "-" else ""
+                lines.append(f"  ⏳ <b>{html.escape(name)}</b>{uname_str} (ID: <code>{cid}</code>)")
+                keyboard.append([
+                    InlineKeyboardButton(f"✅ Setujui {name[:10]}", callback_data=f"approve_{cid}"),
+                    InlineKeyboardButton(f"❌ Tolak", callback_data=f"reject_{cid}")
+                ])
+
+        # 3. Member Diblokir / Kicked
+        if rejected_users:
+            lines.append("\n🚫 <b>MEMBER DIBLOKIR / KICKED:</b>")
+            for u in rejected_users:
+                cid = u.get("chat_id", "-")
+                name = u.get("full_name") or u.get("username") or f"User #{cid[-4:]}"
+                uname_str = f" (@{u['username']})" if u.get("username") and u['username'] != "-" else ""
+                lines.append(f"  🔴 <b>{html.escape(name)}</b>{uname_str} — <i>Akses Terputus & Di-ghosting</i>")
+                keyboard.append([
+                    InlineKeyboardButton(f"♻️ Pulihkan {name[:10]}", callback_data=f"apprdur_{cid}_30d"),
+                    InlineKeyboardButton(f"🗑️ Hapus Total", callback_data=f"deleteuser_{cid}"),
+                ])
+
+        lines.extend([
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "💡 <i>Pilih tombol di bawah untuk perpanjang, cabut akses, atau hapus total.</i>"
+        ])
+        keyboard.append([InlineKeyboardButton("🔄 Refresh Daftar Member", callback_data="listusers")])
+        return "\n".join(lines), InlineKeyboardMarkup(keyboard)
+
+    async def users_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /users untuk melihat daftar pengguna & tombol kontrol 1-klik (khusus Admin)."""
+        if not self._is_admin(update):
+            await update.message.reply_text("⛔ Perintah ini hanya dapat dijalankan oleh Admin.")
+            return
+
+        text, reply_markup = self._build_users_list_view()
+        await update.message.reply_html(text, reply_markup=reply_markup)
+
+    async def license_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /license untuk memverifikasi status izin copier member."""
+        if not update.effective_user or not update.message:
+            return
+        user_id = str(update.effective_user.id).strip()
+        auth = self.storage.is_user_authorized(user_id, admin_id=self.admin_id)
+        all_u = {u["chat_id"]: u for u in self.storage.list_all_users()}
+        u = all_u.get(user_id)
+        exp = u.get("expires_at") if u else ""
+        rem = u.get("remaining_label", "") if u else "Expired"
+        status_flag = "VALID" if auth else "EXPIRED"
+        resp = f"LIC_INFO|{user_id}|{status_flag}|{exp or 'LIFETIME'}|{rem}"
+        reply_msg = await update.message.reply_text(resp)
+
+        # Hapus otomatis pesan handshake setelah 4 detik agar chat Telegram member tetap bersih
+        async def _cleanup_handshake():
+            await asyncio.sleep(4)
+            try:
+                await reply_msg.delete()
+                await update.message.delete()
+            except Exception:
+                pass
+        asyncio.create_task(_cleanup_handshake())
 
     async def tutup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /tutup untuk melihat laporan penutupan pasar saham BEI yang simpel."""
@@ -1179,6 +1992,7 @@ class TelegramBotCommands:
                 "• /users - Lihat daftar seluruh pengguna & status izin",
                 "• /approve &lt;id&gt; - Izinkan akses pengguna baru",
                 "• /reject &lt;id&gt; - Tolak / cabut akses pengguna",
+                "• /sendcopier - Kirim update member_copier.zip ke seluruh member aktif",
             ])
 
         welcome_lines.extend([
@@ -1237,29 +2051,98 @@ class TelegramBotCommands:
         await update.message.reply_html("\n".join(lines))
 
     async def lasthistory_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler perintah /lasthistory untuk melihat 5 riwayat sinyal terakhir."""
+        """Handler perintah /lasthistory dan /history untuk transparansi penuh riwayat sinyal & transaksi MT5 (Win & Lose)."""
         if not await self.check_user_access(update, context):
             return
-        signals = self.storage.get_recent_signals(limit=5)
 
-        if not signals:
-            await update.message.reply_text("Belum ada riwayat sinyal yang tercatat di database.")
-            return
+        from trading.mt5_bridge import MT5Bridge
+        bridge = MT5Bridge()
 
-        lines = ["📜 <b>5 RIWAYAT SINYAL TERAKHIR:</b>", "━━━━━━━━━━━━━━━━━━━━━━"]
-        for s in signals:
-            sig_type = s.get("signal_type", "HOLD")
-            emoji = "🟢" if sig_type == "BUY" else "🔴" if sig_type == "SELL" else "⚪"
-            ticker = s.get("ticker", "-")
-            price = f"Rp {float(s.get('price', 0)):,.0f}"
-            t_candle = s.get("candle_time", "-")
-            reasons = s.get("reasons", [])
-            reason_str = reasons[0] if reasons else "-"
+        # Ambil info akun MT5 & deals 24 jam terakhir
+        acct_info = bridge.get_account_info() if (bridge.enabled and bridge.is_available()) else None
+        closed_deals = bridge.get_closed_deals(hours=24) if (bridge.enabled and bridge.is_available()) else []
+        open_positions = bridge.get_open_positions() if (bridge.enabled and bridge.is_available()) else []
 
-            lines.append(f"{emoji} <b>{sig_type}</b> - <code>{ticker}</code> @ {price}")
-            lines.append(f"   <i>Waktu: {t_candle}</i>")
-            lines.append(f"   <i>Pemicu: {html.escape(reason_str)}</i>")
+        lines = ["📜 <b>REKAP & RIWAYAT TRANSAKSI LENGKAP</b>", "━━━━━━━━━━━━━━━━━━━━━━"]
+
+        # Ringkasan Akun MT5 Live
+        if acct_info:
+            bal = float(acct_info.get("balance", 0.0))
+            eq = float(acct_info.get("equity", 0.0))
+            raw_curr = str(acct_info.get("currency", "USC")).upper()
+            is_cent = "USC" in raw_curr or "CENT" in raw_curr or raw_curr.endswith("C") or bridge.is_cent_account()
+            curr = "USC" if is_cent else raw_curr
+            type_badge = "Cent (USC)" if is_cent else "Standard (USD)"
+            equiv_usd = f" (~ ${bal/100.0:,.2f} USD)" if is_cent else ""
+            lines.append(f"💼 <b>Status Akun MT5 ({type_badge}):</b>")
+            lines.append(f"• Saldo (Balance): <code>{bal:,.2f} {curr}</code>{equiv_usd}")
+            lines.append(f"• Ekuitas (Equity): <code>{eq:,.2f} {curr}</code>")
+            lines.append(f"• Posisi Aktif: <b>{len(open_positions)} posisi terbuka</b>")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+
+        # Riwayat Closed Deals Real MT5 (Win & Lose)
+        if closed_deals:
+            lines.append(f"📊 <b>TRANSAKSI MT5 TERAKHIR (24 JAM):</b>")
+            deal_unit = "USC" if (bridge.is_cent_account() or (acct_info and ("USC" in str(acct_info.get("currency", "")).upper() or "CENT" in str(acct_info.get("currency", "")).upper()))) else "USD"
+            # Urutkan deal paling baru di atas
+            sorted_deals = sorted(closed_deals, key=lambda x: x.get("time", 0), reverse=True)[:8]
+            for d in sorted_deals:
+                pnl = float(d.get("profit", 0.0))
+                is_win = pnl >= 0
+                icon = "🟢 [TP/WIN]" if is_win else "🔴 [SL/LOSE]"
+                t_type = d.get("type", "TRADE")
+                pos_id = d.get("position_id", "-")
+                vol = d.get("volume", 0.05)
+                p_exit = float(d.get("price", 0.0))
+                p_entry = float(d.get("entry_price", 0.0))
+                t_wib = d.get("time_wib", "-")
+                reason = d.get("reason", "MANUAL")
+                sym = d.get("symbol", "XAUUSD")
+
+                price_flow = f"${p_entry:,.2f} ➔ ${p_exit:,.2f}" if p_entry > 0 and p_entry != p_exit else f"${p_exit:,.2f}"
+                lines.append(
+                    f"{icon} <b>{sym} {t_type} #{pos_id}</b> ({vol} lot)\n"
+                    f"   💰 Hasil: <b>{pnl:+.2f} {deal_unit}</b> ({reason})\n"
+                    f"   📍 Harga: <code>{price_flow}</code>\n"
+                    f"   🕒 Waktu: <i>{t_wib}</i>"
+                )
+                lines.append("──────────────────────")
+        else:
+            lines.append("<i>Belum ada transaksi tertutup dalam 24 jam terakhir di MT5.</i>")
             lines.append("──────────────────────")
+
+        # Riwayat Sinyal Strategi di Database
+        signals = self.storage.get_recent_signals(limit=5)
+        if signals:
+            lines.append("🎯 <b>5 SINYAL STRATEGI TERAKHIR:</b>")
+            for s in signals:
+                sig_type = s.get("signal_type", "HOLD")
+                outcome = s.get("outcome", "OPEN")
+                ticker = s.get("ticker", "-")
+                is_gold = any(k in ticker.upper() for k in ["XAUUSD", "GC=F", "GOLD", "EMAS"])
+                p_entry = float(s.get("price", 0.0))
+                p_exit = float(s.get("exit_price") or 0.0)
+                pnl_pct = float(s.get("pnl_pct") or 0.0)
+
+                if outcome == "WIN":
+                    status_lbl = f"🟢 <b>TP HIT (+{pnl_pct:.2f}%)</b>"
+                elif outcome == "LOSE":
+                    status_lbl = f"🔴 <b>SL HIT ({pnl_pct:.2f}%)</b>"
+                elif outcome == "CLOSED_MANUAL":
+                    status_lbl = f"⚠️ <b>CLOSED ({pnl_pct:.2f}%)</b>"
+                else:
+                    status_lbl = "⏳ <b>SEDANG BERJALAN (OPEN)</b>"
+
+                p_str = f"${p_entry:,.2f}" if is_gold else f"Rp {p_entry:,.0f}"
+                flow_str = f" ➔ ${p_exit:,.2f}" if (is_gold and p_exit > 0) else ""
+                t_candle = s.get("candle_time", "-")
+                note = s.get("outcome_note") or ""
+
+                lines.append(f"• <b>{sig_type} {ticker}</b> @ {p_str}{flow_str}")
+                lines.append(f"  Status: {status_lbl}")
+                if note:
+                    lines.append(f"  📝 <i>{html.escape(note[:70])}</i>")
+                lines.append(f"  🕒 <i>{t_candle}</i>")
 
         await update.message.reply_html("\n".join(lines))
 
@@ -1276,19 +2159,22 @@ class TelegramBotCommands:
         signals_triggered = res.get("signals_triggered", 0)
         processed = res.get("processed", 0)
 
+        fresh_signals = [d for d in res.get("details", []) if d.get("signal") in ["BUY", "SELL"] and d.get("notified")]
+
         reply_lines = [
             f"✅ <b>Pemindaian Selesai!</b>",
-            f"• Saham Diproses: <b>{processed}</b>",
-            f"• Sinyal Aktif: <b>{signals_triggered}</b>",
+            f"• Instrumen Diproses: <b>{processed}</b>",
+            f"• Sinyal Baru Siap Entry: <b>{len(fresh_signals)}</b>",
             "━━━━━━━━━━━━━━━━━━━━━━",
         ]
-        for d in res.get("details", []):
-            if d.get("signal") in ["BUY", "SELL"]:
-                emoji = "🟢" if d.get("signal") == "BUY" else "🔴"
-                reply_lines.append(f"{emoji} <b>{d.get('signal')}</b>: <code>{d.get('ticker')}</code> @ Rp {float(d.get('price', 0)):,.0f}")
+        for d in fresh_signals:
+            emoji = "🟢" if d.get("signal") == "BUY" else "🔴"
+            is_gold = any(k in d.get("ticker", "").upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+            p_str = f"${float(d.get('price', 0)):,.2f}" if is_gold else f"Rp {float(d.get('price', 0)):,.0f}"
+            reply_lines.append(f"{emoji} <b>{d.get('signal')}</b>: <code>{d.get('ticker')}</code> @ {p_str}")
 
-        if signals_triggered == 0:
-            reply_lines.append("<i>Semua saham saat ini dalam status netral (HOLD).</i>")
+        if not fresh_signals:
+            reply_lines.append("<i>Semua instrumen saat ini dalam status netral atau sinyal lama telah disaring demi mencegah salah entry / telat.</i>")
 
         await update.message.reply_html("\n".join(reply_lines))
 
@@ -1333,7 +2219,29 @@ class TelegramBotCommands:
                 rsi = snap.get("rsi", 50.0)
                 vol_ratio = snap.get("volume_ratio", 1.0)
 
-                if sig.signal == "BUY":
+                # Validasi kesegaran ketat: Buang sinyal telat / candle hari kemarin
+                is_fresh_signal = False
+                try:
+                    c_ts = pd.to_datetime(sig.candle_time)
+                    tz_w = ZoneInfo("Asia/Jakarta")
+                    n_w = datetime.now(tz_w)
+                    if c_ts.tzinfo is not None:
+                        c_ts_w = c_ts.tz_convert(tz_w)
+                    else:
+                        c_ts_w = c_ts.tz_localize(tz_w)
+
+                    # Hanya candle hari ini
+                    if c_ts_w.date() == n_w.date():
+                        if mode == "intraday":
+                            # Maksimal 30 menit usia candle untuk intraday
+                            if (n_w - c_ts_w).total_seconds() <= 30 * 60:
+                                is_fresh_signal = True
+                        else:
+                            is_fresh_signal = True
+                except Exception:
+                    is_fresh_signal = False
+
+                if sig.signal == "BUY" and is_fresh_signal:
                     buy_signals.append(sig)
                 elif rsi >= 45.0 and rsi <= 65.0:
                     # Saham di zona momentum sehat (radar pantauan)
@@ -1354,7 +2262,7 @@ class TelegramBotCommands:
         ]
 
         if buy_signals:
-            lines.append("🟢 <b>SINYAL BELI SIAP EKSEKUSI (ENTRY):</b>")
+            lines.append("🟢 <b>SINYAL BELI SIAP EKSEKUSI (ENTRY FRESH):</b>")
             for b in buy_signals:
                 lines.append(f"• <code>{b.ticker}</code> @ <b>Rp {b.price:,.0f}</b>")
                 lines.append(f"  🎯 Target Profit (TP): <b>Rp {b.take_profit_price:,.0f}</b>")
@@ -1362,7 +2270,7 @@ class TelegramBotCommands:
                 lines.append(f"  ⚖️ Risk/Reward: <b>1 : {b.risk_reward_ratio or 1.67}</b>")
                 lines.append("──────────────────────")
         else:
-            lines.append("<i>Belum ada sinyal BUY yang terkonfirmasi penuh pada candle saat ini.</i>")
+            lines.append("<i>Belum ada sinyal BUY baru yang segar saat ini. Bot menyaring ketat agar tidak menampilkan sinyal yang sudah telat entry.</i>")
             lines.append("──────────────────────")
 
         if radar_stocks:
@@ -1807,7 +2715,7 @@ class TelegramBotCommands:
                 bridge.set_enabled(True)
                 await update.message.reply_html(
                     "🟢 <b>Auto-Trading MetaTrader 5 DIAKTIFKAN!</b>\n\n"
-                    "Bot akan mengeksekusi order (BUY / SELL) secara otomatis di akun MT5 setiap kali sinyal Emas (XAU/USD) 7 Buku PDF terkonfirmasi Grade A (≥65%).\n\n"
+                    "Bot akan mengeksekusi order (BUY / SELL) secara otomatis di akun MT5 setiap kali sinyal Emas (XAU/USD) 9 Buku PDF terkonfirmasi Grade A (≥65%).\n\n"
                     "🎯 <i>Sinyal tetap dikawal ketat oleh kaidah Fibonacci Golden Pocket, Ichimoku Kumo, 20 EMA Bob Volman, dan manajemen risiko TP & SL.</i>"
                 )
                 return
@@ -1849,6 +2757,13 @@ class TelegramBotCommands:
                 except Exception:
                     await update.message.reply_html("⚠️ Format salah. Contoh penggunaan: <code>/mt5 lot 0.02</code>")
                 return
+            elif sub in ["resume", "lanjut", "reset", "clear"]:
+                bridge.clear_reversal_cooldown()
+                await update.message.reply_html(
+                    "🟢 <b>Mode Jeda Reversal Berhasil Direset!</b>\n\n"
+                    "Bot siap kembali mengeksekusi order XAU/USD secara otomatis jika terkonfirmasi setup Grade A (≥65%)."
+                )
+                return
             elif sub == "close" and len(args) > 1:
                 try:
                     ticket = int(args[1])
@@ -1870,12 +2785,16 @@ class TelegramBotCommands:
         in_hours, _ = bridge.is_within_trading_hours()
         hours_status = "🟢 <b>SESI AKTIF</b>" if in_hours else "⚪ <b>STANDBY (DILUAR JAM)</b>"
 
+        in_cd, cd_msg = bridge.is_in_reversal_cooldown()
+        rg_badge = f"⏸️ <b>JEDA OBSERVASI</b> (Cooldown aktif)" if in_cd else "🟢 <b>AKTIF & MEMANTAU REAL-TIME</b>"
+
         lines = [
             "🤖 <b>DASHBOARD METATRADER 5 (AUTO-TRADER)</b> 📈",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"⚡ <b>Mode Auto-Trade:</b> {status_auto}",
             f"🕒 <b>Jadwal Trading:</b> <code>{hours_badge}</code> ({hours_status})",
             f"📡 <b>Koneksi Terminal:</b> {conn_badge}",
+            f"🛡️ <b>Reversal Guard (Ambil Untung):</b> {rg_badge}",
             f"📚 <b>Filter Eksekusi:</b> <code>Wajib 9 Buku PDF Grade A (≥65%)</code>",
             f"📦 <b>Default Lot:</b> <code>{bridge.default_lot} Lot</code> (Batas Risiko: {bridge.risk_percent}%)",
             f"🎯 <b>Instrumen Trading:</b> <code>{bridge.gold_symbol} (XAU/USD)</code>",
@@ -1883,12 +2802,17 @@ class TelegramBotCommands:
         ]
 
         if acc:
+            curr = str(acc.get("currency", "USD")).upper()
+            is_cent = bridge.is_cent_account() or "USC" in curr or "CENT" in curr
+            type_badge = "Cent (USC)" if is_cent else "Standard (USD)"
+            unit_label = "USC" if is_cent else "USD"
+            equiv_usd = f" (~ ${acc['balance']/100.0:,.2f} USD)" if is_cent else ""
             lines.extend([
-                f"👤 <b>Akun MT5:</b> <code>#{acc['login']}</code> ({acc['server']} - {acc['trade_mode']})",
-                f"💵 <b>Balance:</b> <code>${acc['balance']:,.2f}</code>",
-                f"📊 <b>Equity:</b> <code>${acc['equity']:,.2f}</code>",
-                f"📈 <b>Floating Profit:</b> <code>${acc['profit']:+,.2f}</code>",
-                f"🛡️ <b>Free Margin:</b> <code>${acc['margin_free']:,.2f}</code> (Leverage 1:{acc['leverage']})",
+                f"👤 <b>Akun MT5:</b> <code>#{acc['login']}</code> ({acc['server']} - {acc['trade_mode']} | <b>{type_badge}</b>)",
+                f"💵 <b>Balance:</b> <code>{acc['balance']:,.2f} {unit_label}</code>{equiv_usd}",
+                f"📊 <b>Equity:</b> <code>{acc['equity']:,.2f} {unit_label}</code>",
+                f"📈 <b>Floating Profit:</b> <code>{acc['profit']:+,.2f} {unit_label}</code>",
+                f"🛡️ <b>Free Margin:</b> <code>{acc['margin_free']:,.2f} {unit_label}</code> (Leverage 1:{acc['leverage']})",
                 "━━━━━━━━━━━━━━━━━━━━━━",
             ])
         else:
@@ -1901,13 +2825,14 @@ class TelegramBotCommands:
         positions = bridge.get_open_positions()
         if positions:
             lines.append("📋 <b>POSISI TERBUKA SAAT INI (MT5):</b>")
+            pos_unit = "USC" if (bridge.is_cent_account() or (acc and ("USC" in str(acc.get("currency", "")).upper() or "CENT" in str(acc.get("currency", "")).upper()))) else "USD"
             for p in positions[:8]:
                 icon = "🟢" if p["type"] == "BUY" else "🔴"
                 lines.append(
                     f"• {icon} <b>#{p['ticket']} {p['type']} {p['volume']} {p['symbol']}</b>\n"
                     f"  Open: <code>${p['price_open']:,.2f}</code> | Current: <code>${p['price_current']:,.2f}</code>\n"
                     f"  TP: <code>${p['tp']:,.2f}</code> | SL: <code>${p['sl']:,.2f}</code>\n"
-                    f"  Floating: <b>${p['profit']:+,.2f}</b>"
+                    f"  Floating: <b>{p['profit']:+,.2f} {pos_unit}</b>"
                 )
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         else:
@@ -2056,6 +2981,24 @@ class TelegramBotCommands:
         if sig.market_direction_prediction:
             caption_lines.append(f"🎯 <b>Prediksi Arah:</b> <i>{html.escape(sig.market_direction_prediction)}</i>")
 
+        if is_gold:
+            try:
+                from trading.mt5_bridge import MT5Bridge
+                _bridge = MT5Bridge()
+                _open_pos = [p for p in _bridge.get_open_positions() if "XAUUSD" in p.get("symbol", "").upper()]
+                if _open_pos:
+                    p = _open_pos[0]
+                    p_pnl = p.get('profit', 0.0)
+                    p_sign = "+" if p_pnl >= 0 else ""
+                    caption_lines.append(
+                        f"🤖 <b>MT5 Active Order:</b> <code>#{p['ticket']} {p['type']} {p['volume']} lot @ ${p['price_open']:,.2f} ({p_sign}${p_pnl:,.2f})</code>"
+                    )
+                else:
+                    status_text = "Aktif (24 Jam Nonstop)" if _bridge.enabled and _bridge.trading_hours == "all" else ("Aktif" if _bridge.enabled else "Standby")
+                    caption_lines.append(f"🤖 <b>MT5 Auto-Trade:</b> <code>{status_text}</code>")
+            except Exception:
+                pass
+
         caption_lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         caption_lines.append("💡 <i>Ketik /potensi untuk melihat chart saham & emas yang paling berpotensi.</i>")
 
@@ -2065,12 +3008,38 @@ class TelegramBotCommands:
 
         other_style = "candles" if req_style == "area" else "area"
         other_label = "🕯️ Mode Candles" if req_style == "area" else "📈 Mode Area"
-        tv_markup = InlineKeyboardMarkup([
+        tv_buttons = [
             [
                 InlineKeyboardButton(other_label, callback_data=f"chart_{clean_ticker}_{other_style}"),
                 InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(clean_ticker)),
             ]
-        ])
+        ]
+
+        if is_gold:
+            try:
+                from trading.mt5_bridge import MT5Bridge
+                _bridge = MT5Bridge()
+                _open_pos = [p for p in _bridge.get_open_positions() if "XAUUSD" in p.get("symbol", "").upper()]
+                if _open_pos:
+                    p = _open_pos[0]
+                    tv_buttons.append([
+                        InlineKeyboardButton(
+                            f"🛑 Tutup Order MT5 #{p['ticket']} Sekarang",
+                            callback_data=f"close_pos_{p['ticket']}"
+                        )
+                    ])
+                else:
+                    action_cmd = sig.signal if sig.signal in ["BUY", "SELL"] else ("SELL" if is_bearish else "BUY")
+                    tv_buttons.append([
+                        InlineKeyboardButton(
+                            f"⚡ Eksekusi {action_cmd} di MT5 Sekarang ({_bridge.default_lot:.2f} Lot)",
+                            callback_data=f"exec_chart_{action_cmd}_{clean_ticker}_{sig.price}_{tp_val}_{sl_val}"
+                        )
+                    ])
+            except Exception:
+                pass
+
+        tv_markup = InlineKeyboardMarkup(tv_buttons)
 
         try:
             with open(chart_path, "rb") as photo:
@@ -2119,6 +3088,21 @@ class TelegramBotCommands:
 
                     df_ind = TechnicalIndicators.add_all_indicators(df)
                     sig = engine.evaluate_bar(df_ind, ticker=ticker, strategy=strategy)
+
+                    # Filter kesegaran candle: Tolak jika data candle dari hari kemarin / lampau
+                    try:
+                        c_ts = pd.to_datetime(sig.candle_time)
+                        tz_w = ZoneInfo("Asia/Jakarta")
+                        n_w = datetime.now(tz_w)
+                        if c_ts.tzinfo is not None:
+                            c_ts_w = c_ts.tz_convert(tz_w)
+                        else:
+                            c_ts_w = c_ts.tz_localize(tz_w)
+                        if c_ts_w.date() < n_w.date():
+                            continue
+                    except Exception:
+                        continue
+
                     is_pot, reason_badge, reason_desc = ChartGenerator.evaluate_asset_potential(sig, df_ind)
                     if is_pot:
                         chart_path = ChartGenerator.generate_chart(
@@ -2351,14 +3335,26 @@ class TelegramBotCommands:
 
             closest_analysis = None
             chart_path = None
+            closest_ev = None
             if events:
-                closest_ev = events[0]
+                now_utc = datetime.now(timezone.utc)
+                now_str = now_utc.strftime("%Y-%m-%d %H:%M:%S")
+                upcoming_events = [e for e in events if e.get("date_utc", "") >= now_str]
+                nfp_candidates = [
+                    e for e in (upcoming_events or events)
+                    if "non-farm employment change" in str(e.get("title", "")).lower()
+                ]
+                major_events = [
+                    e for e in (upcoming_events or events)
+                    if e.get("impact") == "High" or e.get("news_type") in ["NFP", "CPI", "FOMC", "PCE"]
+                ]
+                closest_ev = nfp_candidates[0] if nfp_candidates else (major_events[0] if major_events else (upcoming_events[0] if upcoming_events else events[0]))
                 closest_analysis = NewsPredictor.analyze_pre_news(closest_ev, live_gold_price=live_price, df_gold=df_gold)
                 chart_path = NewsPredictor.generate_pre_news_chart(closest_analysis, df=df_gold)
 
-            return events, closest_analysis, chart_path, live_price
+            return events, closest_analysis, chart_path, live_price, closest_ev
 
-        events, closest_analysis, chart_path, live_price = await asyncio.to_thread(_fetch_news)
+        events, closest_analysis, chart_path, live_price, closest_ev = await asyncio.to_thread(_fetch_news)
 
         if not events:
             await update.message.reply_html(
@@ -2370,7 +3366,7 @@ class TelegramBotCommands:
             return
 
         lines = [
-            "📅 <b>JADWAL 3 BERITA BESAR BULANAN (FOMC / CPI / NFP)</b> 🌎",
+            "📅 <b>JADWAL HIGH-IMPACT NEWS (FOMC / CPI / PCE / NFP / TRUMP / OIL)</b> 🌎",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"💵 <b>Harga Live XAU/USD:</b> <code>${live_price:,.2f}</code>",
             "━━━━━━━━━━━━━━━━━━━━━━",
@@ -2378,7 +3374,15 @@ class TelegramBotCommands:
 
         for idx, ev in enumerate(events[:5], 1):
             ntype = ev.get("news_type", "NEWS")
-            badge = "🔴 FOMC" if ntype == "FOMC" else "🟠 CPI" if ntype == "CPI" else "🟣 NFP" if ntype == "NFP" else "⚪ NEWS"
+            badge = (
+                "🔴 FOMC" if ntype == "FOMC"
+                else "🟠 CPI" if ntype == "CPI"
+                else "🔵 PCE" if ntype == "PCE"
+                else "🟣 NFP" if ntype == "NFP"
+                else "🇺🇸 TRUMP" if ntype == "TRUMP"
+                else "🛢️ OIL" if ntype == "OIL"
+                else "⚪ NEWS"
+            )
             t_wib = ev.get("date_wib", "-")
             fc = ev.get("forecast") or "-"
             pv = ev.get("previous") or "-"
@@ -2387,7 +3391,7 @@ class TelegramBotCommands:
             lines.append(f"   📊 Forecast: <code>{fc}</code> | Prev: <code>{pv}</code>")
             lines.append("──────────────────────")
 
-        if closest_analysis:
+        if closest_analysis and closest_ev:
             rec = closest_analysis.get("primary_recommendation", "BUY")
             conf = closest_analysis.get("confidence_pct", 75)
             setup = closest_analysis.get("trade_setup", {})
@@ -2395,7 +3399,9 @@ class TelegramBotCommands:
             badge_rec = "🟢 BUY" if "BUY" in rec else "🔴 SELL" if "SELL" in rec else "🟡 STRADDLE"
 
             lines.extend([
-                f"🎯 <b>SARAN UTAMA EVENT TERDEKAT ({closest_analysis['news_type']}):</b>",
+                f"🎯 <b>SARAN UTAMA EVENT TERDEKAT ({closest_analysis['news_type']} - {html.escape(closest_ev.get('title', ''))}):</b>",
+                f"• ⏰ <b>Waktu Rilis:</b> <code>{closest_ev.get('date_wib', '-')} WIB</code>",
+                f"• 📊 <b>Konsensus Web:</b> Forecast <code>{closest_ev.get('forecast', '-')}</code> | Prev <code>{closest_ev.get('previous', '-')}</code>",
                 f"• 🏆 <b>Rekomendasi:</b> <b>{badge_rec}</b> (<b>{conf}% Confidence</b>)",
                 f"• 🎯 <b>Target TP1:</b> <code>${setup.get('tp1', 0):,.2f}</code> | 🛑 <b>SL:</b> <code>${setup.get('sl', 0):,.2f}</code>",
                 f"• 🌐 <b>Bias Web:</b> <i>{html.escape(fund.get('reason', '-'))}</i>",
@@ -2447,7 +3453,8 @@ async def set_menu_commands(application: Application) -> None:
         BotCommand("scan", "🔍 Pindai Sinyal Pasar Sekarang"),
         BotCommand("watchlist", "📋 Saham Potensial Cuan & Harga"),
         BotCommand("status", "⚙️ Status Bot & Strategi Aktif"),
-        BotCommand("lasthistory", "📜 Riwayat Sinyal Terakhir"),
+        BotCommand("lasthistory", "📜 Riwayat Sinyal & Transaksi MT5"),
+        BotCommand("history", "📊 Rekap Transaksi Real MT5 & Hasil Sinyal"),
         BotCommand("help", "ℹ️ Panduan Penggunaan Bot"),
     ]
     try:
@@ -2495,11 +3502,15 @@ def build_telegram_application() -> Optional[Application]:
     app.add_handler(CommandHandler("status", cmd_handler.status_command))
     app.add_handler(CommandHandler("scan", cmd_handler.scan_command))
     app.add_handler(CommandHandler("watchlist", cmd_handler.watchlist_command))
-    app.add_handler(CommandHandler("lasthistory", cmd_handler.lasthistory_command))
-    app.add_handler(CommandHandler("approve", cmd_handler.approve_command))
-    app.add_handler(CommandHandler("extend", cmd_handler.extend_command))
-    app.add_handler(CommandHandler("reject", cmd_handler.reject_command))
-    app.add_handler(CommandHandler("users", cmd_handler.users_command))
+    app.add_handler(CommandHandler(["lasthistory", "history", "riwayat", "rekap"], cmd_handler.lasthistory_command))
+    app.add_handler(CommandHandler(["approve", "izinkan", "setujui"], cmd_handler.approve_command))
+    app.add_handler(CommandHandler(["extend", "perpanjang", "tambah"], cmd_handler.extend_command))
+    app.add_handler(CommandHandler(["reject", "kick", "cabut", "blokir"], cmd_handler.reject_command))
+    app.add_handler(CommandHandler(["delete", "hapus", "purge"], cmd_handler.delete_command))
+    app.add_handler(CommandHandler(["users", "member", "members", "kelola"], cmd_handler.users_command))
+    app.add_handler(CommandHandler(["sendcopier", "broadcastcopier", "kirimcopier"], cmd_handler.sendcopier_command))
+
+    app.add_handler(CommandHandler(["license", "lisensi", "auth_check"], cmd_handler.license_command))
     app.add_handler(CallbackQueryHandler(cmd_handler.button_callback_handler))
     # Handler pesan teks bebas (ngobrol santai & permintaan live chart otomatis)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_handler.chat_message_handler))
@@ -2513,8 +3524,8 @@ def run_telegram_bot_polling() -> None:
     if app:
         logger.info("Memulai Telegram bot polling listener...")
         try:
-            app.run_polling(stop_signals=None)
+            app.run_polling(stop_signals=None, bootstrap_retries=-1)
         except Exception:
-            app.run_polling()
+            app.run_polling(bootstrap_retries=-1)
     else:
         logger.error("Gagal menjalankan bot: Token Telegram tidak valid.")

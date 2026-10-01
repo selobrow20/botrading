@@ -1,5 +1,5 @@
 @echo off
-title BOT TRADING AUTO-TRADER MT5 (XAU/USD HFM)
+title BOT TRADING AUTO-TRADER MT5 (XAU/USD HFM - 9 PDF)
 color 0A
 cd /d "%~dp0"
 
@@ -14,7 +14,7 @@ if not exist ".\.venv\Scripts\python.exe" (
     exit /b
 )
 
-echo [2/2] Menjalankan Bot Sinyal 7 PDF Confluence & MT5 Auto-Trader...
+echo [2/2] Menjalankan Bot Sinyal 9 PDF Confluence & MT5 Auto-Trader...
 echo.
 echo Tips:
 echo - Pastikan aplikasi MetaTrader 5 HFM tetap terbuka di latar belakang.

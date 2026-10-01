@@ -60,7 +60,35 @@ mt5:
   risk_percent: 1.0
   max_slippage: 20
   gold_symbol: XAUUSDc
-  trading_hours: 19:00-23:00
+  trading_hours: all
+  max_positions_usd: 1
+  max_positions_cent: 3  # Maksimal 3 posisi untuk akun Cent (USC) saat ada setup/momen konfluensi baru
+  min_grid_spacing: 1.0  # Jarak minimal antar posisi $1.00 USD (10 pips) agar sinyal candle baru tidak terblokir
+  use_trailing_stop: false  # Dinonaktifkan sesuai instruksi: murni target TP/SL sesuai mode pasar
+  enable_break_even: true   # Auto Break-Even (BEP) saat floating profit mencapai target
+  break_even_long_pips: 100.0  # Sinyal Long / TP Jauh: Otomatis BEP saat floating profit +100 pips ($10.00 USD)
+  break_even_buffer_pips: 3.0  # Buffer pengaman di atas entry: +3 pips ($0.30 USD) agar transaksi bebas risiko & menutupi komisi
+  enable_reversal_auto_close: true  # Mengizinkan cut loss / auto-close dini jika terkonfirmasi pembalikan tren 90% - 100% 9 Buku PDF
+  reversal_auto_close_min_score: 90.0  # Batas minimal skor pembalikan untuk cut loss dini (90% - 100%)
+  enable_reversal_flip: true  # Mengizinkan pembalikan posisi (Cut loss posisi lama & langsung masuk posisi sebaliknya) jika skor >= 90%
+  min_reversal_flip_score: 90.0  # Minimal skor 90% untuk flip posisi sebaliknya sesuai 9 Buku PDF
+  max_spread_usd: 0.65  # Maksimal spread $0.65 USD (65 pips) agar tidak entry saat spread malam melebar
+  enable_rollover_guard: true  # Menahan entry saat jam rollover malam broker (04:45 - 05:20 WIB)
+  max_consecutive_losses: 2  # Jika 2x SL beruntun, aktifkan cooldown pengamanan 60 menit
+  consecutive_loss_cooldown_mins: 60
+  enable_midnight_guard: true  # Proteksi tidur tengah malam (02:00 - 04:30 WIB) agar tidak boncos saat user istirahat
+  midnight_start_hour: 2  # 02:00 WIB
+  midnight_end_hour: 4    # 04:30 WIB (sebelum rollover 04:45 WIB)
+  midnight_end_minute: 30
+  midnight_max_loss_usc: 50.0  # Batas maksimal kerugian di jam tidur tengah malam akun Cent (-50 USC)
+  min_confluence_score: 65.0  # Batas minimal skor akurasi 9 Buku PDF untuk eksekusi MT5 (Grade A)
+  # Target Take Profit & Stop Loss Adaptif Sesuai Momen (Semua Jam: Pagi, London, US)
+  gold_short_tp_pips: 60.0   # Sinyal short/scalping: 60 pips ($6.00 USD)
+  gold_short_sl_pips: 60.0   # Stop loss sinyal short: 60 pips ($6.00 USD) - R:R 1:1
+  gold_long_tp_pips: 140.0   # Target panjang saat momen tren panjang bagus: 140 pips ($14.00 USD)
+  gold_long_sl_pips: 60.0    # Stop loss momen panjang dijaga 60 pips ($6.00 USD)
+  # Batas kerugian harian USC dihilangkan di jam normal karena dipantau langsung oleh user
+  max_daily_loss_usd: 50.0  # Batas maksimal kerugian harian akun USD Standard (-$50 USD) 24/7
 indicators:
   moving_averages:
     periods:

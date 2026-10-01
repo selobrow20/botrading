@@ -16,12 +16,15 @@ from strategy.signal_engine import SignalResult
 from notify.telegram_bot import TelegramNotifier, TelegramBotCommands
 
 
-def test_stage_5():
+import tempfile
+
+def test_stage_5(tmp_path=None):
     print("=" * 75)
     print("TEST TAHAP 5: MODUL NOTIFIKASI & COMMAND BOT TELEGRAM")
     print("=" * 75)
 
-    storage = StockStorage()
+    db_path = str(tmp_path / "test_stage5.db") if tmp_path else str(Path(tempfile.gettempdir()) / "test_stage5.db")
+    storage = StockStorage(db_path=db_path)
     notifier = TelegramNotifier(token="mock_test_token", chat_id="12345678", storage=storage)
 
     # 1. Simulasikan Sinyal BUY Baru

@@ -1,0 +1,57 @@
+======================================================================
+     PANDUAN LENGKAP PENGGUNAAN MT5 AUTO-COPIER (SISI MEMBER)
+======================================================================
+
+Selamat datang di layanan VIP Auto-Trader 9 Buku PDF Confluence!
+Dengan modul ini, transaksi Gold (XAU/USD) di akun MetaTrader 5 milikmu
+akan dieksekusi secara otomatis setiap kali Master Bot memberikan sinyal Grade A+.
+
+----------------------------------------------------------------------
+LANGKAH 1: PERMINTAAN IZIN KE TELEGRAM ADMIN (WAJIB)
+----------------------------------------------------------------------
+1. Buka aplikasi Telegram kamu.
+2. Cari bot Master: @selo_saham_bot
+3. Ketik perintah: /start
+4. Tunggu beberapa saat sampai Master Admin (@selobrow) MENYETUJUI aksesmu.
+   (Jika belum disetujui, sinyal tidak akan terkirim ke Telegrammu).
+
+----------------------------------------------------------------------
+LANGKAH 2: PENGATURAN LOT & POSISI DI FILE CONFIG.JSON
+----------------------------------------------------------------------
+1. Buka file `config.json` menggunakan Notepad.
+2. Secara default ukuran lot sudah diset `"default_lot": 0.05` (sama persis dengan akun Master).
+   - Akun Cent (USC): Maksimal 3 posisi serentak
+   - Akun Standard (USD): Maksimal 1 posisi (disiplin ketat)
+   - Jika modal kamu kecil ($50 - $100) dan ingin lot lebih kecil, silakan ubah ke 0.01 Lot.
+3. Simpan (Save) file `config.json`.
+
+----------------------------------------------------------------------
+LANGKAH 3: MENJALANKAN AUTO-COPIER
+----------------------------------------------------------------------
+1. Pastikan aplikasi MetaTrader 5 (MT5) di laptop/PC kamu SUDAH TERBUKA
+   dan terhubung ke akun trading broker kamu (Exness, HFM, Octa, XM, dll).
+2. Klik ganda file: `START_COPIER.bat`
+3. Saat pertama kali dijalankan, kamu akan diminta memasukkan nomor HP Telegram:
+   - Ketik nomor HP Telegram kamu dengan awalan +62 (Contoh: +6281234567890).
+   - ⚠️ PERHATIAN: JANGAN MASUKKAN TOKEN BOT! Cukup masukkan nomor HP kamu.
+   - Ketik kode OTP yang dikirim Telegram ke aplikasi Telegram kamu.
+4. Setelah muncul tulisan:
+   "✅ [LISENSI TERVERIFIKASI RESMI DARI MASTER ADMIN]"
+   Artinya copier sudah berjalan! Biarkan jendela ini tetap terbuka.
+
+
+Setiap kali Master Bot mendeteksi sinyal BUY / SELL Gold Grade A+,
+MT5 milikmu akan otomatis membuka posisi lengkap dengan Take Profit (TP)
+dan Stop Loss (SL) yang presisi.
+
+----------------------------------------------------------------------
+KENDALI LISENSI & KEAMANAN TERPUSAT:
+----------------------------------------------------------------------
+1. AUTO-EXPIRY: Copier akan OTOMATIS BERHENTI beroperasi begitu masa
+   aktif VIP yang diberikan oleh Admin berakhir demi keamanan modalmu.
+2. ANTI-SHARE: Modul ini terikat dengan akun Telegram kamu yang disetujui.
+   Jika file ini dikirim/dibagikan ke orang lain, sistem akan otomatis
+   menolak jalan (akses ditolak).
+3. Hubungi Master Admin (@selobrow) jika ingin memperpanjang masa aktif.
+======================================================================
+

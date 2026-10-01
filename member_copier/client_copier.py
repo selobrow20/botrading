@@ -1,0 +1,1107 @@
+"""
+CLIENT MT5 AUTO-COPIER (SISI MEMBER) - ANTI-SHARE & AUTO-EXPIRY EDITION
+Membaca Sinyal Eksklusif 9 Buku PDF dari Master Bot Telegram & Mengeksekusi Otomatis ke MT5.
+
+PERINGATAN HAK CIPTA & KEAMANAN:
+File ini adalah modul penerima (Client Receiver) dengan proteksi lisensi terpusat.
+- Lisensi terkunci ke akun Telegram resmi yang disetujui oleh Master Admin (@selobrow).
+- File ini TIDAK DAPAT DIBAGIKAN ke orang lain (otomatis terkunci & menolak jalan).
+- Copier otomatis berhenti sendiri begitu masa aktif lisensi berakhir.
+- Rumus strategi 9 Buku PDF 100% aman dan tetap berada di server Master Provider.
+"""
+
+import os
+import re
+import sys
+import json
+import time
+import asyncio
+from pathlib import Path
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
+
+# Pastikan UTF-8 di Windows Console
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
+
+def load_config() -> dict:
+    cfg = {
+        "bot_username": "selo_saham_bot",
+        "gold_symbol": "XAUUSD",
+        "symbol_suffix": "",
+        "default_lot": 0.05,
+        "max_positions_cent": 3,
+        "max_positions_standard": 1,
+        "min_grid_spacing": 1.0,
+        "max_price_drift": 8.0,
+        "max_slippage": 20,
+        "magic_number": 888888,
+        "auto_tp_sl": True,
+        "enable_reversal_auto_close": True,
+        "enable_break_even": True,
+        "break_even_long_pips": 100.0,
+        "break_even_buffer_pips": 3.0,
+    }
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+                cfg.update(loaded)
+        except Exception:
+            pass
+
+    # Otomatis koreksi tanpa perlu user mengedit file manual
+    b_user = (cfg.get("bot_username") or "").strip().lstrip("@")
+    if b_user.lower() in ["selobrow_bot", "selobrow", "selo_bot", ""]:
+        cfg["bot_username"] = "selo_saham_bot"
+        try:
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, indent=2)
+        except Exception:
+            pass
+
+    return cfg
+
+
+def parse_signal(text: str) -> dict:
+    """Mengekstrak data sinyal (Aksi, Simbol, Entry, TP, SL, Ticket) dari format kartu Master Bot."""
+    if not text:
+        return {}
+
+    # Bersihkan tag HTML agar regex dapat mencocokkan teks polos maupun bertag (<b>, <code>, dll)
+    clean_text = re.sub(r"<[^>]+>", " ", text)
+    text_upper = clean_text.upper()
+
+    # Abaikan jika ini adalah laporan hasil / deal / penutupan posisi / pengumuman
+    ignore_keywords = [
+        "LAPORAN PENUTUPAN",
+        "TRANSAKSI SELESAI",
+        "HASIL TRANSAKSI",
+        "DEAL #",
+        "POSISI DITUTUP",
+        "RINGKASAN PORTOFOLIO",
+        "WIN RATE",
+        "AKURASI EMAS",
+        "LIC_INFO|",
+        "/START",
+        "/HELP",
+        "/USERS",
+        "/STATUS",
+        "/LICENSE",
+    ]
+    if any(k in text_upper for k in ignore_keywords):
+        return {}
+
+    is_gold = any(k in text_upper for k in ["XAUUSD", "XAU/USD", "XAU", "GOLD", "EMAS"])
+    if not is_gold:
+        return {}
+
+    action = None
+    if any(k in text_upper for k in ["SINYAL ENTRY (MASUK / BUY)", "SINYAL ENTRY BUY", "BUY (LONG)", "BUY / LONG", "AKSI SINYAL: BUY", "AKSI ORDER: BUY"]):
+        action = "BUY"
+    elif any(k in text_upper for k in ["SINYAL ENTRY SHORT", "SINYAL ENTRY (MASUK / SELL)", "SINYAL ENTRY SELL", "SELL (SHORT)", "SELL / SHORT", "AKSI SINYAL: SELL", "AKSI ORDER: SELL"]):
+        action = "SELL"
+    else:
+        # Hanya cocokkan kata BUY/SELL mandiri jika ada kata "ENTRY" atau "HARGA" di dalam pesan
+        if "ENTRY" in text_upper or "MASUK" in text_upper:
+            if re.search(r"\bBUY\b", text_upper):
+                action = "BUY"
+            elif re.search(r"\bSELL\b", text_upper):
+                action = "SELL"
+
+    if not action:
+        return {}
+
+    def _clean_num(raw_str: str) -> float:
+        cleaned = re.sub(r"[^\d.]", "", raw_str)
+        try:
+            return float(cleaned)
+        except Exception:
+            return 0.0
+
+    entry_price = 0.0
+    tp_price = 0.0
+    sl_price = 0.0
+
+    m_entry = re.search(
+        r"(?:Harga Entry(?: Short)?|Harga Masuk|Area Entry|\bEntry\b|Harga)\s*[:=]?\s*\$?([\d,]+(?:\.\d+)?)",
+        clean_text,
+        re.IGNORECASE,
+    )
+    if m_entry:
+        entry_price = _clean_num(m_entry.group(1))
+
+    m_tp = re.search(
+        r"(?:Take Profit(?:\s*\(TP\))?|\bTP\b)\s*[:=]?\s*\$?([\d,]+(?:\.\d+)?)",
+        clean_text,
+        re.IGNORECASE,
+    )
+    if m_tp:
+        tp_price = _clean_num(m_tp.group(1))
+
+    m_sl = re.search(
+        r"(?:Stop Loss(?:\s*\(SL\))?|\bSL\b)\s*[:=]?\s*\$?([\d,]+(?:\.\d+)?)",
+        clean_text,
+        re.IGNORECASE,
+    )
+    if m_sl:
+        sl_price = _clean_num(m_sl.group(1))
+
+    # Jika bukan sinyal berparameter (tidak ada entry, TP, ataupun SL), abaikan
+    if entry_price <= 0 and tp_price <= 0 and sl_price <= 0:
+        return {}
+
+    m_ticket = re.search(r"(?:Ticket ID|Ticket|Order ID)\s*[:=]?\s*#?(\d+)", clean_text, re.IGNORECASE)
+    ticket_id = m_ticket.group(1) if m_ticket else None
+
+    m_score = re.search(r"Konfluensi 9 PDF.*?(\d+)%", clean_text, re.IGNORECASE)
+    pdf_score = float(m_score.group(1)) if m_score else 0.0
+
+    return {
+        "symbol": "XAUUSD",
+        "action": action,
+        "entry_price": entry_price,
+        "tp_price": tp_price,
+        "sl_price": sl_price,
+        "ticket": ticket_id,
+        "pdf_confluence_score": pdf_score,
+        "raw_text": text,
+    }
+
+
+class MT5MemberBridge:
+    """Jembatan eksekusi order ke aplikasi MetaTrader 5 lokal milik member."""
+
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        self.lot = float(cfg.get("default_lot", 0.05))
+        self.magic = int(cfg.get("magic_number", 888888))
+        self.slippage = int(cfg.get("max_slippage", 20))
+        self.symbol_override = cfg.get("gold_symbol", "XAUUSD")
+        self.suffix = cfg.get("symbol_suffix", "")
+        self.mt5 = None
+        self._detect_mt5()
+
+    def _detect_mt5(self):
+        try:
+            import MetaTrader5 as mt5
+            self.mt5 = mt5
+            if not self.mt5.initialize():
+                print(f"[!] Gagal inisialisasi MT5: {self.mt5.last_error()}")
+            else:
+                acc = self.mt5.account_info()
+                if acc:
+                    is_cent = self.is_cent_account()
+                    sym = self.find_broker_symbol()
+                    curr_name = "USC" if is_cent else str(acc.currency or "USD").upper()
+                    equiv_usd = f" (~ ${acc.balance/100.0:,.2f} USD)" if is_cent else ""
+                    type_lbl = "Cent (USC)" if is_cent else "Standard (USD)"
+                    max_pos = int(self.cfg.get("max_positions_cent", 3)) if is_cent else int(self.cfg.get("max_positions_standard", 1))
+
+                    print("\n" + "=" * 65)
+                    print(f"✅ [MT5 TERHUBUNG] Akun #{acc.login} ({acc.server})")
+                    print(f"   👤 Tipe Akun    : {type_lbl}")
+                    print(f"   💰 Saldo MT5    : {acc.balance:,.2f} {curr_name}{equiv_usd}")
+                    print(f"   🏷️ Simbol Gold  : {sym}")
+                    print(f"   📦 Maks Posisi  : {max_pos} Posisi Serentak")
+                    print(f"   🎯 Lot Eksekusi : {self.lot} Lot")
+
+                    # Peringatan Algo Trading
+                    t_info = self.mt5.terminal_info()
+                    if t_info and not getattr(t_info, "trade_allowed", True):
+                        print("   ⚠️ PERINGATAN: Tombol 'Algo Trading' di toolbar atas MT5 belum AKTIF!")
+                        print("      Silakan klik tombol 'Algo Trading' (menjadi hijau) di MT5 agar order dapat dieksekusi.")
+                    print("=" * 65 + "\n")
+                else:
+                    print("[✓] MT5 Berhasil diinisialisasi.")
+        except ImportError:
+            print("[!] Library MetaTrader5 belum terpasang. Jalankan: pip install MetaTrader5")
+
+    def find_broker_symbol(self) -> str:
+        """
+        Mencari simbol trading Gold yang valid & tradeable di MT5 member.
+        Secara cerdas membedakan akun Cent (XAUUSDc, GOLDc) vs Standard USD (XAUUSD, GOLD).
+        """
+        if not self.mt5:
+            return self.symbol_override or "XAUUSD"
+
+        # Cek petunjuk apakah akun Cent
+        is_cent = False
+        try:
+            acc = self.mt5.account_info()
+            if acc:
+                curr = str(getattr(acc, "currency", "") or "").upper().strip()
+                server = str(getattr(acc, "server", "") or "").lower()
+                if any(c in curr for c in ["USC", "CENT", "EUX", "GBX"]) or curr.endswith("C") or any(k in server for k in ["cent", "procent", "micro"]):
+                    is_cent = True
+        except Exception:
+            pass
+
+        # Daftar kandidat simbol berdasarkan tipe akun
+        if is_cent:
+            candidates = [
+                f"{self.symbol_override}{self.suffix}" if self.suffix else None,
+                "XAUUSDc", "XAUUSD.c", "GOLDc", "XAUUSDm", "XAUUSD.m",
+                "XAUUSD", "GOLD", "XAUUSD.raw"
+            ]
+        else:
+            candidates = [
+                f"{self.symbol_override}{self.suffix}" if self.suffix else None,
+                "XAUUSD", "GOLD", "XAUUSD.raw", "XAUUSD.m", "XAUUSDm",
+                "XAUUSDc", "GOLDc"
+            ]
+
+        # Filter candidate yang None / kosong
+        seen = set()
+        clean_candidates = [c for c in candidates if c and not (c in seen or seen.add(c))]
+
+        for c in clean_candidates:
+            s_info = self.mt5.symbol_info(c)
+            if s_info is not None:
+                # Pastikan simbol ini tradeable (bukan disabled / trade_mode == 0)
+                trade_mode = getattr(s_info, "trade_mode", 4)
+                if trade_mode != 0:  # SYMBOL_TRADE_MODE_DISABLED = 0
+                    if not s_info.visible:
+                        self.mt5.symbol_select(c, True)
+                    return c
+
+        # Fallback dinamis: scan seluruh daftar simbol di MT5
+        try:
+            all_symbols = self.mt5.symbols_get()
+            if all_symbols:
+                if is_cent:
+                    for s in all_symbols:
+                        s_name = s.name
+                        s_up = s_name.upper()
+                        if ("XAU" in s_up or "GOLD" in s_up) and (s_name.endswith("c") or ".c" in s_name.lower()):
+                            if getattr(s, "trade_mode", 4) != 0:
+                                self.mt5.symbol_select(s_name, True)
+                                return s_name
+                for s in all_symbols:
+                    s_up = s.name.upper()
+                    if ("XAU" in s_up or "GOLD" in s_up) and getattr(s, "trade_mode", 4) != 0:
+                        self.mt5.symbol_select(s.name, True)
+                        return s.name
+        except Exception:
+            pass
+
+        return "XAUUSDc" if is_cent else "XAUUSD"
+
+    def is_cent_account(self) -> bool:
+        """
+        Mendeteksi dengan akurat 100% apakah akun MT5 adalah akun Cent (USC) atau Standard (USD).
+        Mendukung berbagai broker: HFMarkets, Exness, RoboForex, FBS, XM, Octa, IC Markets, dll.
+        """
+        if not self.mt5:
+            return False
+        try:
+            acc = self.mt5.account_info()
+            if not acc:
+                return False
+
+            # 1. Cek mata uang akun (USC, EUX, GBX, CENT, USDCent, dll)
+            curr = str(getattr(acc, "currency", "") or "").upper().strip()
+            if any(c in curr for c in ["USC", "CENT", "EUX", "GBX"]) or curr.endswith("C"):
+                return True
+
+            # 2. Cek nama server broker (misal: HFMarketsGlobal-Cent, RoboForex-ProCent, Exness-Cent, FBS-Cent)
+            server = str(getattr(acc, "server", "") or "").lower()
+            if any(k in server for k in ["cent", "procent", "micro"]):
+                return True
+
+            # 3. Cek company / group
+            company = str(getattr(acc, "company", "") or "").lower()
+            if "cent" in company:
+                return True
+
+            # 4. Cek apakah ada simbol emas cent di broker MT5 yang aktif & tradeable
+            for sym_cand in ["XAUUSDc", "XAUUSD.c", "GOLDc"]:
+                s_inf = self.mt5.symbol_info(sym_cand)
+                if s_inf is not None and getattr(s_inf, "trade_mode", 4) > 0:
+                    return True
+
+            # 5. Cek simbol broker yang aktif saat ini
+            broker_sym = self.find_broker_symbol()
+            if broker_sym.lower().endswith("c") or ".c" in broker_sym.lower():
+                return True
+
+            return False
+        except Exception:
+            return False
+
+    def ensure_connected(self) -> bool:
+        """Memastikan koneksi MT5 member aktif dan auto-reconnect jika idle atau terputus."""
+        if not self.mt5:
+            self._detect_mt5()
+            return bool(self.mt5)
+        try:
+            t_info = self.mt5.terminal_info()
+            if t_info is None:
+                # IPC terputus, hubungkan ulang secara halus tanpa shutdown paksa
+                return bool(self.mt5.initialize())
+            return True
+        except Exception:
+            return False
+
+    def close_position(self, ticket: int) -> dict:
+        if not self.ensure_connected():
+            return {"success": False, "message": "MetaTrader 5 tidak aktif atau gagal terhubung."}
+        try:
+            positions = self.mt5.positions_get(ticket=ticket)
+            if not positions:
+                return {"success": False, "message": f"Posisi #{ticket} tidak ditemukan."}
+            pos = positions[0]
+            close_type = self.mt5.ORDER_TYPE_SELL if pos.type == self.mt5.ORDER_TYPE_BUY else self.mt5.ORDER_TYPE_BUY
+            tick = self.mt5.symbol_info_tick(pos.symbol)
+            if not tick:
+                return {"success": False, "message": "Gagal membaca tick pasar."}
+            close_price = tick.bid if pos.type == self.mt5.ORDER_TYPE_BUY else tick.ask
+
+            s_info = self.mt5.symbol_info(pos.symbol)
+            filling_mode = int(s_info.filling_mode or 0) if s_info else 0
+            candidates = []
+            if filling_mode & 1:
+                candidates.append(self.mt5.ORDER_FILLING_FOK)
+            if filling_mode & 2:
+                candidates.append(self.mt5.ORDER_FILLING_IOC)
+            candidates.extend([self.mt5.ORDER_FILLING_FOK, self.mt5.ORDER_FILLING_IOC, self.mt5.ORDER_FILLING_RETURN])
+            seen = set()
+            fill_types = [f for f in candidates if not (f in seen or seen.add(f))]
+
+            req = {
+                "action": self.mt5.TRADE_ACTION_DEAL,
+                "position": ticket,
+                "symbol": pos.symbol,
+                "volume": pos.volume,
+                "type": close_type,
+                "price": close_price,
+                "deviation": self.slippage,
+                "magic": self.magic,
+                "comment": "VIP-Close-Opposite",
+            }
+            res = None
+            for ft in fill_types:
+                req["type_filling"] = ft
+                res = self.mt5.order_send(req)
+                if res and res.retcode == self.mt5.TRADE_RETCODE_DONE:
+                    return {"success": True, "message": f"Posisi #{ticket} berhasil ditutup."}
+                if res and res.retcode != 10030:
+                    break
+            err = res.comment if res else "Gagal"
+            return {"success": False, "message": err}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def close_all_positions(self, symbol: str = None, action: str = None) -> list:
+        """Menutup seluruh posisi terbuka pada simbol tertentu (opsional berdasarkan tipe BUY/SELL)."""
+        if not self.ensure_connected():
+            return []
+        sym = symbol or self.find_broker_symbol()
+        open_pos = self.mt5.positions_get(symbol=sym) or []
+        closed = []
+        for p in open_pos:
+            pos_act = "BUY" if p.type == 0 else "SELL"
+            if action is None or pos_act == action:
+                res = self.close_position(p.ticket)
+                closed.append({"ticket": p.ticket, "action": pos_act, "success": res.get("success")})
+        return closed
+
+    def modify_open_positions_sl(self, symbol: str = None, action: str = None, new_sl: float = 0.0) -> list:
+        """Menggeser SL seluruh posisi terbuka (untuk BEP Lock & Trailing Stop dari Master)."""
+        if not self.ensure_connected() or new_sl <= 0:
+            return []
+        sym = symbol or self.find_broker_symbol()
+        open_pos = self.mt5.positions_get(symbol=sym) or []
+        modified = []
+        for p in open_pos:
+            pos_act = "BUY" if p.type == 0 else "SELL"
+            if action is None or pos_act == action:
+                should_mod = False
+                if pos_act == "BUY" and new_sl > p.sl:
+                    should_mod = True
+                elif pos_act == "SELL" and (p.sl == 0.0 or new_sl < p.sl):
+                    should_mod = True
+
+                if should_mod:
+                    req = {
+                        "action": self.mt5.TRADE_ACTION_SLTP,
+                        "position": p.ticket,
+                        "symbol": p.symbol,
+                        "sl": round(float(new_sl), 2),
+                        "tp": float(p.tp),
+                    }
+                    res = self.mt5.order_send(req)
+                    if res and res.retcode == self.mt5.TRADE_RETCODE_DONE:
+                        modified.append({"ticket": p.ticket, "action": pos_act, "new_sl": new_sl, "success": True})
+                    else:
+                        err_msg = res.comment if res else "Gagal modifikasi"
+                        modified.append({"ticket": p.ticket, "action": pos_act, "success": False, "err": err_msg})
+        return modified
+
+    def execute_order(self, sig: dict) -> dict:
+        if not self.ensure_connected():
+            return {"success": False, "message": "MetaTrader 5 tidak aktif atau gagal terhubung."}
+
+        action = sig.get("action", "BUY")
+        sym = self.find_broker_symbol()
+
+        # Proteksi Anti-Tabrakan & Anti-Hedging Disiplin (Kaidah 9 Buku PDF):
+        # Jika ada posisi yang berlawanan arah (misal ada BUY aktif, lalu muncul sinyal SELL):
+        # JANGAN lakukan penutupan paksa di harga pasar yang memicu whipsawing / kerugian bolak-balik!
+        # Biarkan posisi yang sedang berjalan menyelesaikan target TP atau pengaman SL-nya secara terukur.
+        # Lewati (skip) sinyal baru yang berlawanan arah agar terhindar dari hedging liar dan overtrading.
+        open_pos = self.mt5.positions_get(symbol=sym) or []
+        opposite_pos = [p for p in open_pos if (p.type == 0 and action == "SELL") or (p.type == 1 and action == "BUY")]
+        if opposite_pos:
+            # Cek apakah sinyal ini merupakan REVERSAL FLIP 90%+ dari Master:
+            sig_reasons = str(sig.get("reasons", "")) + " " + str(sig.get("raw_text", ""))
+            pdf_score = float(sig.get("pdf_confluence_score", 0.0) or 0.0)
+            is_flip = (
+                pdf_score >= 90.0 or
+                any(k in sig_reasons.upper() for k in ["REVERSAL FLIP", "PEMBALIKAN ARAH", "GRADE A+ (SETUP SEMPURNA", "95%"]) or
+                "REVERSAL" in str(sig.get("strategy_name", "")).upper()
+            )
+
+            if is_flip:
+                opp_summary = ", ".join(f"#{p.ticket} ({'BUY' if p.type==0 else 'SELL'} @ {p.price_open})" for p in opposite_pos)
+                print(f"\n🔄 [REVERSAL FLIP 90%+ 9 BUKU PDF] Menutup posisi lawan [{opp_summary}] di MT5 Member untuk cut loss & flip ke {action}...")
+                for p in opposite_pos:
+                    self.close_position(p.ticket)
+                import time
+                time.sleep(0.5)
+                open_pos = self.mt5.positions_get(symbol=sym) or []
+            else:
+                opp_summary = ", ".join(f"#{p.ticket} ({'BUY' if p.type==0 else 'SELL'} @ {p.price_open})" for p in opposite_pos)
+                msg_opp = (
+                    f"⏸️ [ANTI-HEDGING GUARD] Sinyal {action} dilewati: Masih ada posisi berlawanan aktif "
+                    f"[{opp_summary}] yang sedang berjalan menuju TP/SL. Menghindari whipsawing / tabrakan order."
+                )
+                print(f"\n{msg_opp}\n")
+                return {"success": False, "message": msg_opp}
+
+        # Batasan posisi terbuka berdasarkan tipe akun:
+        # Akun Cent (USC): Maksimal 3 posisi (sesuai instruksi: "ubah jadi 3 aja max bor")
+        # Akun USD Standard: Maksimal 1 posisi (disiplin ketat)
+        is_cent = self.is_cent_account()
+        max_cent = int(self.cfg.get("max_positions_cent", 3))
+        max_std = int(self.cfg.get("max_positions_standard", 1))
+        max_positions = max_cent if is_cent else max_std
+
+        if len(open_pos) >= max_positions:
+            mode_lbl = f"CENT USC (Maks {max_positions} Posisi)" if is_cent else f"USD Standard (Maks {max_positions} Posisi)"
+            return {
+                "success": False,
+                "message": f"Batas posisi tercapai ({len(open_pos)}/{max_positions} posisi {sym} aktif di MT5). Mode: {mode_lbl}. Menunggu posisi selesai sebelum open baru."
+            }
+
+        s_info = self.mt5.symbol_info(sym)
+        if not s_info:
+            return {"success": False, "message": f"Simbol {sym} tidak ditemukan di MT5 member."}
+
+        tick = self.mt5.symbol_info_tick(sym)
+        if not tick:
+            return {"success": False, "message": f"Gagal mendapatkan tick pasar {sym}."}
+
+        order_type = self.mt5.ORDER_TYPE_BUY if action == "BUY" else self.mt5.ORDER_TYPE_SELL
+        curr_price = tick.ask if action == "BUY" else tick.bid
+
+        # Anti-Stacking Protection: Minimal jarak harga antar posisi terbuka searah (default $1.00 USD)
+        min_grid_spacing = float(self.cfg.get("min_grid_spacing", 1.0))
+        same_side_pos = [p for p in open_pos if (p.type == 0 and action == "BUY") or (p.type == 1 and action == "SELL")]
+        if same_side_pos and curr_price > 0:
+            min_dist = min(abs(curr_price - float(p.price_open)) for p in same_side_pos)
+            if min_dist < min_grid_spacing:
+                msg_stack = (
+                    f"⛔ Penumpukan Posisi Dicegah: Sudah ada posisi {action} aktif di area harga ini "
+                    f"(jarak harga live ${curr_price:,.2f} vs posisi terbuka hanya ${min_dist:.2f} < minimal grid ${min_grid_spacing:.2f} USD). "
+                    f"Menjaga akun dari risiko over-exposure di titik harga yang sama."
+                )
+                print(f"\n{msg_stack}\n")
+                return {"success": False, "message": msg_stack}
+
+        # Proteksi Sinyal Telat (Price Drift Guard):
+        # Jika harga live pasar sudah lari lebih dari batas toleransi (default $8.00 USD) dari harga sinyal Master,
+        # tolak order seketika agar member tidak terjebak entry telat / di pucuk!
+        sig_entry = float(sig.get("entry_price", 0.0))
+        max_drift = float(self.cfg.get("max_price_drift", 8.0))
+        if sig_entry > 0:
+            price_drift = abs(curr_price - sig_entry)
+            if price_drift > max_drift:
+                msg_drift = (
+                    f"⚠️ [SINYAL TELAT DITOLAK] Harga live (${curr_price:,.2f}) sudah lari "
+                    f"${price_drift:.2f} USD dari harga sinyal (${sig_entry:,.2f}). "
+                    f"Batas toleransi: ${max_drift:.2f} USD. Order dibatalkan demi melindungi modal trading member."
+                )
+                print(f"\n{msg_drift}\n")
+                return {"success": False, "message": msg_drift}
+        else:
+            sig["entry_price"] = curr_price
+
+        tp_val = sig.get("tp_price", 0.0)
+        sl_val = sig.get("sl_price", 0.0)
+
+        digits = s_info.digits
+        if tp_val > 0:
+            tp_val = round(tp_val, digits)
+        if sl_val > 0:
+            sl_val = round(sl_val, digits)
+
+        # Money Management & Normalisasi Ukuran Lot
+        trade_lot = self.lot
+        if not is_cent:
+            acc = self.mt5.account_info()
+            if acc and float(getattr(acc, "balance", 0.0) or 0.0) < 1000.0 and trade_lot > 0.01:
+                print(f"   ℹ️ [MONEY MANAGEMENT] Akun Standard USD (Saldo: ${acc.balance:,.2f} USD). Lot disesuaikan ke 0.01 agar modal aman.")
+                trade_lot = 0.01
+
+        vol_step = float(getattr(s_info, "volume_step", 0.01) or 0.01)
+        if vol_step > 0:
+            trade_lot = round(round(trade_lot / vol_step) * vol_step, 2)
+        vol_min = float(getattr(s_info, "volume_min", 0.01) or 0.01)
+        vol_max = float(getattr(s_info, "volume_max", 100.0) or 100.0)
+        if trade_lot < vol_min:
+            trade_lot = vol_min
+        if trade_lot > vol_max:
+            trade_lot = vol_max
+
+        req = {
+            "action": self.mt5.TRADE_ACTION_DEAL,
+            "symbol": sym,
+            "volume": trade_lot,
+            "type": order_type,
+            "price": curr_price,
+            "deviation": self.slippage,
+            "magic": self.magic,
+            "comment": "VIP-9PDF-Copy",
+            "type_time": self.mt5.ORDER_TIME_GTC,
+        }
+        if tp_val > 0:
+            req["tp"] = tp_val
+        if sl_val > 0:
+            req["sl"] = sl_val
+
+        # Deteksi Filling Mode yang didukung broker (HFM, Exness, IC Markets, dll)
+        filling_mode = int(s_info.filling_mode or 0)
+        candidates = []
+        if filling_mode & 1:  # FOK (misal broker HFM)
+            candidates.append(self.mt5.ORDER_FILLING_FOK)
+        if filling_mode & 2:  # IOC
+            candidates.append(self.mt5.ORDER_FILLING_IOC)
+        candidates.extend([self.mt5.ORDER_FILLING_FOK, self.mt5.ORDER_FILLING_IOC, self.mt5.ORDER_FILLING_RETURN])
+
+        seen = set()
+        fill_types = [f for f in candidates if not (f in seen or seen.add(f))]
+
+        last_res = None
+        for ft in fill_types:
+            req["type_filling"] = ft
+            res = self.mt5.order_send(req)
+            last_res = res
+            if res and res.retcode == self.mt5.TRADE_RETCODE_DONE:
+                return {
+                    "success": True,
+                    "ticket": res.order,
+                    "price": res.price,
+                    "volume": res.volume,
+                    "symbol": sym,
+                }
+            # Jika errornya bukan masalah filling mode (10030), jangan loop filling lagi
+            if res and res.retcode != 10030:
+                break
+
+        res = last_res
+        err_code = res.retcode if res else "No response"
+        err_comment = res.comment if res else self.mt5.last_error()[1]
+        return {"success": False, "message": f"RetCode: {err_code} - {err_comment}"}
+
+
+async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
+    """Mendengarkan sinyal dari Master Bot dengan verifikasi lisensi anti-share & auto-stop."""
+    try:
+        import logging
+        from telethon import TelegramClient, events, functions
+
+        # Redam log socket error raw dari Telethon agar tidak mencemari layar console member (Anti [WinError 64])
+        logging.getLogger("telethon.network.mtprotosender").setLevel(logging.CRITICAL)
+        logging.getLogger("telethon.network.connection").setLevel(logging.CRITICAL)
+        logging.getLogger("telethon").setLevel(logging.ERROR)
+    except ImportError:
+        print("[!] Modul 'telethon' belum terpasang. Jalankan: pip install telethon")
+        return
+
+    API_ID = int(os.getenv("TELEGRAM_API_ID", "2040"))
+    API_HASH = os.getenv("TELEGRAM_API_HASH", "b18441a1ff607e10a989891a5462e627")
+    cfg_bot = cfg.get("bot_username", "selo_saham_bot").lstrip("@")
+    target_bots = list(dict.fromkeys([cfg_bot, "selo_saham_bot", "Selobrow_bot"]))
+    target_bot = target_bots[0]
+
+    session_name = "member_copier_session"
+    client = TelegramClient(
+        session_name,
+        API_ID,
+        API_HASH,
+        connection_retries=None,  # Retry tak terbatas jika jaringan drop
+        retry_delay=2,            # Sambung ulang cepat dalam 2 detik
+        auto_reconnect=True,
+        timeout=20,
+        request_retries=10,
+    )
+
+    print(f"\n[+] Menghubungkan ke jaringan Telegram...")
+
+    def prompt_phone():
+        print("\n" + "=" * 60)
+        print("📲 LOGIN TELEGRAM MEMBER (HANYA SEKALI DI AWAL)")
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("Masukkan NOMOR HP Telegram Anda (gunakan awalan kode +62)")
+        print("Contoh: +6281234567890")
+        print("")
+        print("⚠️ PERHATIAN: BUKAN TOKEN BOT! Masukkan nomor HP Telegram Anda")
+        print("agar copier terhubung ke akun VIP yang sudah di-approve Admin.")
+        print("=" * 60)
+        return input("\nNomor HP Telegram (+62...): ").strip()
+
+    def prompt_code():
+        print("\n📩 Masukkan KODE OTP 5-digit yang baru masuk ke aplikasi Telegram Anda:")
+        return input("Kode OTP Telegram: ").strip()
+
+    def prompt_password():
+        import getpass
+        print("\n🔒 Masukkan Password Verifikasi 2 Langkah (2FA) Telegram (jika aktif):")
+        try:
+            return getpass.getpass("Password 2FA: ")
+        except Exception:
+            return input("Password 2FA: ").strip()
+
+    await client.start(
+        phone=prompt_phone,
+        code_callback=prompt_code,
+        password=prompt_password,
+    )
+
+
+    me = await client.get_me()
+    user_id = str(me.id)
+    user_display = f"@{me.username}" if me.username else (me.first_name or f"User #{user_id}")
+
+    print(f"[+] Akun Telegram login: {user_display} (ID: {user_id})")
+    print(f"[+] Memvalidasi lisensi ke Master Bot (@{target_bot})...")
+
+    # 1. Handshake Verifikasi Lisensi ke Master Bot
+    license_data = {"valid": False, "expires_at": "", "remaining": ""}
+    auth_received = asyncio.Event()
+
+    @client.on(events.NewMessage)
+    async def temp_license_listener(event):
+        sender = await event.get_sender()
+        s_uname = (getattr(sender, "username", "") or "").lower()
+        txt = event.raw_text or ""
+        is_bot = any(b.lower() in s_uname for b in target_bots) or "selo" in s_uname or "saham" in s_uname
+        if is_bot and "LIC_INFO|" in txt:
+            parts = txt.strip().split("|")
+            if len(parts) >= 5 and parts[1] == user_id:
+                license_data["valid"] = (parts[2].upper() == "VALID")
+                license_data["expires_at"] = parts[3]
+                license_data["remaining"] = parts[4]
+                auth_received.set()
+                try:
+                    await event.delete()
+                except Exception:
+                    pass
+
+    # Kirim ping verifikasi lisensi ke Master Bot (hanya 1x saat buka copier)
+    sent_msgs = []
+    for b in target_bots:
+        try:
+            sm = await client.send_message(b, "/license")
+            if sm:
+                sent_msgs.append(sm)
+        except Exception:
+            pass
+
+    try:
+        await asyncio.wait_for(auth_received.wait(), timeout=7.0)
+    except Exception:
+        pass
+
+    for sm in sent_msgs:
+        try:
+            await sm.delete()
+        except Exception:
+            pass
+
+    client.remove_event_handler(temp_license_listener)
+
+    # 2. Cek Hasil Verifikasi Lisensi (Anti-Share)
+    if not license_data["valid"]:
+        print("\n" + "=" * 65)
+        print("❌ [AKSES DITOLAK / LISENSI TIDAK VALID]")
+        print(f"Akun Telegram: {user_display} (ID: {user_id})")
+        print("Akun ini BELUM DISETUJUI atau MASA AKTIF TELAH HABIS.")
+        print("")
+        print("🔒 PROTEKSI ANTI-SHARE AKTIF:")
+        print("File copier ini terkunci dan TIDAK BISA DIBAGIKAN ke orang lain.")
+        print("Silakan hubungi Master Admin (@selobrow) untuk aktivasi lisensi resmi!")
+        print("=" * 65 + "\n")
+        await client.disconnect()
+        return
+
+    exp_str = license_data["expires_at"]
+    rem_str = license_data["remaining"]
+
+    print("\n" + "=" * 65)
+    print("✅ [LISENSI TERVERIFIKASI RESMI DARI MASTER ADMIN] 🎉")
+    print(f"👤 Pengguna Terdaftar : {user_display} (Chat ID: {user_id})")
+    print(f"⏱️ Masa Aktif Lisensi : {rem_str} (Berlaku s/d: {exp_str})")
+    print(f"🔒 Proteksi Anti-Share: Terkunci ke akun ini (Tidak bisa dipindahtangankan)")
+    print(f"📦 Ukuran Lot MT5     : {bridge.lot} Lot")
+    print(f"📡 Status             : Standby menerima sinyal 9 Buku PDF...")
+    print("=" * 65 + "\n")
+
+    copier_start_time = datetime.now(timezone.utc)
+
+    # 3. Pengatur Waktu Auto-Shutdown (Auto-Stop saat Expired)
+    expiry_dt = None
+    if exp_str and exp_str.upper() != "LIFETIME":
+        try:
+            tz_wib = ZoneInfo("Asia/Jakarta")
+            # Parse YYYY-MM-DD HH:MM:SS
+            raw_dt_str = exp_str[:19].strip()
+            expiry_dt = datetime.strptime(raw_dt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz_wib)
+        except Exception:
+            pass
+
+    async def expiry_auto_stopper():
+        """Memantau sisa waktu lisensi dan otomatis mematikan copier saat waktu habis atau dicabut Admin."""
+        while True:
+            await asyncio.sleep(15)
+            if expiry_dt:
+                tz_wib = ZoneInfo("Asia/Jakarta")
+                now_wib = datetime.now(tz_wib)
+                if now_wib >= expiry_dt:
+                    print("\n" + "=" * 65)
+                    print("⏳ [MASA AKTIF LISENSI TELAH BERAKHIR]")
+                    print(f"Batas waktu akses Anda ({exp_str}) telah habis.")
+                    print("Copier otomatis BERHENTI beroperasi demi keamanan akun Anda.")
+                    print("Silakan hubungi Master Admin (@selobrow) untuk perpanjangan!")
+                    print("=" * 65 + "\n")
+                    await client.disconnect()
+                    os._exit(0)
+
+
+    asyncio.create_task(expiry_auto_stopper())
+
+    # Keep-Alive Heartbeat Task: Mencegah ISP/Router me-reset socket TCP [WinError 64] saat idle
+    async def telegram_keepalive_daemon():
+        """Mengirim ping heartbeat berkala ke Telegram agar NAT table router tidak memutus socket [WinError 64]."""
+        while True:
+            await asyncio.sleep(20)
+            try:
+                if client.is_connected():
+                    await client(functions.PingRequest(ping_id=int(time.time())))
+            except Exception:
+                pass
+
+    asyncio.create_task(telegram_keepalive_daemon())
+
+    # 4. Listener Sinyal Masuk & Kontrol Lisensi Real-Time
+    recent_executed_signals = {}
+
+    @client.on(events.NewMessage)
+    async def message_handler(event):
+        sender = await event.get_sender()
+        sender_username = (getattr(sender, "username", "") or "").lower()
+
+        # Hanya terima pesan dari Master Bot resmi
+        is_valid_bot = any(b.lower() in sender_username for b in target_bots) or "selo" in sender_username
+        if not is_valid_bot:
+            return
+
+        msg_text = event.raw_text or ""
+        msg_date = getattr(getattr(event, "message", None), "date", None)
+        now_utc = datetime.now(timezone.utc)
+        age_sec = (now_utc - msg_date).total_seconds() if msg_date else 0.0
+
+        # Proteksi Pesan Lampau / Riwayat Chat (Backlog saat baru buka copier):
+        # Jika pesan dikirim sebelum copier dijalankan atau usia pesan > 120 detik (2 menit),
+        # lewati pesan ini agar tidak mengeksekusi sinyal lama & tidak memicu false alarm price drift!
+        if msg_date and (msg_date < copier_start_time - timedelta(seconds=15) or age_sec > 120.0):
+            mins_ago = int(age_sec // 60)
+            sec_rem = int(age_sec % 60)
+            time_lbl = f"{mins_ago}m {sec_rem}s" if mins_ago > 0 else f"{sec_rem}s"
+            if any(k in msg_text.upper() for k in ["BUY", "SELL", "XAUUSD", "GOLD", "ENTRY"]):
+                print(f"\nℹ️ [{datetime.now().strftime('%H:%M:%S')}] [SINYAL LAMPAU DILEWATI] Sinyal dari riwayat chat "
+                      f"(diterbitkan {time_lbl} yang lalu saat copier belum aktif / offline). Dilewati demi menjaga keamanan modal member.")
+            return
+
+        # Deteksi respons lisensi real-time
+        if "LIC_INFO|" in msg_text:
+            parts = msg_text.strip().split("|")
+            if len(parts) >= 5 and parts[1] == user_id:
+                if parts[2].upper() != "VALID":
+                    print("\n" + "=" * 65)
+                    print("🚫 [AKSES LISENSI TELAH DICABUT OLEH ADMIN / KADALUWARSA]")
+                    print(f"Akun Anda ({user_display}) telah dinonaktifkan oleh Master Admin.")
+                    print("Copier otomatis BERHENTI beroperasi seketika.")
+                    print("=" * 65 + "\n")
+                    await client.disconnect()
+                    os._exit(0)
+            return
+
+        # Deteksi notifikasi pencabutan akses langsung dari Admin
+        msg_lower = msg_text.lower()
+        if "akses dicabut" in msg_lower or "akses ditolak" in msg_lower or "dinonaktifkan oleh admin" in msg_lower:
+            print("\n" + "=" * 65)
+            print("🚫 [AKSES ANDA TELAH DICABUT OLEH ADMIN]")
+            print("Master Admin (@selobrow) telah menonaktifkan izin akses akun ini.")
+            print("Copier otomatis BERHENTI seketika.")
+            print("=" * 65 + "\n")
+            await client.disconnect()
+            os._exit(0)
+
+        # Cek apakah lisensi masih berlaku sebelum open posisi
+        if expiry_dt:
+            tz_wib = ZoneInfo("Asia/Jakarta")
+            if datetime.now(tz_wib) >= expiry_dt:
+                print("\n[!] Sinyal diabaikan: Masa aktif lisensi telah habis.")
+                return
+
+        msg_upper = msg_text.upper()
+
+        # Deteksi Reversal Guard (Ambil Untung Otomatis dari Master Bot)
+        if "REVERSAL GUARD" in msg_upper or "AMBIL UNTUNG OTOMATIS" in msg_upper:
+            enable_rev_close = bool(cfg.get("enable_reversal_auto_close", False))
+            if enable_rev_close:
+                print(f"\n🛡️ [{datetime.now().strftime('%H:%M:%S')}] ALERT REVERSAL GUARD DITERIMA DARI MASTER BOT!")
+                sym = bridge.find_broker_symbol()
+                target_act = None
+                if "POSISI DITUTUP: BUY" in msg_upper or "🟢 BUY" in msg_upper:
+                    target_act = "BUY"
+                elif "POSISI DITUTUP: SELL" in msg_upper or "🔴 SELL" in msg_upper:
+                    target_act = "SELL"
+
+                closed_list = bridge.close_all_positions(sym, action=target_act)
+                if closed_list:
+                    for c in closed_list:
+                        status_lbl = "BERHASIL" if c["success"] else "GAGAL"
+                        print(f"   🔒 [AUTO-CLOSE REVERSAL] Posisi {c['action']} #{c['ticket']} {status_lbl} ditutup untuk mengamankan profit!")
+                else:
+                    print(f"   ℹ️ Tidak ada posisi terbuka {target_act or ''} pada {sym} di MT5 Anda.")
+            else:
+                print(f"\nℹ️ [{datetime.now().strftime('%H:%M:%S')}] PERINGATAN REVERSAL MASTER (INFO):")
+                print("   Master mendeteksi indikasi pembalikan pasar. Sesuai setting, posisi Anda tetap dibiarkan berjalan menuju target TP/SL.")
+            return
+
+        # Deteksi Proteksi Modal (BEP Lock & Trailing Stop dari Master Bot)
+        if "BREAK-EVEN PROTECTION" in msg_upper or "TRAILING STOP NAIK" in msg_upper or "TRAILING STOP TURUN" in msg_upper:
+            print(f"\n🛡️ [{datetime.now().strftime('%H:%M:%S')}] ALERT KUNCI PROFIT DITERIMA DARI MASTER BOT!")
+            sym = bridge.find_broker_symbol()
+            target_act = "BUY" if "BUY" in msg_upper else ("SELL" if "SELL" in msg_upper else None)
+            m_sl = re.search(r"SL Pengaman Baru.*?[:=]?\s*\$?([\d.,]+)", msg_text, re.IGNORECASE)
+            if m_sl:
+                cleaned_sl = re.sub(r"[^\d.]", "", m_sl.group(1))
+                try:
+                    new_sl_val = float(cleaned_sl)
+                    mod_list = bridge.modify_open_positions_sl(sym, action=target_act, new_sl=new_sl_val)
+                    if mod_list:
+                        for m in mod_list:
+                            status_lbl = "SUKSES" if m["success"] else "GAGAL"
+                            print(f"   🔒 [BEP/TRAILING MT5] Posisi {m['action']} #{m['ticket']} {status_lbl} digeser SL-nya ke ${new_sl_val:.2f}!")
+                    else:
+                        print(f"   ℹ️ Posisi Anda pada {sym} sudah aman atau SL sudah lebih baik.")
+                except Exception as ex:
+                    print(f"   ⚠️ Gagal memproses SL baru: {ex}")
+            return
+
+        # Deteksi Peringatan Dini Pembalikan Arah (Early Warning Alert)
+        if "PERINGATAN DINI PEMBALIKAN ARAH TREN" in msg_upper:
+            print(f"\n⚠️ [{datetime.now().strftime('%H:%M:%S')}] PERINGATAN DINI DARI MASTER BOT:")
+            print("   Indikasi awal pembalikan arah XAU/USD terdeteksi. Posisi MT5 Anda tetap berjalan dalam siaga.")
+            return
+
+        sig = parse_signal(msg_text)
+        if not sig:
+            return
+
+        # Deduplikasi Cerdas: Cegah double execution dari kartu laporan eksekusi & kartu sinyal beruntun
+        now_ts = time.time()
+        sig_ticket = sig.get("ticket")
+        sig_tp = sig.get("tp_price", 0.0)
+        sig_sl = sig.get("sl_price", 0.0)
+        sig_act = sig.get("action")
+        sig_sym = sig.get("symbol", "XAUUSD")
+
+        # Bersihkan riwayat eksekusi lama (> 1800 detik / 30 menit)
+        for k in list(recent_executed_signals.keys()):
+            if now_ts - recent_executed_signals[k] > 1800:
+                del recent_executed_signals[k]
+
+        is_duplicate = False
+        if sig_ticket and f"ticket_{sig_ticket}" in recent_executed_signals:
+            is_duplicate = True
+        elif sig_tp > 0 and sig_sl > 0:
+            param_key = f"{sig_act}_{sig_tp:.1f}_{sig_sl:.1f}"
+            if param_key in recent_executed_signals:
+                if now_ts - recent_executed_signals[param_key] < 900:  # 15 menit
+                    is_duplicate = True
+
+        if is_duplicate:
+            print(f"\nℹ️ [{datetime.now().strftime('%H:%M:%S')}] [DUPLIKAT DIABAIKAN] Sinyal {sig_act} {sig_sym} "
+                  f"(TP: ${sig_tp:,.2f}, SL: ${sig_sl:,.2f}) sudah pernah dieksekusi sebelumnya.")
+            return
+
+        # Fallback entry_price jika belum terdeteksi agar tidak tampil $0.00
+        if sig.get("entry_price", 0.0) <= 0:
+            if bridge.mt5:
+                tick_now = bridge.mt5.symbol_info_tick(bridge.find_broker_symbol())
+                if tick_now:
+                    sig["entry_price"] = tick_now.ask if sig_act == "BUY" else tick_now.bid
+
+        print(f"\n⚡ [{datetime.now().strftime('%H:%M:%S')}] SINYAL DITERIMA DARI MASTER BOT:")
+        print(f"   Aksi  : {sig['action']} {sig['symbol']}")
+        print(f"   Entry : ${sig['entry_price']:,.2f}")
+        print(f"   TP    : ${sig['tp_price']:,.2f}")
+        print(f"   SL    : ${sig['sl_price']:,.2f}")
+
+        # Eksekusi ke terminal MT5 member
+        res = bridge.execute_order(sig)
+        if res.get("success"):
+            # Catat ke riwayat deduplikasi agar kartu duplikat diabaikan
+            if sig_ticket:
+                recent_executed_signals[f"ticket_{sig_ticket}"] = now_ts
+            if sig_tp > 0 and sig_sl > 0:
+                recent_executed_signals[f"{sig_act}_{sig_tp:.1f}_{sig_sl:.1f}"] = now_ts
+
+            print(f"   ✅ [ORDER MT5 SUKSES] #{res['ticket']} {sig['action']} {res['volume']} Lot @ ${res['price']:,.2f} pada {res['symbol']}\n")
+        else:
+            print(f"   ❌ [ORDER GAGAL] {res.get('message')}\n")
+
+    async def local_bep_watcher():
+        """
+        Background Watcher Mandiri di MT5 Member:
+        Jika terdeteksi posisi sinyal Long / TP Jauh (target TP >= 85 pips atau open target),
+        dan floating profit telah mencapai +100 pips ($10.00 USD),
+        otomatis geser SL ke Break-Even (BEP) + buffer pengaman 3 pips ($0.30 USD) di atas/bawah entry.
+        Berfungsi sebagai proteksi berlapis seandainya notifikasi Telegram delay atau terputus.
+        """
+        if not cfg.get("enable_break_even", True):
+            return
+
+        bep_pips = float(cfg.get("break_even_long_pips", 100.0))
+        buffer_pips = float(cfg.get("break_even_buffer_pips", 3.0))
+        bep_dist = bep_pips / 10.0      # 100 pips = $10.00 USD
+        bep_offset = buffer_pips / 10.0  # 3 pips = $0.30 USD
+
+        while True:
+            try:
+                await asyncio.sleep(5)
+                if not bridge.ensure_connected():
+                    continue
+
+                sym = bridge.find_broker_symbol()
+                open_pos = bridge.mt5.positions_get(symbol=sym) or []
+                for p in open_pos:
+                    ticket = p.ticket
+                    pos_type = "BUY" if p.type == 0 else "SELL"
+                    price_open = float(p.price_open)
+                    price_curr = float(p.price_current)
+                    sl_curr = float(p.sl or 0.0)
+                    tp_curr = float(p.tp or 0.0)
+
+                    if price_open <= 0 or price_curr <= 0:
+                        continue
+
+                    if pos_type == "BUY":
+                        profit_dist = price_curr - price_open
+                        tp_dist = (tp_curr - price_open) if tp_curr > 0 else 999.0
+                        if (tp_dist >= 8.5 or tp_curr == 0.0) and profit_dist >= bep_dist:
+                            target_bep = round(price_open + bep_offset, 2)
+                            if sl_curr < target_bep:
+                                req = {
+                                    "action": bridge.mt5.TRADE_ACTION_SLTP,
+                                    "position": ticket,
+                                    "symbol": p.symbol,
+                                    "sl": target_bep,
+                                    "tp": tp_curr,
+                                }
+                                res = bridge.mt5.order_send(req)
+                                if res and res.retcode == bridge.mt5.TRADE_RETCODE_DONE:
+                                    print(
+                                        f"\n🛡️ [LOCAL AUTO-BEP MEMBER] Posisi BUY #{ticket} floating +${profit_dist:.2f} USD "
+                                        f"(+{int(profit_dist*10)} pips). SL digeser ke ${target_bep:.2f} (FREE TRADE)!"
+                                    )
+                    elif pos_type == "SELL":
+                        profit_dist = price_open - price_curr
+                        tp_dist = (price_open - tp_curr) if tp_curr > 0 else 999.0
+                        if (tp_dist >= 8.5 or tp_curr == 0.0) and profit_dist >= bep_dist:
+                            target_bep = round(price_open - bep_offset, 2)
+                            if sl_curr == 0.0 or sl_curr > target_bep:
+                                req = {
+                                    "action": bridge.mt5.TRADE_ACTION_SLTP,
+                                    "position": ticket,
+                                    "symbol": p.symbol,
+                                    "sl": target_bep,
+                                    "tp": tp_curr,
+                                }
+                                res = bridge.mt5.order_send(req)
+                                if res and res.retcode == bridge.mt5.TRADE_RETCODE_DONE:
+                                    print(
+                                        f"\n🛡️ [LOCAL AUTO-BEP MEMBER] Posisi SELL #{ticket} floating +${profit_dist:.2f} USD "
+                                        f"(+{int(profit_dist*10)} pips). SL digeser ke ${target_bep:.2f} (FREE TRADE)!"
+                                    )
+            except Exception:
+                pass
+
+    # Jalankan background watcher otomatis untuk Break-Even Protection (BEP) di MT5 Member
+    asyncio.create_task(local_bep_watcher())
+
+    # Loop pemulihan koneksi Telegram (Anti-Crash & Auto-Reconnect)
+    while True:
+        try:
+            await client.run_until_disconnected()
+            break
+        except (KeyboardInterrupt, SystemExit):
+            break
+        except Exception:
+            await asyncio.sleep(2)
+            if not client.is_connected():
+                try:
+                    await client.connect()
+                except Exception:
+                    pass
+
+
+def main():
+    print("=" * 65)
+    print("    AUTO-COPIER MT5 MEMBER (VIP 9 BUKU PDF CONFLUENCE)")
+    print("=" * 65)
+    cfg = load_config()
+    bridge = MT5MemberBridge(cfg)
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--test":
+        print("\n[TEST MODE] Menguji parser dan koneksi...")
+        sample_signal = (
+            "🔴 SINYAL ENTRY SHORT (SELL): XAU/USD (Gold Spot)\n"
+            "📍 Harga Entry Short: $4,161.73\n"
+            "🎯 Take Profit (TP): $4,128.80 (-0.79% Target Bawah)\n"
+            "🛑 Stop Loss (SL): $4,178.75 (+0.41% Batas Atas)\n"
+        )
+        parsed = parse_signal(sample_signal)
+        print(f"Hasil Parser: {parsed}")
+        sym = bridge.find_broker_symbol()
+        print(f"Simbol broker terdeteksi: {sym}")
+        return
+
+    try:
+        asyncio.run(run_telethon_listener(cfg, bridge))
+    except KeyboardInterrupt:
+        print("\nCopier dihentikan oleh pengguna.")
+
+
+if __name__ == "__main__":
+    main()

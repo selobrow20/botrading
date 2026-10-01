@@ -1,0 +1,37 @@
+name: Bot Trading Auto Cron & Market Scan
+
+on:
+  schedule:
+    # Menjalankan cron job berkala (sintaks per menit: * * * * *)
+    # Catatan GitHub: GitHub Actions mengeksekusi cron tercepat sekitar 5 menit sekali demi efisiensi server.
+    - cron: "* * * * *"
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  bot-cron-check:
+    name: 1-Minute Scheduled Health Check & Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Run Test Suite (79 Tests)
+        run: |
+          pytest -q tests/

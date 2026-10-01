@@ -6,6 +6,15 @@ from typing import Any, Dict
 import yaml
 from dotenv import load_dotenv
 
+
+class SafeTimedRotatingFileHandler(TimedRotatingFileHandler):
+    """TimedRotatingFileHandler yang aman di Windows saat file sedang dibuka proses lain."""
+    def doRollover(self):
+        try:
+            super().doRollover()
+        except (PermissionError, OSError):
+            pass
+
 # Root Directory Proyek
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -61,7 +70,6 @@ def setup_logger(name: str = "stock_bot", log_level: str | None = None) -> loggi
     console_handler.setLevel(level)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
-
     # File Handler (Daily Rotating)
     log_dir_name = logging_cfg.get("log_dir", "logs")
     log_dir = BASE_DIR / log_dir_name
@@ -69,12 +77,13 @@ def setup_logger(name: str = "stock_bot", log_level: str | None = None) -> loggi
 
     log_file = log_dir / "stock_bot.log"
     retention_days = logging_cfg.get("retention_days", 14)
-    file_handler = TimedRotatingFileHandler(
+    file_handler = SafeTimedRotatingFileHandler(
         filename=str(log_file),
         when="midnight",
         interval=1,
         backupCount=retention_days,
         encoding="utf-8",
+        delay=True,
     )
     file_handler.setLevel(level)
     file_handler.setFormatter(formatter)

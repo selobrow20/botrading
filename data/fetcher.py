@@ -154,7 +154,18 @@ class DataFetcher:
             rates = mt5.copy_rates_from_pos(target_symbol, tf, 0, limit)
             if rates is not None and len(rates) > 0:
                 df = pd.DataFrame(rates)
-                df["Date"] = pd.to_datetime(df["time"], unit="s")
+                # Konversi waktu broker MT5 (HFM UTC+3) ke waktu lokal WIB (Asia/Jakarta UTC+7)
+                broker_offset_hours = 4
+                try:
+                    tick = mt5.symbol_info_tick(target_symbol)
+                    if tick and tick.time > 0:
+                        now_utc_ts = datetime.now(timezone.utc).timestamp()
+                        broker_utc_diff_hours = round((tick.time - now_utc_ts) / 3600)
+                        broker_offset_hours = 7 - broker_utc_diff_hours
+                except Exception:
+                    broker_offset_hours = 4
+
+                df["Date"] = pd.to_datetime(df["time"], unit="s") + pd.Timedelta(hours=broker_offset_hours)
                 df.rename(columns={
                     "open": "Open",
                     "high": "High",

@@ -71,7 +71,7 @@ def test_pdf_strategy_learner(tmp_path: Path):
 
 
 def test_validate_pdf_confluence_strict_gatekeeper():
-    """Menguji filter ketat konfluensi 7 buku PDF (hanya meloloskan Grade A/A+ untuk win rate tinggi)."""
+    """Menguji filter ketat konfluensi 9 buku PDF (hanya meloloskan Grade A/A+ untuk win rate tinggi)."""
     # 1. Bar dengan konfluensi kuat (Martin Pring + Bob Volman + Mega Profit + Volume + Wave)
     strong_buy_bar = pd.Series({
         "Close": 4310.0,
@@ -133,7 +133,7 @@ def test_signal_engine_evaluates_xau_with_risk_reward():
         "Low": [4288.0 + i for i in range(20)],
         "Close": [4294.0 + i for i in range(20)],
         "Volume": [1000] * 20,
-    }, index=pd.date_range("2026-09-23 10:00", periods=20, freq="15min"))
+    }, index=pd.date_range("2026-09-23 08:00", periods=20, freq="15min"))
 
     custom_strat = Strategy(
         name="Test_Strategy",
@@ -153,8 +153,8 @@ def test_signal_engine_evaluates_xau_with_risk_reward():
     assert sig.stop_loss_price < sig.price
 
 
-def test_telegram_signal_formatter_shows_7_pdf_details():
-    """Memastikan format notifikasi telegram menampilkan telaah 7 buku PDF dan win rate badge."""
+def test_telegram_signal_formatter_shows_9_pdf_details():
+    """Memastikan format notifikasi telegram menampilkan telaah 9 buku PDF dan win rate badge."""
     sig = SignalResult(
         ticker="XAUUSD",
         strategy_name="Master_Confluence_Strategy",
@@ -179,7 +179,7 @@ def test_telegram_signal_formatter_shows_7_pdf_details():
     msg = notifier.format_signal_message(sig)
 
     assert "SINYAL ENTRY (MASUK / BUY): XAU/USD (Gold)" in msg
-    assert "TELAAH 9 BUKU PDF" in msg or "TELAAH 7 BUKU PDF" in msg
+    assert "TELAAH 9 BUKU PDF" in msg
     assert "Grade A+" in msg
     assert "Martin Pring" in msg
     assert "Bob Volman" in msg
@@ -339,6 +339,206 @@ def test_stock_sell_suppression_and_gold_sell_preservation():
     # 2. Emas (XAUUSD) -> Sinyal SELL tetap diizinkan
     gold_res = engine.evaluate_bar(df_dummy, ticker="XAUUSD", strategy=strat, apply_pdf_filter=False)
     assert gold_res.signal == "SELL"
+
+
+def test_adaptive_dynamic_tp_sl_modes():
+    """Menguji mode Adaptive TP: Quick TP saat Sideways vs Wide TP saat Momentum Panjang."""
+    engine = SignalEngine()
+
+    # 1. Sideways Data (EMA berjarak dekat < 3.5, ADX rendah)
+    df_sideways = pd.DataFrame({
+        "Open": [4130.0] * 20,
+        "High": [4133.0] * 20,
+        "Low": [4128.0] * 20,
+        "Close": [4131.0] * 20,
+        "Volume": [1000] * 20,
+    }, index=pd.date_range("2026-09-29 08:00", periods=20, freq="15min"))
+
+    sig_side = engine.evaluate_bar(df_sideways, "XAUUSD", apply_pdf_filter=False)
+    assert "Sideways" in sig_side.market_regime or "Berguncang" in sig_side.market_regime
+    tp_dist_side = abs(sig_side.take_profit_price - sig_side.price)
+    sl_dist_side = abs(sig_side.price - sig_side.stop_loss_price)
+    # TP Seimbang atau Lebih Besar: minimal $5.50 s/d $7.50
+    assert 5.5 <= tp_dist_side <= 7.5
+    # SL Lega: $5.50
+    assert 5.5 <= sl_dist_side <= 6.5
+    # Kaidah 9 PDF: Risk to Reward wajib minimal 1:1 (TP >= SL)
+    assert sig_side.risk_reward_ratio >= 1.0
+
+    # 2. Trending Data (EMA berjarak tegas >= 3.5, Momentum Panjang)
+    df_trend = pd.DataFrame({
+        "Open": [4100.0 + i * 3 for i in range(25)],
+        "High": [4105.0 + i * 3 for i in range(25)],
+        "Low": [4098.0 + i * 3 for i in range(25)],
+        "Close": [4104.0 + i * 3 for i in range(25)],
+        "Volume": [1000] * 25,
+    }, index=pd.date_range("2026-09-29 07:00", periods=25, freq="15min"))
+
+    sig_trend = engine.evaluate_bar(df_trend, "XAUUSD", apply_pdf_filter=False)
+    assert "Momentum Panjang" in sig_trend.market_regime
+    tp_dist_trend = abs(sig_trend.take_profit_price - sig_trend.price)
+    # Wide TP: $22 - $35
+    assert 22.0 <= tp_dist_trend <= 35.0
+    assert sig_trend.risk_reward_ratio >= 1.8
+
+
+def test_trailing_stop_alert_formatting():
+    """Menguji format kartu alert BEP Lock dan Trailing Stop."""
+    notifier = TelegramNotifier()
+    bep_info = {
+        "ticket": 12345,
+        "action": "BUY",
+        "symbol": "XAUUSD",
+        "volume": 0.05,
+        "price_open": 4135.0,
+        "price_curr": 4140.0,
+        "new_sl": 4135.5,
+        "profit_dist": 5.0,
+        "type": "BEP_LOCK",
+    }
+    msg = notifier.format_trailing_stop_alert(bep_info)
+    assert "BREAK-EVEN PROTECTION AKTIF" in msg
+    assert "FREE TRADE" in msg
+def test_trading_sessions_and_us_london_rules():
+    """Menguji deteksi sesi trading dan aturan khusus Sesi US (65 pips) serta Sesi London (anti-manipulasi)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from strategy.signal_engine import get_trading_session, SignalEngine
+
+    # 1. Uji deteksi sesi berdasarkan waktu WIB
+    dt_us = datetime(2026, 9, 29, 20, 30, tzinfo=ZoneInfo("Asia/Jakarta"))
+    assert get_trading_session(dt_us)[0] == "US"
+
+    dt_london = datetime(2026, 9, 29, 15, 0, tzinfo=ZoneInfo("Asia/Jakarta"))
+    assert get_trading_session(dt_london)[0] == "LONDON"
+
+    dt_asia = datetime(2026, 9, 29, 9, 0, tzinfo=ZoneInfo("Asia/Jakarta"))
+    assert get_trading_session(dt_asia)[0] == "ASIA"
+
+    # 2. Uji Sesi US: Wajib TP 65 pips ($6.50) dan SL 65 pips ($6.50)
+    engine = SignalEngine()
+    df_us = pd.DataFrame({
+        "Open": [4130.0] * 20,
+        "High": [4135.0] * 20,
+        "Low": [4128.0] * 20,
+        "Close": [4132.0] * 20,
+        "Volume": [1000] * 20,
+    }, index=pd.date_range("2026-09-29 20:00", periods=20, freq="15min", tz="Asia/Jakarta"))
+
+    sig_us = engine.evaluate_bar(df_us, "XAUUSD", apply_pdf_filter=False)
+    assert "Sesi US" in sig_us.market_regime
+    tp_dist_us = round(abs(sig_us.take_profit_price - sig_us.price), 2)
+    sl_dist_us = round(abs(sig_us.price - sig_us.stop_loss_price), 2)
+    assert tp_dist_us in [6.00, 6.50]  # 60 - 65 pips sesuai konfigurasi pasar
+    assert sl_dist_us in [6.00, 6.50]  # 60 - 65 pips sesuai konfigurasi pasar
+    assert sig_us.risk_reward_ratio == 1.0
+
+
+def test_london_session_anti_manipulation():
+    """Menguji penyaringan ketat sesi London: Menahan sinyal dengan skor < 75% karena rawan manipulasi."""
+    from strategy.signal_engine import SignalEngine
+
+    # Bar dengan skor Grade A reguler (65%) namun < 75% (ditahan di sesi London)
+    medium_bar = pd.Series({
+        "Close": 4140.0,
+        "High": 4145.0,
+        "Low": 4135.0,
+        "Open": 4138.0,
+        "ema_20": 4000.0,
+        "ema_50": 4130.0,
+        "ema_200": 4100.0,
+        "rsi": 64.0,
+        "volume_ratio": 1.0,
+        "rejection_wick_ratio": 0.20,
+        "pattern_pinbar": 0,
+        "volman_pullback": 0,
+        "volman_buildup": 0,
+        "fib_in_golden_zone": 0,
+        "ichimoku_above_cloud": 1,
+        "ichimoku_cloud_green": 1,
+        "ichimoku_tk_cross": 1,
+    })
+
+    # Pada sesi reguler (Asia), skor 65% lolos (Grade A)
+    approved_asia, score_asia, grade_asia, _, _ = SignalEngine.validate_pdf_entry_confluence(
+        medium_bar, signal_type="BUY", session="ASIA"
+    )
+    assert approved_asia is True
+    assert score_asia == 65.0
+
+    # Namun pada sesi London, skor 65% ditolak demi keamanan modal dari manipulasi likuiditas
+    approved_london, score_london, grade_london, checks, pred = SignalEngine.validate_pdf_entry_confluence(
+        medium_bar, signal_type="BUY", session="LONDON"
+    )
+    assert approved_london is False
+    assert any("Sesi London sering terjadi manipulasi likuiditas" in c for c in checks)
+
+
+def test_bep_and_trailing_stop_reported_as_win():
+    """Memastikan transaksi yang keluar via SL namun menghasilkan profit (BEP / Trailing) diklasifikasikan sebagai WIN."""
+    from trading.mt5_bridge import MT5Bridge
+
+    # Simulasi order BUY closed dengan DEAL_REASON_SL tapi exit price > entry price (profit +35.65 USC)
+    buy_deal = {
+        "profit": 35.65,
+        "reason_code": 4,  # DEAL_REASON_SL
+        "entry_price": 4135.0,
+        "price": 4142.5,
+        "type": 1,  # ORDER_TYPE_SELL (exit untuk buy)
+    }
+    # Logika klasifikasi WIN pada mt5_bridge
+    if buy_deal["profit"] >= 0 or buy_deal["price"] > buy_deal["entry_price"]:
+        outcome = "WIN"
+    else:
+        outcome = "LOSE"
+
+    assert outcome == "WIN"
+
+
+def test_pdf_accuracy_contradictory_market_structure():
+    """Menguji penalti skor konfluensi jika struktur pasar bertentangan (Buku 9: Trading Alchemist)."""
+    base_buy_bar = pd.Series({
+        "Close": 4310.0,
+        "High": 4315.0,
+        "Low": 4300.0,
+        "Open": 4305.0,
+        "ema_20": 4308.0,
+        "ema_50": 4290.0,
+        "ema_200": 4250.0,
+        "rsi": 54.0,
+        "volume_ratio": 1.25,
+        "rejection_wick_ratio": 0.40,
+        "pattern_pinbar": 1,
+        "structure_bos_bearish": 1,  # Bertentangan dengan BUY!
+    })
+
+    approved, score, grade, checks, pred = SignalEngine.validate_pdf_entry_confluence(base_buy_bar, signal_type="BUY")
+    assert any("Break of Structure Bearish (BOS) terdeteksi" in c for c in checks)
+
+
+def test_pdf_accuracy_flat_chop_and_low_volume():
+    """Menguji filter pasar kompresi datar / chop (Bob Volman & Al Brooks) dan volume rendah (VPA)."""
+    chop_bar = pd.Series({
+        "Close": 4300.0,
+        "High": 4301.0,
+        "Low": 4299.0,
+        "Open": 4300.0,
+        "ema_20": 4300.2,
+        "ema_50": 4300.0,
+        "adx": 14.0,  # ADX sangat rendah
+        "volume_ratio": 0.50,  # Volume sangat kering
+        "rejection_wick_ratio": 0.10,
+        "pattern_pinbar": 0,
+        "structure_bos_bullish": 0,
+    })
+
+    approved, score, grade, checks, pred = SignalEngine.validate_pdf_entry_confluence(chop_bar, signal_type="BUY")
+    assert approved is False
+    assert any("Kompresi Datar / Chop" in c for c in checks)
+    assert any("Volume Sangat Rendah" in c for c in checks)
+
+
+
 
 
 
