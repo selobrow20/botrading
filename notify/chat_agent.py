@@ -136,7 +136,81 @@ class ChatAgent:
                 "is_gold": "XAU" in target_ticker or "GOLD" in target_ticker,
             }
 
-        # 3. Deteksi Pertanyaan High-Impact News & Kalender Ekonomi
+        # 3. Deteksi Pertanyaan Buy or Sell / Posisi / Arah Pasar ("lu buy or sell", "buy apa sell", "arahnya kemana")
+        stance_patterns = [
+            r"\b(lu|lo|kamu|bot)?\s*(buy\s*(or|apa|atau)\s*sell|sell\s*(or|apa|atau)\s*buy)\b",
+            r"\b(lagi|mau|sedang)?\s*(buy\s*apa\s*sell|beli\s*apa\s*jual|buy\s*atau\s*sell|buy\s*or\s*sell)\b",
+            r"\bposisi\s*(lu|lo|kamu|sekarang|apa)\b",
+            r"\b(lagi\s*pegang|lagi\s*pasang|lagi\s*ambil)\s*(apa|posisi)\b",
+            r"\b(bagusan|enakan|enaknya|bagusnya|mending)\s*(buy|sell|beli|jual)\b",
+            r"\bsinyal\s*(lu|sekarang)\s*apa\b",
+        ]
+        if any(re.search(pat, text_lower) for pat in stance_patterns):
+            target_ticker = extracted_ticker or "XAUUSD"
+            return {
+                "intent": "STANCE",
+                "ticker": target_ticker,
+                "is_gold": "XAU" in target_ticker or "GOLD" in target_ticker,
+            }
+
+        # 4. Deteksi Pertanyaan Timing Masuk / Entry Advice ("bisa masuk sekarang ga", "aman buy ga", "telat ga")
+        entry_patterns = [
+            r"\b(bisa|boleh|aman|layak|bagus|enaknya)?\s*(masuk|entry|open\s*posisi|buy|sell)\s*(sekarang|saat\s*ini)\b",
+            r"\b(bisa|boleh|aman|layak)\s*(masuk|entry|open\s*posisi)\b",
+            r"\b(telat|ketinggalan)\s*(ga|nggak|gak|kah)\b",
+        ]
+        if any(re.search(pat, text_lower) for pat in entry_patterns):
+            target_ticker = extracted_ticker or "XAUUSD"
+            return {
+                "intent": "ENTRY_ADVICE",
+                "ticker": target_ticker,
+                "is_gold": "XAU" in target_ticker or "GOLD" in target_ticker,
+            }
+
+        # 5. Deteksi Pertanyaan Cek Harga Cepat ("harga emas berapa", "berapa harga xau", "bbca berapa")
+        price_patterns = [
+            r"\bberapa\s*harga\b",
+            r"\bharga\s*([a-zA-Z0-9\s/]+)?\s*berapa\b",
+            r"\b(emas|gold|xau|xauusd)\s*berapa\b",
+        ]
+        if any(re.search(pat, text_lower) for pat in price_patterns):
+            target_ticker = extracted_ticker or "XAUUSD"
+            return {
+                "intent": "PRICE_CHECK",
+                "ticker": target_ticker,
+                "is_gold": "XAU" in target_ticker or "GOLD" in target_ticker,
+            }
+
+        # 6. Deteksi Curhat Loss / Kena SL / Boncos
+        loss_keywords = ["kena sl", "cutloss", "cut loss", "rugi gue", "boncos", "floating minus", "margin call", "rugi banyak"]
+        if any(k in text_lower for k in loss_keywords):
+            return {
+                "intent": "CURHAT_LOSS",
+                "ticker": None,
+            }
+
+        # 7. Deteksi Curhat Profit / Cuan / WD
+        profit_keywords = ["alhamdulillah", "cuan gede", "profit gede", "kena tp", "udah tp", "dapet tp", "mantap cuan", "profit mantap", "bisa wd", "cuan banyak"]
+        if any(k in text_lower for k in profit_keywords):
+            return {
+                "intent": "CURHAT_PROFIT",
+                "ticker": None,
+            }
+
+        # 8. Deteksi Pertanyaan Identitas ("lu siapa", "siapa lu", "kamu robot apa manusia")
+        identity_patterns = [
+            r"\b(lu|lo|kamu)\s*siapa\b",
+            r"\bsiapa\s*(lu|lo|kamu)\b",
+            r"\b(lu|lo|kamu)\s*(robot|bot|manusia)\b",
+            r"\bsiapa\s*(yang\s*)?(bikin|buat|ciptain)\b",
+        ]
+        if any(re.search(pat, text_lower) for pat in identity_patterns):
+            return {
+                "intent": "IDENTITY",
+                "ticker": None,
+            }
+
+        # 9. Deteksi Pertanyaan High-Impact News & Kalender Ekonomi
         news_keywords = [
             "news", "fomc", "cpi", "pce", "cpe", "nfp", "inflasi", "suku bunga", "the fed",
             "non farm", "nonfarm", "unemployment", "kalender", "berita ekonomi",
@@ -638,26 +712,173 @@ class ChatAgent:
         )
 
     @classmethod
+    def generate_stance_response(
+        cls,
+        ticker: str,
+        price: float,
+        signal: str,
+        setup_grade: str = "",
+        pdf_confluence_score: float = 0.0,
+        indicators: Optional[Dict[str, float]] = None,
+        tp_price: Optional[float] = None,
+        sl_price: Optional[float] = None,
+        prediction: Optional[str] = None,
+        reasons: Optional[List[str]] = None,
+        user_name: str = "Bor",
+    ) -> str:
+        """Menjawab pertanyaan 'lu buy or sell / posisi lu apa' dengan gaya bicara trader sungguhan."""
+        indicators = indicators or {}
+        reasons = reasons or []
+        is_gold = any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        disp_name = "Gold (XAU/USD)" if is_gold else ticker.replace(".JK", "")
+        price_fmt = f"${price:,.2f}" if is_gold else f"Rp {price:,.0f}"
+
+        rsi_val = indicators.get("rsi", 50.0)
+        conf_pct = int(pdf_confluence_score * 100) if pdf_confluence_score else 0
+
+        if signal == "BUY":
+            headline = f"Gue lagi ambil posisi <b>BUY</b> di {disp_name} bor! 🚀"
+            bias_text = (
+                f"Kondisi teknikal saat ini lagi mendukung bullish. Harga berada di <code>{price_fmt}</code> "
+                f"dan candle masih mampu bertahan kokoh di atas support EMA 20 (RSI <code>{rsi_val:.1f}</code>)."
+            )
+            action_advice = "Kalau lu mau ikut masuk, atur lot santai ya bor dan pastikan Stop Loss udah terpasang!"
+        elif signal == "SELL":
+            headline = f"Gue lagi condong <b>SELL</b> di {disp_name} bor! 🔻"
+            bias_text = (
+                f"Tekanan jual lagi dominan. Harga sekarang di <code>{price_fmt}</code> "
+                f"dan ada rejection kuat di bawah resisten EMA 20 (RSI <code>{rsi_val:.1f}</code>)."
+            )
+            action_advice = "Hati-hati jangan paksain buy pas momentum turun lagi deras ya bor! Disiplin pasang SL!"
+        else:
+            headline = f"Kalau sekarang gue lagi posisi <b>WAIT & SEE (belum buy / sell)</b> di {disp_name} bor! ⏳"
+            bias_text = (
+                f"Harga sekarang di <code>{price_fmt}</code> dan market lagi gerak konsolidasi / sideways (RSI <code>{rsi_val:.1f}</code>). "
+                f"Belum ada setup Grade A yang benar-benar solid dari 9 buku."
+            )
+            action_advice = (
+                "Dalam trading, sabar nunggu momen yang tepat itu jauh lebih bijak daripada maksa entry "
+                "terus floating minus. Begitu ada setup Grade A+ yang jelas, gue langsung kasih tau!"
+            )
+
+        lines = [
+            headline,
+            "",
+            bias_text,
+        ]
+
+        if setup_grade and signal in ["BUY", "SELL"]:
+            lines.append(f"⭐ <b>Kualitas Setup:</b> Grade {setup_grade} ({conf_pct}% Konfluensi 9 Buku)")
+
+        if tp_price and sl_price and signal in ["BUY", "SELL"]:
+            tp_fmt = f"${tp_price:,.2f}" if is_gold else f"Rp {tp_price:,.0f}"
+            sl_fmt = f"${sl_price:,.2f}" if is_gold else f"Rp {sl_price:,.0f}"
+            pct_tp = abs((tp_price - price) / max(price, 0.01)) * 100.0
+            pct_sl = abs((price - sl_price) / max(price, 0.01)) * 100.0
+            lines.append(f"🎯 <b>Rencana Target TP:</b> <code>{tp_fmt}</code> (+{pct_tp:.2f}%)")
+            lines.append(f"🛑 <b>Batas Stop Loss:</b> <code>{sl_fmt}</code> (-{pct_sl:.2f}%)")
+
+        if prediction and signal in ["BUY", "SELL"]:
+            lines.append(f"🔮 <b>Proyeksi Arah:</b> <i>{html.escape(prediction)}</i>")
+
+        if reasons and signal in ["BUY", "SELL"]:
+            lines.append(f"💡 <b>Pemicu Utama:</b> {html.escape(reasons[0])}")
+
+        lines.extend([
+            "",
+            action_advice,
+        ])
+        return "\n".join(lines)
+
+    @classmethod
+    def generate_entry_advice_response(
+        cls,
+        ticker: str,
+        price: float,
+        signal: str,
+        indicators: Optional[Dict[str, float]] = None,
+        tp_price: Optional[float] = None,
+        sl_price: Optional[float] = None,
+        user_name: str = "Bor",
+    ) -> str:
+        """Memberikan saran timing masuk posisi (entry) seperti kawan ngobrol di warkop."""
+        indicators = indicators or {}
+        is_gold = any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        disp_name = "Gold" if is_gold else ticker.replace(".JK", "")
+        price_fmt = f"${price:,.2f}" if is_gold else f"Rp {price:,.0f}"
+        rsi_val = indicators.get("rsi", 50.0)
+        ema20 = indicators.get("ema_20", price)
+
+        if signal == "BUY":
+            dist_pct = ((price - ema20) / max(ema20, 0.01)) * 100.0
+            if rsi_val > 70 or dist_pct > 1.2:
+                return (
+                    f"Kalau buat langsung hajar buy sekarang di {disp_name} ({price_fmt}), "
+                    f"jujur agak rawan bor! ⚠️\n\n"
+                    f"Harganya udah lumayan melompat di atas EMA 20 dan RSI udah di <code>{rsi_val:.1f}</code> (area jenuh beli). "
+                    f"Saran gue: mending sabar tunggu koreksi (pullback) tipis mendekati garis EMA 20 dulu. "
+                    f"Biar lu dapet harga diskon dan jarak ke Stop Loss ga kebesaran. Jangan fomo ya bor! 🧘‍♂️"
+                )
+            else:
+                sl_fmt = f"${sl_price:,.2f}" if is_gold and sl_price else f"Rp {sl_price:,.0f}" if sl_price else "area support"
+                return (
+                    f"Masih aman dan layak masuk bor! 👍\n\n"
+                    f"Harga sekarang di <code>{price_fmt}</code> masih berada di dekat area pijakan EMA 20 dan RSI <code>{rsi_val:.1f}</code> masih sehat. "
+                    f"Setup momentum buy-nya masih valid.\n\n"
+                    f"Tapi inget kaidah nomor 1: wajib pasang Stop Loss di <code>{sl_fmt}</code> dan hitung lot santai sesuai risiko akun lu ya. Gaskeun! 🔥"
+                )
+        elif signal == "SELL":
+            return (
+                f"Untuk saat ini tren di {disp_name} lagi condong turun (SELL) bor.\n\n"
+                f"Kalau lu mau buy, jangan tangkap pisau jatuh dulu. Kalau mau ikutan sell, "
+                f"tunggu pantulan retest ke EMA 20 biar dapet titik entry yang optimal. Tetap disiplin ya!"
+            )
+        else:
+            return (
+                f"Saran gue mending tahan diri dulu bor! ⏳\n\n"
+                f"Pergerakan {disp_name} sekarang lagi sideways / konsolidasi (RSI <code>{rsi_val:.1f}</code>). "
+                f"Belum ada konfirmasi arah yang kuat dari 9 buku. Dalam trading, menunggu itu juga bagian dari strategi. "
+                f"Nanti pas setup Grade A+ muncul, langsung gue panggil!"
+            )
+
+    @classmethod
+    def generate_price_response(
+        cls,
+        ticker: str,
+        price: float,
+        change_pct: float = 0.0,
+        signal: str = "HOLD",
+        user_name: str = "Bor",
+    ) -> str:
+        """Menyampaikan harga terkini secara santai dan to-the-point."""
+        is_gold = any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        disp_name = "Gold (XAU/USD)" if is_gold else ticker.replace(".JK", "")
+        price_fmt = f"${price:,.2f}" if is_gold else f"Rp {price:,.0f}"
+        sign_chg = "+" if change_pct >= 0 else ""
+        chg_fmt = f"({sign_chg}{change_pct:.2f}%)"
+
+        sig_label = "lagi ada sinyal BUY" if signal == "BUY" else ("lagi ada sinyal SELL" if signal == "SELL" else "lagi konsolidasi")
+        return (
+            f"Harga live <b>{disp_name}</b> sekarang lagi di <code>{price_fmt}</code> {chg_fmt} bor.\n"
+            f"Status sinyal sistem saat ini <b>{sig_label}</b>. Ada yang mau lu cek lagi?"
+        )
+
+    @classmethod
     def generate_chat_response(cls, intent: str, user_name: str = "Bor", extra: Optional[Dict[str, Any]] = None) -> str:
-        """Menghasilkan teks balasan percakapan santai berbahasa gaul sesuai intent."""
+        """Menghasilkan teks balasan percakapan natural layaknya manusia biasa yang ramah."""
         extra = extra or {}
 
         if intent == "GREETING":
             return (
-                f"Yo halo {user_name}! 😎\n\n"
-                f"Gue standby 24 jam nih mantau pergerakan Gold sama saham-saham IDX.\n"
-                f"Ada yang mau lu cek bor? Misalnya:\n"
-                f"• <i>'bor minta chart xau/usd'</i>\n"
-                f"• <i>'gimana analisa bbca hari ini?'</i>\n"
-                f"• <i>'ada saham yang berpotensi ga?'</i>\n"
-                f"• <i>'cek posisi akun mt5'</i>\n\n"
-                f"Tinggal ngomong aja santai bor, gue siap bantu! 🚀"
+                f"Yo halo {user_name}! 😎 Lagi mantau market apa nih hari ini?\n\n"
+                f"Gold sama saham-saham IDX lagi gue pantauin terus nih. "
+                f"Ada pergerakan atau saham yang lagi bikin lu penasaran bor?"
             )
 
         elif intent == "THANKS":
             return (
-                f"Sama-sama bor {user_name}! Santai aja, kita cari cuan bareng-bareng. 🤝🔥\n"
-                f"Kalau butuh cek chart, tanya analisa saham, atau mau liat setup yang lagi cakep, tinggal colek gue aja ya bor!"
+                f"Sama-sama bor {user_name}! Santai aja, kita kan partneran cari cuan bareng. 🤝🔥\n"
+                f"Kalau butuh cek chart, tanya analisa, atau mau liat setup yang lagi cakep, tinggal panggil gue aja ya!"
             )
 
         elif intent == "STATUS":
@@ -666,16 +887,36 @@ class ChatAgent:
                 f"dan pipeline analisa jalan rutin memantau market. Siap berburu sinyal Grade A+ buat lu! 🛡️⚡"
             )
 
+        elif intent == "CURHAT_LOSS":
+            return (
+                f"Sabar ya bor, tarik napas dulu sejenak. 🧘‍♂️\n\n"
+                f"Kena SL itu bukan tanda lu gagal, tapi bukti bahwa lu disiplin menjaga modal dari kehancuran total. "
+                f"Trader profesional kelas dunia pun sering salah, tapi portofolionya tetap tumbuh konsisten karena saat salah ruginya terukur kecil (1-2%), "
+                f"dan saat bener cuannya lebar.\n\n"
+                f"Istirahat dulu sejenak, jangan balas dendam (*revenge trade*) ke market ya bor. "
+                f"Nanti pas muncul setup Grade A+ lagi yang fresh, kita hajar bareng-bareng! Gue temenin terus! 🤝🔥"
+            )
+
+        elif intent == "CURHAT_PROFIT":
+            return (
+                f"Alhamdulillah, gokil bor! Selamat ya! 🎉💰\n\n"
+                f"Ikut seneng banget gue liat portofolio lu makin tebel! 🔥\n"
+                f"Saran santai dari gue: jangan lupa amankan sebagian profit atau tarik (*withdraw*) buat reward ke diri sendiri. "
+                f"Tetap membumi, jangan langsung kepancing naikin lot kegedean ya. Besok kita berburu cuan lagi! 🚀"
+            )
+
+        elif intent == "IDENTITY":
+            return (
+                f"Haha santai bor! Gue Selobrow AI Trader, asisten trading pribadi lu. 😎\n\n"
+                f"Gue didesain khusus buat nemenin lu mantau pergerakan Gold (XAU/USD) dan saham-saham IDX 24 jam nonstop "
+                f"pake metode konfluensi 9 Buku PDF dunia.\n\n"
+                f"Gue bisa lu ajak ngobrol santai seputar arah harga, minta live chart, cek posisi MT5, jadwal news, "
+                f"atau diskusi setup trading. Ada yang mau kita bedah bareng sekarang bor?"
+            )
+
         else:
             # Chitchat default
             return (
-                f"Siap bor {user_name}! 😎 Mau ngobrolin trading apa nih hari ini?\n\n"
-                f"Lu bisa ketik langsung pertanyaan santai kayak:\n"
-                f"👉 <i>'minta chart xau/usd'</i> (buat liat live emas)\n"
-                f"👉 <i>'gimana analisa bbca?'</i> (buat analisa saham kilat)\n"
-                f"👉 <i>'cek candle gold'</i> (buat bedah pola candlestick)\n"
-                f"👉 <i>'ada saham berpotensi ga?'</i> (buat scan setup terbaik)\n"
-                f"👉 <i>'gimana posisi mt5?'</i> (buat cek status akun)\n"
-                f"👉 <i>'fitur kamu apa aja?'</i> (buat liat daftar lengkap)\n\n"
-                f"Gue pantauin terus marketnya buat lu bor! 🚀"
+                f"Siap bor {user_name}! Mau ngobrolin apa nih seputar market hari ini? "
+                f"Mau tanya arah Gold, cek analisa saham, atau liat chart langsung ngomong aja santai ya, gue standby terus! 🚀"
             )

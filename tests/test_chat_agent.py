@@ -226,10 +226,87 @@ def test_generate_copier_and_menu_response():
 def test_generate_chat_response():
     resp_greet = ChatAgent.generate_chat_response("GREETING", user_name="Nabil")
     assert "Nabil" in resp_greet
-    assert "standby" in resp_greet
+    assert "Lagi mantau market apa nih" in resp_greet
 
     resp_thanks = ChatAgent.generate_chat_response("THANKS", user_name="Nabil")
     assert "Sama-sama bor" in resp_thanks
 
     resp_status = ChatAgent.generate_chat_response("STATUS")
     assert "Aman terkendali" in resp_status
+
+    resp_loss = ChatAgent.generate_chat_response("CURHAT_LOSS")
+    assert "Kena SL itu bukan tanda lu gagal" in resp_loss
+
+    resp_profit = ChatAgent.generate_chat_response("CURHAT_PROFIT")
+    assert "Alhamdulillah" in resp_profit
+
+    resp_id = ChatAgent.generate_chat_response("IDENTITY")
+    assert "Selobrow AI Trader" in resp_id
+
+
+def test_classify_intent_human_conversation():
+    # 1. Stance: "lu buy or sell" (seperti yang ditanyakan user pada screenshot)
+    res1 = ChatAgent.classify_intent("lu buy or sell")
+    assert res1["intent"] == "STANCE"
+    assert res1["ticker"] == "XAUUSD"
+
+    res2 = ChatAgent.classify_intent("buy or sell")
+    assert res2["intent"] == "STANCE"
+
+    res3 = ChatAgent.classify_intent("buy apa sell bor sekarang")
+    assert res3["intent"] == "STANCE"
+
+    res4 = ChatAgent.classify_intent("posisi lu apa sekarang")
+    assert res4["intent"] == "STANCE"
+
+    res5 = ChatAgent.classify_intent("lu buy or sell di bbca")
+    assert res5["intent"] == "STANCE"
+    assert res5["ticker"] == "BBCA.JK"
+
+    # 2. Timing entry
+    res_entry = ChatAgent.classify_intent("bisa masuk sekarang ga bor")
+    assert res_entry["intent"] == "ENTRY_ADVICE"
+
+    res_entry2 = ChatAgent.classify_intent("telat ga kalau buy sekarang")
+    assert res_entry2["intent"] == "ENTRY_ADVICE"
+
+    # 3. Price check
+    res_price = ChatAgent.classify_intent("harga emas sekarang berapa")
+    assert res_price["intent"] == "PRICE_CHECK"
+
+    # 4. Curhat & Identity
+    assert ChatAgent.classify_intent("aduh kena sl nih bor")["intent"] == "CURHAT_LOSS"
+    assert ChatAgent.classify_intent("alhamdulillah cuan gede gue bor")["intent"] == "CURHAT_PROFIT"
+    assert ChatAgent.classify_intent("lu siapa sih bor?")["intent"] == "IDENTITY"
+
+
+def test_generate_stance_and_entry_advice_response():
+    resp_buy = ChatAgent.generate_stance_response(
+        ticker="XAUUSD",
+        price=4306.50,
+        signal="BUY",
+        setup_grade="A",
+        pdf_confluence_score=0.85,
+        indicators={"rsi": 56.4, "ema_20": 4295.0},
+        tp_price=4331.0,
+        sl_price=4290.0,
+        prediction="Bullish continuation",
+        reasons=["Pantulan EMA 20 & NFP momentum"],
+        user_name="Bro",
+    )
+    assert "BUY" in resp_buy
+    assert "$4,306.50" in resp_buy
+    assert "Target TP" in resp_buy
+    assert "Batas Stop Loss" in resp_buy
+    assert "Bullish continuation" in resp_buy
+
+    resp_advice = ChatAgent.generate_entry_advice_response(
+        ticker="XAUUSD",
+        price=4306.50,
+        signal="BUY",
+        indicators={"rsi": 56.4, "ema_20": 4305.0},
+        tp_price=4331.0,
+        sl_price=4290.0,
+    )
+    assert "aman dan layak masuk" in resp_advice
+    assert "Stop Loss" in resp_advice

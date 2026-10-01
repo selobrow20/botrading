@@ -3311,6 +3311,188 @@ class TelegramBotCommands:
         except Exception:
             await update.message.reply_html(analysis_text, reply_markup=reply_markup)
 
+    async def handle_stance_chat(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        target_ticker: str,
+        user_name: str,
+    ) -> None:
+        """Handler pertanyaan 'lu buy or sell' / posisi terkini bot."""
+        from data.fetcher import DataFetcher
+        from indicators.technical import TechnicalIndicators
+        from strategy.rules import get_strategy, DEFAULT_STRATEGY
+        from strategy.signal_engine import SignalEngine
+        from notify.chat_agent import ChatAgent
+        import asyncio
+
+        fetcher = DataFetcher(storage=self.storage)
+        clean_ticker = fetcher.normalize_ticker(target_ticker)
+        is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        disp_ticker = "XAU/USD (Gold Spot)" if is_gold else clean_ticker.replace(".JK", "")
+
+        def _eval():
+            interval = "15m"
+            period = "5d" if is_gold else "60d"
+            df = fetcher.get_data(clean_ticker, interval=interval, period=period, force_fetch=True if is_gold else False)
+            if df.empty or len(df) < 15:
+                df = fetcher.get_data(clean_ticker, interval="1d", period="1y", force_fetch=True if is_gold else False)
+            if df.empty or len(df) < 15:
+                return None
+            df_ind = TechnicalIndicators.add_all_indicators(df)
+            strategy = get_strategy("DayTrading_Intraday_Momentum") or DEFAULT_STRATEGY
+            engine = SignalEngine([strategy])
+            sig = engine.evaluate_bar(df_ind, ticker=clean_ticker, strategy=strategy)
+            return sig
+
+        sig = await asyncio.to_thread(_eval)
+        if not sig:
+            await update.message.reply_text(f"Waduh bor, feed data untuk {disp_ticker} lagi ga bisa diakses nih. Coba sebentar lagi ya!")
+            return
+
+        tp_val = sig.take_profit_price
+        sl_val = sig.stop_loss_price
+        if not tp_val or not sl_val:
+            is_bearish = "bearish" in (sig.market_direction_prediction or "").lower() or sig.signal == "SELL"
+            if is_gold:
+                if is_bearish:
+                    tp_val = round(sig.price * (1.0 - 0.008), 2)
+                    sl_val = round(sig.price * (1.0 + 0.004), 2)
+                else:
+                    tp_val = round(sig.price * (1.0 + 0.008), 2)
+                    sl_val = round(sig.price * (1.0 - 0.004), 2)
+            else:
+                tp_val = round(sig.price * 1.03, 0)
+                sl_val = round(sig.price * 0.98, 0)
+
+        stance_text = ChatAgent.generate_stance_response(
+            ticker=clean_ticker,
+            price=sig.price,
+            signal=sig.signal,
+            setup_grade=sig.setup_grade,
+            pdf_confluence_score=sig.pdf_confluence_score,
+            indicators=sig.indicators_snapshot,
+            tp_price=tp_val,
+            sl_price=sl_val,
+            prediction=sig.market_direction_prediction,
+            reasons=sig.reasons,
+            user_name=user_name,
+        )
+
+        reply_markup = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📊 Buka Live Chart", callback_data=f"chart_{clean_ticker}_candles"),
+                InlineKeyboardButton("🕯️ Pola Candlestick", callback_data=f"candle_{clean_ticker}"),
+            ],
+            [
+                InlineKeyboardButton("📈 Buka di TradingView", url=get_tradingview_url(clean_ticker)),
+            ]
+        ])
+        await update.message.reply_html(stance_text, reply_markup=reply_markup)
+
+    async def handle_entry_advice_chat(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        target_ticker: str,
+        user_name: str,
+    ) -> None:
+        """Handler pertanyaan timing masuk posisi (boleh masuk sekarang ga)."""
+        from data.fetcher import DataFetcher
+        from indicators.technical import TechnicalIndicators
+        from strategy.rules import get_strategy, DEFAULT_STRATEGY
+        from strategy.signal_engine import SignalEngine
+        from notify.chat_agent import ChatAgent
+        import asyncio
+
+        fetcher = DataFetcher(storage=self.storage)
+        clean_ticker = fetcher.normalize_ticker(target_ticker)
+        is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        disp_ticker = "XAU/USD (Gold Spot)" if is_gold else clean_ticker.replace(".JK", "")
+
+        def _eval():
+            interval = "15m"
+            period = "5d" if is_gold else "60d"
+            df = fetcher.get_data(clean_ticker, interval=interval, period=period, force_fetch=True if is_gold else False)
+            if df.empty or len(df) < 15:
+                df = fetcher.get_data(clean_ticker, interval="1d", period="1y", force_fetch=True if is_gold else False)
+            if df.empty or len(df) < 15:
+                return None
+            df_ind = TechnicalIndicators.add_all_indicators(df)
+            strategy = get_strategy("DayTrading_Intraday_Momentum") or DEFAULT_STRATEGY
+            engine = SignalEngine([strategy])
+            sig = engine.evaluate_bar(df_ind, ticker=clean_ticker, strategy=strategy)
+            return sig
+
+        sig = await asyncio.to_thread(_eval)
+        if not sig:
+            await update.message.reply_text(f"Waduh bor, feed data untuk {disp_ticker} lagi ga bisa diakses nih.")
+            return
+
+        tp_val = sig.take_profit_price
+        sl_val = sig.stop_loss_price
+        advice_text = ChatAgent.generate_entry_advice_response(
+            ticker=clean_ticker,
+            price=sig.price,
+            signal=sig.signal,
+            indicators=sig.indicators_snapshot,
+            tp_price=tp_val,
+            sl_price=sl_val,
+            user_name=user_name,
+        )
+
+        reply_markup = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📊 Buka Live Chart", callback_data=f"chart_{clean_ticker}_candles"),
+                InlineKeyboardButton("🕯️ Pola Candlestick", callback_data=f"candle_{clean_ticker}"),
+            ]
+        ])
+        await update.message.reply_html(advice_text, reply_markup=reply_markup)
+
+    async def handle_price_check_chat(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        target_ticker: str,
+        user_name: str,
+    ) -> None:
+        """Handler pertanyaan cek harga live."""
+        from data.fetcher import DataFetcher
+        from notify.chat_agent import ChatAgent
+        import asyncio
+
+        fetcher = DataFetcher(storage=self.storage)
+        clean_ticker = fetcher.normalize_ticker(target_ticker)
+
+        def _eval():
+            interval = "15m"
+            is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+            period = "5d" if is_gold else "60d"
+            df = fetcher.get_data(clean_ticker, interval=interval, period=period, force_fetch=True if is_gold else False)
+            if df.empty or len(df) < 5:
+                df = fetcher.get_data(clean_ticker, interval="1d", period="1y", force_fetch=True if is_gold else False)
+            if df.empty or len(df) < 2:
+                return None
+            last_close = float(df.iloc[-1]["Close"])
+            prev_close = float(df.iloc[-2]["Close"])
+            chg = ((last_close - prev_close) / max(prev_close, 0.01)) * 100.0
+            return last_close, chg
+
+        res = await asyncio.to_thread(_eval)
+        if not res:
+            await update.message.reply_text("Waduh bor, harga terkini lagi ga bisa diambil dari feed bursa.")
+            return
+
+        price, chg = res
+        price_text = ChatAgent.generate_price_response(
+            ticker=clean_ticker,
+            price=price,
+            change_pct=chg,
+            signal="HOLD",
+            user_name=user_name,
+        )
+        await update.message.reply_html(price_text)
+
     async def chat_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler pesan teks percakapan natural (bahasa gaul) & interaksi seluruh fitur bot."""
         if not await self.check_user_access(update, context):
@@ -3411,13 +3593,37 @@ class TelegramBotCommands:
             await self.candle_command(update, context)
             return
 
-        # 3. Intent ANALYSIS: Pengguna menanyakan kondisi / analisa saham atau emas tertentu
+        # 3. Intent STANCE: Pengguna bertanya "lu buy or sell?", "buy apa sell?", "posisi lu apa?"
+        if intent == "STANCE":
+            target_ticker = target_ticker or "XAUUSD"
+            await self.handle_stance_chat(update, context, target_ticker, user_name)
+            return
+
+        # 4. Intent ENTRY_ADVICE: Pengguna bertanya "bisa masuk sekarang ga?", "aman buy ga?"
+        if intent == "ENTRY_ADVICE":
+            target_ticker = target_ticker or "XAUUSD"
+            await self.handle_entry_advice_chat(update, context, target_ticker, user_name)
+            return
+
+        # 5. Intent PRICE_CHECK: Pengguna bertanya harga live instrumen
+        if intent == "PRICE_CHECK":
+            target_ticker = target_ticker or "XAUUSD"
+            await self.handle_price_check_chat(update, context, target_ticker, user_name)
+            return
+
+        # 6. Intent CURHAT_LOSS, CURHAT_PROFIT, IDENTITY
+        if intent in ["CURHAT_LOSS", "CURHAT_PROFIT", "IDENTITY"]:
+            reply_text = ChatAgent.generate_chat_response(intent=intent, user_name=user_name)
+            await update.message.reply_html(reply_text)
+            return
+
+        # 7. Intent ANALYSIS: Pengguna menanyakan kondisi / analisa saham atau emas tertentu
         if intent == "ANALYSIS":
             target_ticker = target_ticker or "XAUUSD"
             await self.handle_ticker_chat_analysis(update, context, target_ticker, user_name)
             return
 
-        # 4. Intent MT5: Pengguna menanyakan status akun / autotrade MT5
+        # 8. Intent MT5: Pengguna menanyakan status akun / autotrade MT5
         if intent == "MT5":
             await self.mt5_command(update, context)
             return
