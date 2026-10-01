@@ -278,7 +278,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
             base_dir=BASE_DIR,
             branch=git_cfg.get("branch", "main"),
             auto_restart=git_cfg.get("auto_restart", True),
-            notifier=runner.telegram_notifier if git_cfg.get("notify_telegram", True) else None,
+            notifier=runner.notifier if git_cfg.get("notify_telegram", True) else None,
         )
         pull_interval_mins = int(git_cfg.get("interval_minutes", 5))
         scheduler.add_job(
