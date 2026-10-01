@@ -538,6 +538,42 @@ def test_pdf_accuracy_flat_chop_and_low_volume():
     assert any("Volume Sangat Rendah" in c for c in checks)
 
 
+def test_check_london_judas_swing_trap():
+    """Menguji deteksi perangkap manipulasi likuiditas Sesi London (Judas Swing)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    engine = SignalEngine()
+
+    # Buat bar sesi Asia (05:00 - 14:00 WIB)
+    tz = ZoneInfo("Asia/Jakarta")
+    idx_times = [
+        datetime(2026, 10, 1, 9, 0, tzinfo=tz),
+        datetime(2026, 10, 1, 11, 0, tzinfo=tz),
+        datetime(2026, 10, 1, 13, 0, tzinfo=tz),
+        datetime(2026, 10, 1, 14, 15, tzinfo=tz),  # Waktu London Open Judas Swing
+    ]
+    df = pd.DataFrame([
+        {"High": 4180.0, "Low": 4170.0, "Open": 4172.0, "Close": 4178.0, "volume_ratio": 1.0},
+        {"High": 4185.0, "Low": 4175.0, "Open": 4178.0, "Close": 4182.0, "volume_ratio": 1.0},
+        {"High": 4183.0, "Low": 4172.0, "Open": 4182.0, "Close": 4175.0, "volume_ratio": 1.0},
+        # Bar 14:15 menusuk di atas High Asia (4185.0) tapi membentuk sumbu atas (upper wick)
+        {"High": 4186.0, "Low": 4172.0, "Open": 4174.0, "Close": 4175.0, "volume_ratio": 1.1, "rejection_wick_ratio": 0.35},
+    ], index=pd.DatetimeIndex(idx_times))
+
+    curr_row = df.iloc[-1]
+    is_trap, reason = engine.check_london_judas_swing(
+        df=df,
+        curr_price=4175.0,
+        signal_type="BUY",
+        curr_row=curr_row,
+    )
+
+    assert is_trap is True
+    assert "Anti-Judas Swing" in reason
+    assert "sapuan likuiditas di pucuk High Asia" in reason
+
+
 
 
 

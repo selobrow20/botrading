@@ -1012,10 +1012,9 @@ class PipelineRunner:
                 volume = float(pos["volume"])
                 pos_time = float(pos.get("time", 0))
 
-                # Pengamanan anti-premature: Posisi yang baru buka (< 3 menit) diberi ruang bernapas
-                # agar tidak terpicu oleh fluktuasi tick candle yang sama dengan saat entry
+                # Pengamanan anti-premature: Posisi yang baru buka (< 45 detik) diberi ruang bernapas awal
                 pos_age_sec = (now_epoch - pos_time) if pos_time > 0 else 9999
-                if pos_age_sec < 180:
+                if pos_age_sec < 45:
                     logger.debug(f"Posisi #{ticket} baru berjalan {int(pos_age_sec)} detik. Dalam masa observasi awal.")
                     continue
 
@@ -1057,7 +1056,7 @@ class PipelineRunner:
                 except Exception as ex_warn:
                     logger.warning(f"Error pengecekan early reversal warning #{ticket}: {ex_warn}")
 
-                # 2. Pengecekan Reversal Terkonfirmasi (100% Confirmation)
+                # 2. Pengecekan Reversal Terkonfirmasi (100% Confirmation - Candle 15m)
                 is_rev, rev_type, rev_reasons, rev_score = GoldReversalDetector.detect_reversal(
                     df_ind=df_ind,
                     position_type=pos_type,
@@ -1065,13 +1064,43 @@ class PipelineRunner:
                     current_price=price_curr,
                 )
 
+                # 2b. Pengecekan Fast Impulsive Plunge / Pump (Deteksi Junam Cepat TF 1m/5m & Judas Swing Dump)
+                fast_rev = False
+                fast_type = ""
+                fast_reasons = []
+                fast_score = 0.0
+
+                enable_fast_guard = bool(cfg_mt5.get("enable_fast_reversal_guard", True))
+                if enable_fast_guard:
+                    try:
+                        from strategy.signal_engine import get_trading_session
+                        s_code, s_name = get_trading_session()
+                        df_m5 = self.fetcher.get_data("XAUUSD", interval="5m", period="1d", force_fetch=False)
+                        fast_threshold = float(cfg_mt5.get("fast_reversal_pips_threshold", 22.0))
+
+                        fast_rev, fast_type, fast_reasons, fast_score = GoldReversalDetector.detect_fast_impulsive_reversal(
+                            position_type=pos_type,
+                            entry_price=price_open,
+                            current_price=price_curr,
+                            df_m5=df_m5,
+                            threshold_pips=fast_threshold,
+                            session_code=s_code,
+                        )
+                    except Exception as ex_fast:
+                        logger.debug(f"Pengecekan fast reversal #{ticket}: {ex_fast}")
+
                 # Filter Ketat 9 Buku PDF & Preferensi Pengguna:
-                # Sesuai arahan pengguna: "kalo udah fix pembalikan 100% sesuai pdf gapapa bor atau 90% lu bisa sl dan masuk posisi sebalik nya"
-                # Posisi dibiarkan berjalan menyentuh Hard TP (65/140 pips) atau Hard SL (65 pips) di MT5.
-                # Auto-close dini HANYA aktif jika enable_reversal_auto_close = True DAN ada konfirmasi pembalikan mutlak (rev_score >= 90%)
-                # serta harga telah menembus ke sisi berlawanan dari tren mayor 50 EMA.
                 should_auto_close = False
-                if is_rev:
+                if fast_rev and enable_auto_close:
+                    should_auto_close = True
+                    rev_score = fast_score
+                    rev_type = fast_type
+                    rev_reasons = fast_reasons
+                    logger.info(
+                        f"🚨 [FAST IMPULSIVE REVERSAL TRIGGERED] Posisi #{ticket} ({pos_type}) mengalami pergerakan impulsif berlawanan arah! "
+                        f"Floating: {pnl_pct}%. Tipe: {rev_type}. Melakukan Cut Loss Dini & Auto-Flip!"
+                    )
+                elif is_rev:
                     ema50_val = float(df_ind["ema_50"].iloc[-1]) if ("ema_50" in df_ind.columns and not df_ind.empty) else price_open
                     is_trend_broken = (price_curr < ema50_val) if pos_type == "BUY" else (price_curr > ema50_val)
                     rev_threshold = float(cfg_mt5.get("reversal_auto_close_min_score", 90.0))
@@ -1101,15 +1130,47 @@ class PipelineRunner:
                         bridge.clear_reversal_cooldown()
 
                         # Sesuai arahan pengguna: "kalo udah fix pembalikan 100% sesuai pdf gapapa bor atau 90% lu bisa sl dan masuk posisi sebalik nya"
-                        # Langsung trigger scan pipeline instan untuk masuk ke posisi sebaliknya!
+                        # Langsung eksekusi order balik arah (Flip) seketika ke MT5!
                         enable_flip = bool(cfg_mt5.get("enable_reversal_flip", True))
                         if enable_flip:
+                            flip_action = "SELL" if pos_type == "BUY" else "BUY"
                             logger.info(
                                 f"🔄 [REVERSAL AUTO-FLIP] Posisi #{ticket} ({pos_type}) ditutup cut loss. "
-                                f"Memicu scan pipeline instan untuk masuk posisi sebaliknya!"
+                                f"Mengeksekusi order balik arah {flip_action} seketika ke MT5!"
                             )
+                            try:
+                                from strategy.signal_engine import SignalResult
+                                short_tp_usd = float(cfg_mt5.get("gold_short_tp_pips", 60.0)) / 10.0
+                                short_sl_usd = float(cfg_mt5.get("gold_short_sl_pips", 60.0)) / 10.0
+                                if flip_action == "SELL":
+                                    f_tp = round(price_curr - short_tp_usd, 2)
+                                    f_sl = round(price_curr + short_sl_usd, 2)
+                                else:
+                                    f_tp = round(price_curr + short_tp_usd, 2)
+                                    f_sl = round(price_curr - short_sl_usd, 2)
+
+                                flip_sig = SignalResult(
+                                    ticker="XAUUSD",
+                                    strategy_name="Reversal_Auto_Flip",
+                                    signal=flip_action,
+                                    price=price_curr,
+                                    candle_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                    reasons=[f"⚡ Auto-Flip Seketika: Membalik {pos_type} ke {flip_action} ({rev_type})"],
+                                    take_profit_price=f_tp,
+                                    stop_loss_price=f_sl,
+                                    pdf_confluence_score=90.0,
+                                    setup_grade="Grade A+ Reversal Flip",
+                                )
+                                flip_res = bridge.execute_signal(flip_sig)
+                                if flip_res.get("success"):
+                                    logger.info(f"✅ Order Balik Arah {flip_action} MT5 #{flip_res.get('ticket')} sukses dipasang!")
+                                else:
+                                    logger.warning(f"Order Balik Arah MT5: {flip_res.get('message')}")
+                            except Exception as ex_flip:
+                                logger.error(f"Gagal eksekusi order flip MT5: {ex_flip}")
+
                             import threading
-                            threading.Thread(target=self.run_pipeline, kwargs={"force_run": True}, daemon=True).start()
+                            threading.Thread(target=self.run_pipeline, kwargs={"force_run": True, "watchlist": ["XAUUSD"]}, daemon=True).start()
 
                         alert_payload = {
                             "ticket": ticket,

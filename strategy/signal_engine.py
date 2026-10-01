@@ -470,6 +470,102 @@ class SignalEngine:
 
         return is_approved, score, setup_grade, checks, prediction
 
+    def check_london_judas_swing(
+        self,
+        df: pd.DataFrame,
+        curr_price: float,
+        signal_type: str,
+        curr_row: pd.Series,
+    ) -> Tuple[bool, str]:
+        """
+        Mendeteksi potensi perangkap manipulasi likuiditas Sesi London (Judas Swing / Liquidity Trap).
+        Jendela Waktu: 14:00 - 15:30 WIB (London Open & Pre-London).
+        Mekanisme: Institusi mendorong harga menembus High/Low Sesi Asia untuk memancing
+        breakout retail sebelum membanting harga secara ekstrem ke arah sejati (dump/pump).
+        """
+        try:
+            from zoneinfo import ZoneInfo
+            from datetime import time, datetime
+            import pandas as pd
+
+            # Dapatkan waktu candle dalam WIB (Asia/Jakarta)
+            candle_idx = curr_row.name
+            if isinstance(candle_idx, pd.Timestamp):
+                ts_wib = candle_idx.tz_convert(ZoneInfo("Asia/Jakarta")) if candle_idx.tzinfo else candle_idx.tz_localize(ZoneInfo("Asia/Jakarta"))
+            elif isinstance(candle_idx, str):
+                try:
+                    dt_parsed = pd.to_datetime(candle_idx)
+                    ts_wib = dt_parsed.tz_convert(ZoneInfo("Asia/Jakarta")) if dt_parsed.tzinfo else dt_parsed.tz_localize(ZoneInfo("Asia/Jakarta"))
+                except Exception:
+                    ts_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
+            else:
+                ts_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
+
+            t = ts_wib.time()
+            # Jendela utama manipulasi pembukaan London: 14:00 s/d 15:30 WIB
+            if not (time(14, 0) <= t <= time(15, 30)):
+                return False, ""
+
+            # Cari data sesi Asia hari ini (05:00 - 14:00 WIB)
+            recent_bars = df.tail(40)
+            asia_highs = []
+            asia_lows = []
+
+            for idx_val, row in recent_bars.iterrows():
+                try:
+                    if isinstance(idx_val, pd.Timestamp):
+                        b_ts = idx_val.tz_convert(ZoneInfo("Asia/Jakarta")) if idx_val.tzinfo else idx_val.tz_localize(ZoneInfo("Asia/Jakarta"))
+                    else:
+                        b_ts = pd.to_datetime(idx_val).tz_localize(ZoneInfo("Asia/Jakarta"))
+                    if b_ts.date() == ts_wib.date() and time(5, 0) <= b_ts.time() < time(14, 0):
+                        asia_highs.append(float(row.get("High", row.get("high", 0.0))))
+                        asia_lows.append(float(row.get("Low", row.get("low", 999999.0))))
+                except Exception:
+                    pass
+
+            if len(asia_highs) < 3:
+                prev_bars = df.iloc[-25:-1] if len(df) >= 25 else df.iloc[:-1]
+                asian_high = float(prev_bars["High"].max()) if not prev_bars.empty else curr_price
+                asian_low = float(prev_bars["Low"].min()) if not prev_bars.empty else curr_price
+            else:
+                asian_high = max(asia_highs)
+                asian_low = min(asia_lows)
+
+            high_c = float(curr_row.get("High", curr_price))
+            low_c = float(curr_row.get("Low", curr_price))
+            close_c = float(curr_row.get("Close", curr_price))
+            open_c = float(curr_row.get("Open", curr_price))
+            c_range = max(high_c - low_c, 0.01)
+            upper_wick = max(0.0, (high_c - max(open_c, close_c)) / c_range)
+            lower_wick = max(0.0, (min(open_c, close_c) - low_c) / c_range)
+            vol_ratio = float(curr_row.get("volume_ratio", 1.0))
+
+            # 1. Kasus BUY Trap (Bullish Judas Swing di Pucuk Asia High):
+            # Harga menyentuh/menembus High Asia, tapi ada sumbu atas (upper wick) atau volume kecil
+            if signal_type == "BUY":
+                is_near_asian_high = high_c >= (asian_high - 1.50)
+                if is_near_asian_high and (upper_wick >= 0.22 or close_c < asian_high or vol_ratio < 1.4):
+                    return True, (
+                        f"🛑 Filter Anti-Judas Swing (Sesi London): Terdeteksi sapuan likuiditas di pucuk High Asia (${asian_high:.2f}). "
+                        f"Candle menunjukkan penolakan atas ({upper_wick*100:.0f}% upper wick). "
+                        f"Sangat rentan dump/junam tajam oleh institusi London, sinyal BUY ditahan demi keamanan modal."
+                    )
+
+            # 2. Kasus SELL Trap (Bearish Judas Swing di Lembah Asia Low):
+            elif signal_type == "SELL":
+                is_near_asian_low = low_c <= (asian_low + 1.50)
+                if is_near_asian_low and (lower_wick >= 0.22 or close_c > asian_low or vol_ratio < 1.4):
+                    return True, (
+                        f"🛑 Filter Anti-Judas Swing (Sesi London): Terdeteksi sapuan likuiditas di dasar Low Asia (${asian_low:.2f}). "
+                        f"Candle menunjukkan penolakan bawah ({lower_wick*100:.0f}% lower wick). "
+                        f"Sangat rentan pump/pantulan tajam oleh institusi London, sinyal SELL ditahan demi keamanan modal."
+                    )
+
+            return False, ""
+        except Exception as ex:
+            logger.debug(f"Pengecekan judas swing trap: {ex}")
+            return False, ""
+
     def evaluate_bar(
         self,
         df: pd.DataFrame,
@@ -670,6 +766,18 @@ class SignalEngine:
         london_min_score = 75.0
         london_rejected = is_london_session and apply_pdf_filter and (pdf_score < london_min_score)
 
+        # Filter Deteksi Jebakan Likuiditas Sesi London (Anti-Judas Swing)
+        judas_trap = False
+        judas_reason = ""
+        enable_judas = self.config.get("mt5", {}).get("enable_judas_swing_filter", True)
+        if is_london_session and enable_judas and apply_pdf_filter:
+            judas_trap, judas_reason = self.check_london_judas_swing(
+                df=df_with_ind,
+                curr_price=curr_price,
+                signal_type=target_sig_type,
+                curr_row=curr_row,
+            )
+
         if is_buy:
             if apply_pdf_filter and not pdf_approved:
                 # Sinyal BUY ditahan jika konfluensi 9 buku belum tembus Grade A (65%)
@@ -684,6 +792,9 @@ class SignalEngine:
                     f"Sinyal beli ditahan (Mode Hati-Hati Sesi London). Skor konfluensi {pdf_score:.0f}% < {london_min_score:.0f}% ({setup_grade}). "
                     f"Sesi London sering terjadi manipulasi likuiditas / Judas swing, hanya sinyal Grade A+ kuat (>=75%) yang diizinkan."
                 ]
+            elif judas_trap:
+                signal = "HOLD"
+                reasons = [judas_reason]
             else:
                 signal = "BUY"
                 reasons = list(buy_reasons)
@@ -713,6 +824,9 @@ class SignalEngine:
                     f"Sinyal short ditahan (Mode Hati-Hati Sesi London). Skor konfluensi {pdf_score:.0f}% < {london_min_score:.0f}% ({setup_grade}). "
                     f"Sesi London sering terjadi manipulasi likuiditas / Judas swing, hanya sinyal Grade A+ kuat (>=75%) yang diizinkan."
                 ]
+            elif judas_trap:
+                signal = "HOLD"
+                reasons = [judas_reason]
             else:
                 signal = "SELL"
                 reasons = list(sell_reasons)
@@ -723,7 +837,10 @@ class SignalEngine:
             # Jika sinyal dasar masih netral namun telaah 9 Buku PDF membuktikan Grade A (>=65% atau >=75% di London)
             min_promo_score = london_min_score if is_london_session else 65.0
             if apply_pdf_filter and pdf_score >= min_promo_score and is_gold:
-                if target_sig_type == "BUY" and curr_price >= snapshot.get("ema_50", 0.0):
+                if judas_trap:
+                    signal = "HOLD"
+                    reasons = [judas_reason]
+                elif target_sig_type == "BUY" and curr_price >= snapshot.get("ema_50", 0.0):
                     signal = "BUY"
                     reasons = [
                         f"Konfluensi 9 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",

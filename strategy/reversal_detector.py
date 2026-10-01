@@ -252,3 +252,106 @@ class GoldReversalDetector:
 
         return False, rev_type, reasons, score
 
+    @staticmethod
+    def detect_fast_impulsive_reversal(
+        position_type: str,
+        entry_price: float,
+        current_price: float,
+        df_m5: Optional[pd.DataFrame] = None,
+        threshold_pips: float = 22.0,
+        session_code: str = "LONDON",
+    ) -> Tuple[bool, str, List[str], float]:
+        """
+        Sistem Deteksi Junam / Lonjakan Cepat Real-Time (Fast Impulsive Reversal & Anti-Judas Swing Dump).
+        Mendeteksi saat market bergerak berlawanan arah dengan sangat impulsif (flash drop / pump)
+        sebelum menunggu candle 15m selesai, sehingga bot bisa Cut Loss Dini dan langsung Balik Arah (Flip).
+        """
+        if entry_price <= 0 or current_price <= 0:
+            return False, "", [], 0.0
+
+        pos_type = position_type.upper().strip()
+        reasons = []
+        score = 0.0
+
+        if pos_type == "BUY":
+            adverse_pips = round((entry_price - current_price) * 10.0, 1)
+            if adverse_pips < threshold_pips:
+                return False, "", [], 0.0
+
+            score = 75.0
+            reasons.append(
+                f"⚡ Junam Impulsif Berlawanan Arah: Floating minus {adverse_pips:.1f} pips >= ambang batas {threshold_pips:.1f} pips"
+            )
+
+            # Cek konfirmasi TF 5 Menit jika tersedia
+            if df_m5 is not None and not df_m5.empty and len(df_m5) >= 2:
+                last_m5 = df_m5.iloc[-1]
+                prev_m5 = df_m5.iloc[-2]
+                close_m5 = float(last_m5.get("Close", last_m5.get("close", current_price)))
+                open_m5 = float(last_m5.get("Open", last_m5.get("open", close_m5)))
+                prev_close_m5 = float(prev_m5.get("Close", prev_m5.get("close", close_m5)))
+                prev_open_m5 = float(prev_m5.get("Open", prev_m5.get("open", prev_close_m5)))
+
+                # Bearish candles on M5
+                if close_m5 < open_m5 and prev_close_m5 <= prev_open_m5:
+                    score += 15.0
+                    reasons.append("🕯️ TF 5M: Candle merah tebal berturut-turut mengonfirmasi dorongan seller institusi")
+
+                ema20_m5 = float(last_m5.get("ema_20", 0.0))
+                if ema20_m5 > 0 and current_price < ema20_m5:
+                    score += 10.0
+                    reasons.append(f"📉 TF 5M: Harga jebol di bawah Dynamic 20 EMA ({ema20_m5:.2f})")
+
+            # Bobot Sesi London (Judas Swing Dump)
+            if session_code == "LONDON":
+                score = max(score, 90.0)
+                reasons.append("🏛️ Sesi London: Terkonfirmasi pola Judas Swing Trap / False Bullish institusi")
+            elif session_code == "US":
+                score = max(score, 85.0)
+                reasons.append("🗽 Sesi US: Terkonfirmasi volatilitas New York momentum break")
+
+            rev_type = "FAST BEARISH PLUNGE (London Judas Swing Dump)"
+            return True, rev_type, reasons, min(score, 95.0)
+
+        elif pos_type == "SELL":
+            adverse_pips = round((current_price - entry_price) * 10.0, 1)
+            if adverse_pips < threshold_pips:
+                return False, "", [], 0.0
+
+            score = 75.0
+            reasons.append(
+                f"⚡ Lonjakan Impulsif Berlawanan Arah: Floating minus {adverse_pips:.1f} pips >= ambang batas {threshold_pips:.1f} pips"
+            )
+
+            # Cek konfirmasi TF 5 Menit jika tersedia
+            if df_m5 is not None and not df_m5.empty and len(df_m5) >= 2:
+                last_m5 = df_m5.iloc[-1]
+                prev_m5 = df_m5.iloc[-2]
+                close_m5 = float(last_m5.get("Close", last_m5.get("close", current_price)))
+                open_m5 = float(last_m5.get("Open", last_m5.get("open", close_m5)))
+                prev_close_m5 = float(prev_m5.get("Close", prev_m5.get("close", close_m5)))
+                prev_open_m5 = float(prev_m5.get("Open", prev_m5.get("open", prev_close_m5)))
+
+                # Bullish candles on M5
+                if close_m5 > open_m5 and prev_close_m5 >= prev_open_m5:
+                    score += 15.0
+                    reasons.append("🕯️ TF 5M: Candle hijau tebal berturut-turut mengonfirmasi dorongan buyer institusi")
+
+                ema20_m5 = float(last_m5.get("ema_20", 0.0))
+                if ema20_m5 > 0 and current_price > ema20_m5:
+                    score += 10.0
+                    reasons.append(f"📈 TF 5M: Harga menembus ke atas Dynamic 20 EMA ({ema20_m5:.2f})")
+
+            # Bobot Sesi London
+            if session_code == "LONDON":
+                score = max(score, 90.0)
+                reasons.append("🏛️ Sesi London: Terkonfirmasi pola Judas Swing Trap / False Bearish institusi")
+            elif session_code == "US":
+                score = max(score, 85.0)
+                reasons.append("🗽 Sesi US: Terkonfirmasi volatilitas New York momentum break")
+
+            rev_type = "FAST BULLISH PUMP (London Judas Swing Pump)"
+            return True, rev_type, reasons, min(score, 95.0)
+
+        return False, "", [], 0.0
+

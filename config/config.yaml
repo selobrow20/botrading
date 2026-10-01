@@ -72,6 +72,9 @@ mt5:
   reversal_auto_close_min_score: 90.0  # Batas minimal skor pembalikan untuk cut loss dini (90% - 100%)
   enable_reversal_flip: true  # Mengizinkan pembalikan posisi (Cut loss posisi lama & langsung masuk posisi sebaliknya) jika skor >= 90%
   min_reversal_flip_score: 90.0  # Minimal skor 90% untuk flip posisi sebaliknya sesuai 9 Buku PDF
+  enable_fast_reversal_guard: true   # Deteksi junam kilat berlawanan arah secara real-time (TF 1m/5m)
+  fast_reversal_pips_threshold: 22.0 # Cut loss dini & auto-flip jika junam >= 22 pips berlawanan arah
+  enable_judas_swing_filter: true    # Filter anti-manipulasi likuiditas Sesi London (14:00 - 15:30 WIB)
   max_spread_usd: 0.65  # Maksimal spread $0.65 USD (65 pips) agar tidak entry saat spread malam melebar
   enable_rollover_guard: true  # Menahan entry saat jam rollover malam broker (04:45 - 05:20 WIB)
   max_consecutive_losses: 2  # Jika 2x SL beruntun, aktifkan cooldown pengamanan 60 menit

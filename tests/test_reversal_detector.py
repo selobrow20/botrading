@@ -242,3 +242,45 @@ def test_early_reversal_warning_detection_and_formatting():
     assert "SIAGA PENGAWALAN" in msg
 
 
+def test_detect_fast_impulsive_reversal_buy():
+    """Menguji deteksi junam kilat (Fast Impulsive Reversal) saat posisi BUY aktif."""
+    df_m5 = pd.DataFrame([
+        {"Open": 4175.0, "High": 4176.0, "Low": 4170.0, "Close": 4171.0, "ema_20": 4174.0},
+        {"Open": 4171.0, "High": 4171.5, "Low": 4165.0, "Close": 4166.0, "ema_20": 4172.0},
+    ])
+    # Harga entry 4174.5, harga saat ini 4166.0 (turun 8.5 USD = 85 pips > 22 pips)
+    is_fast, r_type, reasons, score = GoldReversalDetector.detect_fast_impulsive_reversal(
+        position_type="BUY",
+        entry_price=4174.5,
+        current_price=4166.0,
+        df_m5=df_m5,
+        threshold_pips=22.0,
+        session_code="LONDON",
+    )
+    assert is_fast is True
+    assert "FAST BEARISH PLUNGE" in r_type
+    assert score >= 90.0
+    assert len(reasons) >= 2
+
+
+def test_detect_fast_impulsive_reversal_sell():
+    """Menguji deteksi lonjakan kilat (Fast Impulsive Reversal) saat posisi SELL aktif."""
+    df_m5 = pd.DataFrame([
+        {"Open": 4160.0, "High": 4166.0, "Low": 4159.0, "Close": 4165.0, "ema_20": 4161.0},
+        {"Open": 4165.0, "High": 4172.0, "Low": 4164.0, "Close": 4171.0, "ema_20": 4163.0},
+    ])
+    # Harga entry 4162.0, harga saat ini 4171.0 (naik 9.0 USD = 90 pips > 22 pips)
+    is_fast, r_type, reasons, score = GoldReversalDetector.detect_fast_impulsive_reversal(
+        position_type="SELL",
+        entry_price=4162.0,
+        current_price=4171.0,
+        df_m5=df_m5,
+        threshold_pips=22.0,
+        session_code="LONDON",
+    )
+    assert is_fast is True
+    assert "FAST BULLISH PUMP" in r_type
+    assert score >= 90.0
+    assert len(reasons) >= 2
+
+
