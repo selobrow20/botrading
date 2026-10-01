@@ -925,7 +925,26 @@ class MT5Bridge:
                     "message": msg,
                 }
 
-        # 5. Hitung Lot Sesuai Kualitas Momen (0.05 lot momen bagus banget, 0.01 lot standar/riskan)
+        # 5. Preservasi Jarak TP & SL Terencana (Dynamic Anchoring):
+        if tp > 0 and sl > 0 and price > 0:
+            tp_dist = round(abs(tp - price), 2)
+            sl_dist = round(abs(price - sl), 2)
+        else:
+            tp_dist = round(float(cfg_mt5.get("gold_short_tp_pips", 48.0)) / 10.0, 2)
+            sl_dist = round(float(cfg_mt5.get("gold_short_sl_pips", 42.0)) / 10.0, 2)
+
+        # KAIDAH BAKU RISK:REWARD GUARD (DILARANG KERAS TP 1 SL 2):
+        if sl_dist > tp_dist:
+            sl_dist = tp_dist
+
+        if sig_type == "BUY":
+            tp = round(price + tp_dist, 2)
+            sl = round(price - sl_dist, 2)
+        else:
+            tp = round(price - tp_dist, 2)
+            sl = round(price + sl_dist, 2)
+
+        # Hitung Lot Sesuai Kualitas Momen (0.05 lot momen bagus banget, 0.01 lot standar/riskan)
         lot = self.calculate_lot_size(ticker, price, sl, confluence_score=score, setup_grade=grade)
 
         # Mode Simulasi (Dry-Run untuk Unit Testing)
@@ -1002,16 +1021,50 @@ class MT5Bridge:
             order_type = mt5.ORDER_TYPE_BUY if sig_type == "BUY" else mt5.ORDER_TYPE_SELL
             exec_price = float(tick.ask if sig_type == "BUY" else tick.bid)
 
-            # KAIDAH BAKU RISK:REWARD GUARD (Minimal 1:1, Dilarang Keras SL Lebih Besar dari TP):
-            if tp > 0 and sl > 0 and exec_price > 0:
-                tp_dist = abs(tp - exec_price)
-                sl_dist = abs(sl - exec_price)
-                if sl_dist > tp_dist:
-                    if sig_type == "BUY":
-                        sl = round(exec_price - tp_dist, 2)
-                    else:
-                        sl = round(exec_price + tp_dist, 2)
-                    logger.info(f"🛡️ [RR GUARD 1:1] SL disesuaikan ke ${sl:.2f} agar R:R minimal 1:1 dengan TP!")
+            # 1. Preservasi Jarak TP & SL Terencana (Dynamic Execution-Price Anchoring):
+            # Mengatasi bug penyusutan jarak TP akibat spread Ask/Bid pasar dan slippage!
+            sig_price = float(getattr(sig, "price", 0.0) or exec_price)
+            sig_tp = float(getattr(sig, "take_profit_price", 0.0) or 0.0)
+            sig_sl = float(getattr(sig, "stop_loss_price", 0.0) or 0.0)
+            rrr = float(getattr(sig, "risk_reward_ratio", 1.0) or 1.0)
+            regime = str(getattr(sig, "market_regime", ""))
+
+            is_gold_symbol = any(k in ticker.upper() for k in ["XAUUSD", "GC=F", "GOLD", "EMAS"])
+            if is_gold_symbol:
+                cfg_short_tp = float(cfg_mt5.get("gold_short_tp_pips", 48.0)) / 10.0
+                cfg_short_sl = float(cfg_mt5.get("gold_short_sl_pips", 42.0)) / 10.0
+                cfg_long_tp = float(cfg_mt5.get("gold_long_tp_pips", 135.0)) / 10.0
+                cfg_long_sl = float(cfg_mt5.get("gold_long_sl_pips", 45.0)) / 10.0
+
+                if rrr >= 2.8 or "3:1" in regime or "Jauh" in regime or "Momentum" in regime:
+                    # Momen TP Jauh: Rasio wajib tepat 3:1 (TP 3, SL 1)
+                    sl_dist = round(min(4.50, max(4.00, cfg_long_sl)), 2)
+                    tp_dist = round(sl_dist * 3.0, 2)
+                else:
+                    # Momen Cepat / Normal: Minimal 1:1, TP 45 - 50 pips, SL 40 - 45 pips (TP >= SL)
+                    tp_dist = round(min(5.00, max(4.50, cfg_short_tp)), 2)
+                    sl_dist = round(min(tp_dist, max(3.50, cfg_short_sl)), 2)
+            else:
+                # Saham Reguler
+                tp_dist = round(abs(sig_tp - sig_price), 2) if (sig_tp > 0 and sig_price > 0) else 0.0
+                sl_dist = round(abs(sig_price - sig_sl), 2) if (sig_sl > 0 and sig_price > 0) else 0.0
+
+            # KAIDAH BAKU RISK:REWARD GUARD (DILARANG KERAS TP 1 SL 2):
+            if sl_dist > tp_dist:
+                sl_dist = tp_dist
+
+            digits = int(sym_info.digits or 2) if sym_info else 2
+            if sig_type == "BUY":
+                tp = round(exec_price + tp_dist, digits)
+                sl = round(exec_price - sl_dist, digits)
+            else:
+                tp = round(exec_price - tp_dist, digits)
+                sl = round(exec_price + sl_dist, digits)
+
+            logger.info(
+                f"🛡️ [RR GUARD {tp_dist/max(sl_dist, 0.01):.1f}:1] Entry Ask/Bid ${exec_price:.2f} -> "
+                f"TP: ${tp:.2f} (+{int(tp_dist*10)} pips), SL: ${sl:.2f} (-{int(sl_dist*10)} pips)"
+            )
 
             # Hitung lot dengan pertimbangan momen (Grade A+ = 0.05 lot, Grade A = 0.01 lot)
             lot = self.calculate_lot_size(broker_sym, exec_price, sl, confluence_score=score, setup_grade=grade)
@@ -1062,6 +1115,24 @@ class MT5Bridge:
                 }
 
             logger.info(f"✅ Order MT5 #{result.order} berhasil dieksekusi! {sig_type} {result.volume} {broker_sym} @ {result.price}")
+
+            # Sinkronisasi Slippage Broker: Jika harga fill aktual berbeda > 5 sen,
+            # lakukan update posisi agar jarak TP & SL di MT5 tetap 100% presisi terhadap harga fill!
+            if result.price > 0 and abs(float(result.price) - exec_price) >= 0.05 and is_gold_symbol:
+                actual_fill = float(result.price)
+                if sig_type == "BUY":
+                    adj_tp = round(actual_fill + tp_dist, digits)
+                    adj_sl = round(actual_fill - sl_dist, digits)
+                else:
+                    adj_tp = round(actual_fill - tp_dist, digits)
+                    adj_sl = round(actual_fill + sl_dist, digits)
+                try:
+                    self.modify_position(result.order, sl=adj_sl, tp=adj_tp)
+                    tp = adj_tp
+                    sl = adj_sl
+                    logger.info(f"🎯 [SLIPPAGE ADJUST] SL/TP tiket #{result.order} disinkronkan ke fill ${actual_fill:.2f}: TP=${tp:.2f}, SL=${sl:.2f}")
+                except Exception as e_mod:
+                    logger.debug(f"Gagal sinkronisasi slippage: {e_mod}")
             return {
                 "success": True,
                 "status": "executed",

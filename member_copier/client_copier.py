@@ -542,24 +542,28 @@ class MT5MemberBridge:
         else:
             sig["entry_price"] = curr_price
 
-        tp_val = sig.get("tp_price", 0.0)
-        sl_val = sig.get("sl_price", 0.0)
+        # Preservasi Jarak TP & SL Terencana (Dynamic Execution-Price Anchoring):
+        tp_raw = float(sig.get("tp_price", 0.0) or 0.0)
+        sl_raw = float(sig.get("sl_price", 0.0) or 0.0)
+        ref_price = float(sig.get("entry_price", curr_price) or curr_price)
+        digits = int(getattr(s_info, "digits", 2) or 2)
 
-        # KAIDAH BAKU RISK:REWARD GUARD (Minimal 1:1, Dilarang Keras SL Lebih Besar dari TP):
-        if tp_val > 0 and sl_val > 0 and curr_price > 0:
-            tp_dist = abs(tp_val - curr_price)
-            sl_dist = abs(sl_val - curr_price)
+        if tp_raw > 0 and sl_raw > 0 and ref_price > 0:
+            tp_dist = round(abs(tp_raw - ref_price), 2)
+            sl_dist = round(abs(ref_price - sl_raw), 2)
+            # KAIDAH BAKU RISK:REWARD GUARD (DILARANG KERAS TP 1 SL 2):
             if sl_dist > tp_dist:
-                if action == "BUY":
-                    sl_val = curr_price - tp_dist
-                else:
-                    sl_val = curr_price + tp_dist
-
-        digits = s_info.digits
-        if tp_val > 0:
-            tp_val = round(tp_val, digits)
-        if sl_val > 0:
-            sl_val = round(sl_val, digits)
+                sl_dist = tp_dist
+            
+            if action == "BUY":
+                tp_val = round(curr_price + tp_dist, digits)
+                sl_val = round(curr_price - sl_dist, digits)
+            else:
+                tp_val = round(curr_price - tp_dist, digits)
+                sl_val = round(curr_price + sl_dist, digits)
+        else:
+            tp_val = round(tp_raw, digits) if tp_raw > 0 else 0.0
+            sl_val = round(sl_raw, digits) if sl_raw > 0 else 0.0
 
         # Money Management & Normalisasi Ukuran Lot
         trade_lot = self.lot
