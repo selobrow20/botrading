@@ -1002,6 +1002,17 @@ class MT5Bridge:
             order_type = mt5.ORDER_TYPE_BUY if sig_type == "BUY" else mt5.ORDER_TYPE_SELL
             exec_price = float(tick.ask if sig_type == "BUY" else tick.bid)
 
+            # KAIDAH BAKU RISK:REWARD GUARD (Minimal 1:1, Dilarang Keras SL Lebih Besar dari TP):
+            if tp > 0 and sl > 0 and exec_price > 0:
+                tp_dist = abs(tp - exec_price)
+                sl_dist = abs(sl - exec_price)
+                if sl_dist > tp_dist:
+                    if sig_type == "BUY":
+                        sl = round(exec_price - tp_dist, 2)
+                    else:
+                        sl = round(exec_price + tp_dist, 2)
+                    logger.info(f"🛡️ [RR GUARD 1:1] SL disesuaikan ke ${sl:.2f} agar R:R minimal 1:1 dengan TP!")
+
             # Hitung lot dengan pertimbangan momen (Grade A+ = 0.05 lot, Grade A = 0.01 lot)
             lot = self.calculate_lot_size(broker_sym, exec_price, sl, confluence_score=score, setup_grade=grade)
 

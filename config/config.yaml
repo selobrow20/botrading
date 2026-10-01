@@ -77,6 +77,9 @@ mt5:
   enable_judas_swing_filter: true    # Filter anti-manipulasi likuiditas Sesi London (14:00 - 15:30 WIB)
   london_h1_confirmation: true       # Khusus Sesi London: Open posisi wajib konfirmasi searah tren & candle H1 (1-Hour)
   london_h1_max_hour: 17             # Maksimal jam 17:00 WIB (setelah jam 5 sore manipulasi reda, kembali ke M15 biasa)
+  gold_short_tp_pips: 65.0           # Target Take Profit 65 pips ($6.50 USD)
+  gold_short_sl_pips: 55.0           # Stop Loss ketat 55 pips ($5.50 USD) - R:R minimal 1:1.18
+  min_risk_reward_ratio: 1.0         # Rasio R:R mutlak minimal 1:1 (SL dilarang lebih besar dari TP)
   max_spread_usd: 0.65  # Maksimal spread $0.65 USD (65 pips) agar tidak entry saat spread malam melebar
   enable_rollover_guard: true  # Menahan entry saat jam rollover malam broker (04:45 - 05:20 WIB)
   max_consecutive_losses: 2  # Jika 2x SL beruntun, aktifkan cooldown pengamanan 60 menit

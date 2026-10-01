@@ -430,8 +430,9 @@ def test_trading_sessions_and_us_london_rules():
     tp_dist_us = round(abs(sig_us.take_profit_price - sig_us.price), 2)
     sl_dist_us = round(abs(sig_us.price - sig_us.stop_loss_price), 2)
     assert tp_dist_us in [6.00, 6.50]  # 60 - 65 pips sesuai konfigurasi pasar
-    assert sl_dist_us in [6.00, 6.50]  # 60 - 65 pips sesuai konfigurasi pasar
-    assert sig_us.risk_reward_ratio == 1.0
+    assert sl_dist_us in [5.50, 6.00, 6.50]  # 55 - 65 pips (ketat, R:R minimal 1:1)
+    assert tp_dist_us >= sl_dist_us  # TP selalu minimal seimbang atau lebih besar dari SL
+    assert sig_us.risk_reward_ratio >= 1.0
 
 
 def test_london_session_anti_manipulation():

@@ -545,6 +545,16 @@ class MT5MemberBridge:
         tp_val = sig.get("tp_price", 0.0)
         sl_val = sig.get("sl_price", 0.0)
 
+        # KAIDAH BAKU RISK:REWARD GUARD (Minimal 1:1, Dilarang Keras SL Lebih Besar dari TP):
+        if tp_val > 0 and sl_val > 0 and curr_price > 0:
+            tp_dist = abs(tp_val - curr_price)
+            sl_dist = abs(sl_val - curr_price)
+            if sl_dist > tp_dist:
+                if action == "BUY":
+                    sl_val = curr_price - tp_dist
+                else:
+                    sl_val = curr_price + tp_dist
+
         digits = s_info.digits
         if tp_val > 0:
             tp_val = round(tp_val, digits)

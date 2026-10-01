@@ -774,9 +774,9 @@ class SignalEngine:
 
             mt5_cfg = self.config.get("mt5", {})
             short_tp_usd = float(mt5_cfg.get("gold_short_tp_pips", 65.0)) / 10.0  # 6.50 USD (65 pips)
-            short_sl_usd = float(mt5_cfg.get("gold_short_sl_pips", 65.0)) / 10.0  # 6.50 USD (65 pips)
+            short_sl_usd = float(mt5_cfg.get("gold_short_sl_pips", 55.0)) / 10.0  # 5.50 USD (55 pips)
             long_tp_usd = float(mt5_cfg.get("gold_long_tp_pips", 140.0)) / 10.0   # 14.00 USD (140 pips)
-            long_sl_usd = float(mt5_cfg.get("gold_long_sl_pips", 65.0)) / 10.0    # 6.50 USD (65 pips)
+            long_sl_usd = float(mt5_cfg.get("gold_long_sl_pips", 60.0)) / 10.0    # 6.00 USD (60 pips)
 
             # Deteksi Kualitas Momen Tren Panjang Bagus (Kaidah 9 Buku PDF Trading):
             # 1. EMA 20 dan EMA 50 menyebar tegas (ema_diff >= 3.5)
@@ -790,23 +790,27 @@ class SignalEngine:
 
             if is_good_long_momentum:
                 # Sesuai arahan pengguna: "kalo misal lgi panjang bagus, gapapa entry panjang"
-                # Target Lebar / Swing Run terukur (R:R 1:1.8 s/d 1:2.4+):
+                # Target Lebar / Swing Run terukur (R:R 1:3+):
                 tp_distance = round(max(22.0, min(35.0, curr_price * 0.0075)), 2)
-                sl_distance = round(max(6.50, min(14.0, tp_distance / 2.2)), 2)
+                # SL dijaga KETAT maksimal 55-60 pips ($5.50 - $6.00 USD) agar tidak pernah rugi besar jika tersentuh!
+                sl_distance = round(min(6.00, short_sl_usd), 2)
                 market_regime = f"{session_name} Momentum Panjang (Trending Run R:R 1:2+)"
             else:
-                # Sesuai arahan pengguna: "tp kalo moment nya short, shortt aja untuk semua jam"
-                # Momen Short / Sideways / Normal untuk SEMUA JAM (Pagi/Asia, London, US):
-                # Target Seimbang TP 65 Pips & SL 65 Pips ($6.50 USD):
-                tp_distance = short_tp_usd  # 65 pips ($6.50 USD)
-                sl_distance = short_sl_usd  # 65 pips ($6.50 USD)
-                market_regime = f"{session_name} Momen Short/Sideways (Quick TP 65 Pips & SL 65 Pips)"
+                # Sesuai arahan pengguna: "rr minimal 1:1 lah"
+                # Momen Disiplin untuk SEMUA JAM:
+                # Target Take Profit: 65 Pips ($6.50 USD)
+                # Stop Loss Ketat: 55 Pips ($5.50 USD) -> R:R 1:1.18 (Profit selalu lebih besar dari Loss!)
+                tp_distance = round(max(6.50, short_tp_usd), 2)
+                sl_distance = round(min(5.50, short_sl_usd), 2)
+                market_regime = f"{session_name} Momen Short/Sideways (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R >= 1:1)"
 
             # KAIDAH BAKU 9 BUKU PDF TRADING (Risk:Reward Ratio Guard):
             # DILARANG KERAS SL LEBIH BESAR DARI TP!
             # TP Wajib minimal SEIMBANG (R:R 1:1) atau LEBIH BESAR (R:R >= 1.0) demi menjaga modal tumbuh konsisten.
             if tp_distance < sl_distance:
                 tp_distance = sl_distance
+            if sl_distance > tp_distance:
+                sl_distance = tp_distance
 
             if target_sig_type == "SELL":
                 tp_price = round(curr_price - tp_distance, 2)
