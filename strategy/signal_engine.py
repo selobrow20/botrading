@@ -773,10 +773,10 @@ class SignalEngine:
             rsi_val = float(curr_row.get("rsi", 50.0))
 
             mt5_cfg = self.config.get("mt5", {})
-            short_tp_usd = float(mt5_cfg.get("gold_short_tp_pips", 65.0)) / 10.0  # 6.50 USD (65 pips)
-            short_sl_usd = float(mt5_cfg.get("gold_short_sl_pips", 55.0)) / 10.0  # 5.50 USD (55 pips)
-            long_tp_usd = float(mt5_cfg.get("gold_long_tp_pips", 140.0)) / 10.0   # 14.00 USD (140 pips)
-            long_sl_usd = float(mt5_cfg.get("gold_long_sl_pips", 60.0)) / 10.0    # 6.00 USD (60 pips)
+            short_tp_usd = float(mt5_cfg.get("gold_short_tp_pips", 48.0)) / 10.0  # 4.80 USD (48 pips, rentang 45-50 pips)
+            short_sl_usd = float(mt5_cfg.get("gold_short_sl_pips", 42.0)) / 10.0  # 4.20 USD (42 pips)
+            long_tp_usd = float(mt5_cfg.get("gold_long_tp_pips", 50.0)) / 10.0    # 5.00 USD (50 pips)
+            long_sl_usd = float(mt5_cfg.get("gold_long_sl_pips", 45.0)) / 10.0    # 4.50 USD (45 pips)
 
             # Deteksi Kualitas Momen Tren Panjang Bagus (Kaidah 9 Buku PDF Trading):
             # 1. EMA 20 dan EMA 50 menyebar tegas (ema_diff >= 3.5)
@@ -789,20 +789,19 @@ class SignalEngine:
                 is_good_long_momentum = False
 
             if is_good_long_momentum:
-                # Sesuai arahan pengguna: "kalo misal lgi panjang bagus, gapapa entry panjang"
-                # Target Lebar / Swing Run terukur (R:R 1:3+):
-                tp_distance = round(max(22.0, min(35.0, curr_price * 0.0075)), 2)
-                # SL dijaga KETAT maksimal 55-60 pips ($5.50 - $6.00 USD) agar tidak pernah rugi besar jika tersentuh!
-                sl_distance = round(min(6.00, short_sl_usd), 2)
-                market_regime = f"{session_name} Momentum Panjang (Trending Run R:R 1:2+)"
+                # Sesuai arahan pengguna: "tp nya 45-50 pips aja tp jangan gede gede nanti ga kena"
+                # Target TP Momen Kuat: 50 Pips ($5.00 USD) agar tidak gantung dan pasti tercapai
+                # Stop Loss Ketat: 45 Pips ($4.50 USD) -> R:R 1:1.11 (Profit selalu lebih besar dari Loss!)
+                tp_distance = round(min(5.00, max(4.50, long_tp_usd)), 2)
+                sl_distance = round(min(4.50, long_sl_usd), 2)
+                market_regime = f"{session_name} Momentum Kuat (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R >= 1:1)"
             else:
-                # Sesuai arahan pengguna: "rr minimal 1:1 lah"
-                # Momen Disiplin untuk SEMUA JAM:
-                # Target Take Profit: 65 Pips ($6.50 USD)
-                # Stop Loss Ketat: 55 Pips ($5.50 USD) -> R:R 1:1.18 (Profit selalu lebih besar dari Loss!)
-                tp_distance = round(max(6.50, short_tp_usd), 2)
-                sl_distance = round(min(5.50, short_sl_usd), 2)
-                market_regime = f"{session_name} Momen Short/Sideways (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R >= 1:1)"
+                # Sesuai arahan pengguna: "tp nya 45-50 pips aja tp jangan gede gede nanti ga kena" & "rr minimal 1:1 lah"
+                # Target Take Profit: 45 - 48 Pips ($4.50 - $4.80 USD)
+                # Stop Loss Ketat: 40 - 42 Pips ($4.00 - $4.20 USD) -> R:R 1:1.14 (Profit selalu lebih besar dari Loss!)
+                tp_distance = round(min(5.00, max(4.50, short_tp_usd)), 2)
+                sl_distance = round(min(4.50, max(3.50, short_sl_usd)), 2)
+                market_regime = f"{session_name} Momen Cepat (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R >= 1:1)"
 
             # KAIDAH BAKU 9 BUKU PDF TRADING (Risk:Reward Ratio Guard):
             # DILARANG KERAS SL LEBIH BESAR DARI TP!

@@ -148,7 +148,7 @@ def test_signal_engine_evaluates_xau_with_risk_reward():
     assert sig.ticker == "XAUUSD"
     assert sig.take_profit_price is not None
     assert sig.stop_loss_price is not None
-    assert sig.risk_reward_ratio >= 1.8
+    assert sig.risk_reward_ratio >= 1.0
     assert sig.take_profit_price > sig.price
     assert sig.stop_loss_price < sig.price
 
@@ -355,17 +355,17 @@ def test_adaptive_dynamic_tp_sl_modes():
     }, index=pd.date_range("2026-09-29 08:00", periods=20, freq="15min"))
 
     sig_side = engine.evaluate_bar(df_sideways, "XAUUSD", apply_pdf_filter=False)
-    assert "Sideways" in sig_side.market_regime or "Berguncang" in sig_side.market_regime
+    assert "Sideways" in sig_side.market_regime or "Berguncang" in sig_side.market_regime or "Cepat" in sig_side.market_regime
     tp_dist_side = abs(sig_side.take_profit_price - sig_side.price)
     sl_dist_side = abs(sig_side.price - sig_side.stop_loss_price)
-    # TP Seimbang atau Lebih Besar: minimal $5.50 s/d $7.50
-    assert 5.5 <= tp_dist_side <= 7.5
-    # SL Lega: $5.50
-    assert 5.5 <= sl_dist_side <= 6.5
+    # TP Cepat/Realistis Sesuai Arahan: 45 - 50 pips ($4.50 - $5.00 USD)
+    assert 4.5 <= tp_dist_side <= 5.0
+    # SL Ketat: 40 - 45 pips ($4.00 - $4.50 USD)
+    assert 4.0 <= sl_dist_side <= 4.5
     # Kaidah 9 PDF: Risk to Reward wajib minimal 1:1 (TP >= SL)
     assert sig_side.risk_reward_ratio >= 1.0
 
-    # 2. Trending Data (EMA berjarak tegas >= 3.5, Momentum Panjang)
+    # 2. Trending Data (EMA berjarak tegas >= 3.5, Momentum Kuat)
     df_trend = pd.DataFrame({
         "Open": [4100.0 + i * 3 for i in range(25)],
         "High": [4105.0 + i * 3 for i in range(25)],
@@ -375,11 +375,13 @@ def test_adaptive_dynamic_tp_sl_modes():
     }, index=pd.date_range("2026-09-29 07:00", periods=25, freq="15min"))
 
     sig_trend = engine.evaluate_bar(df_trend, "XAUUSD", apply_pdf_filter=False)
-    assert "Momentum Panjang" in sig_trend.market_regime
+    assert "Momentum Kuat" in sig_trend.market_regime or "Momentum" in sig_trend.market_regime
     tp_dist_trend = abs(sig_trend.take_profit_price - sig_trend.price)
-    # Wide TP: $22 - $35
-    assert 22.0 <= tp_dist_trend <= 35.0
-    assert sig_trend.risk_reward_ratio >= 1.8
+    sl_dist_trend = abs(sig_trend.price - sig_trend.stop_loss_price)
+    # Target Momentum Terukur: 50 pips ($5.00 USD) agar pasti kena
+    assert 4.5 <= tp_dist_trend <= 5.0
+    assert 4.0 <= sl_dist_trend <= 4.5
+    assert sig_trend.risk_reward_ratio >= 1.0
 
 
 def test_trailing_stop_alert_formatting():
@@ -429,8 +431,8 @@ def test_trading_sessions_and_us_london_rules():
     assert "Sesi US" in sig_us.market_regime
     tp_dist_us = round(abs(sig_us.take_profit_price - sig_us.price), 2)
     sl_dist_us = round(abs(sig_us.price - sig_us.stop_loss_price), 2)
-    assert tp_dist_us in [6.00, 6.50]  # 60 - 65 pips sesuai konfigurasi pasar
-    assert sl_dist_us in [5.50, 6.00, 6.50]  # 55 - 65 pips (ketat, R:R minimal 1:1)
+    assert 4.5 <= tp_dist_us <= 5.0  # 45 - 50 pips sesuai arahan terbaru agar pasti kena
+    assert 4.0 <= sl_dist_us <= 4.5  # 40 - 45 pips (ketat, R:R minimal 1:1)
     assert tp_dist_us >= sl_dist_us  # TP selalu minimal seimbang atau lebih besar dari SL
     assert sig_us.risk_reward_ratio >= 1.0
 

@@ -1156,8 +1156,10 @@ class PipelineRunner:
                             )
                             try:
                                 from strategy.signal_engine import SignalResult
-                                short_tp_usd = float(cfg_mt5.get("gold_short_tp_pips", 60.0)) / 10.0
-                                short_sl_usd = float(cfg_mt5.get("gold_short_sl_pips", 60.0)) / 10.0
+                                short_tp_usd = float(cfg_mt5.get("gold_short_tp_pips", 48.0)) / 10.0
+                                short_sl_usd = float(cfg_mt5.get("gold_short_sl_pips", 42.0)) / 10.0
+                                if short_sl_usd > short_tp_usd:
+                                    short_sl_usd = short_tp_usd
                                 if flip_action == "SELL":
                                     f_tp = round(price_curr - short_tp_usd, 2)
                                     f_sl = round(price_curr + short_sl_usd, 2)

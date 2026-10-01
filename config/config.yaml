@@ -77,9 +77,12 @@ mt5:
   enable_judas_swing_filter: true    # Filter anti-manipulasi likuiditas Sesi London (14:00 - 15:30 WIB)
   london_h1_confirmation: true       # Khusus Sesi London: Open posisi wajib konfirmasi searah tren & candle H1 (1-Hour)
   london_h1_max_hour: 17             # Maksimal jam 17:00 WIB (setelah jam 5 sore manipulasi reda, kembali ke M15 biasa)
-  gold_short_tp_pips: 65.0           # Target Take Profit 65 pips ($6.50 USD)
-  gold_short_sl_pips: 55.0           # Stop Loss ketat 55 pips ($5.50 USD) - R:R minimal 1:1.18
-  min_risk_reward_ratio: 1.0         # Rasio R:R mutlak minimal 1:1 (SL dilarang lebih besar dari TP)
+  # Target Take Profit & Stop Loss Gold XAUUSD (Sesuai arahan: TP 45-50 pips, R:R minimal 1:1)
+  gold_short_tp_pips: 48.0           # Target Take Profit 45-50 pips ($4.80 USD) - Cepat tersentuh & hindari fakeout
+  gold_short_sl_pips: 42.0           # Stop Loss ketat 42 pips ($4.20 USD) - R:R 1:1.14 (Profit selalu > Loss)
+  gold_long_tp_pips: 50.0            # Target TP saat momen tren panjang: 50 pips ($5.00 USD) agar realistis kena
+  gold_long_sl_pips: 45.0            # Stop Loss tren panjang: 45 pips ($4.50 USD) - R:R 1:1.11
+  min_risk_reward_ratio: 1.0         # Rasio R:R mutlak minimal 1:1 (SL dilarang keras lebih besar dari TP)
   max_spread_usd: 0.65  # Maksimal spread $0.65 USD (65 pips) agar tidak entry saat spread malam melebar
   enable_rollover_guard: true  # Menahan entry saat jam rollover malam broker (04:45 - 05:20 WIB)
   max_consecutive_losses: 2  # Jika 2x SL beruntun, aktifkan cooldown pengamanan 60 menit
@@ -90,11 +93,6 @@ mt5:
   midnight_end_minute: 30
   midnight_max_loss_usc: 50.0  # Batas maksimal kerugian di jam tidur tengah malam akun Cent (-50 USC)
   min_confluence_score: 65.0  # Batas minimal skor akurasi 9 Buku PDF untuk eksekusi MT5 (Grade A)
-  # Target Take Profit & Stop Loss Adaptif Sesuai Momen (Semua Jam: Pagi, London, US)
-  gold_short_tp_pips: 60.0   # Sinyal short/scalping: 60 pips ($6.00 USD)
-  gold_short_sl_pips: 60.0   # Stop loss sinyal short: 60 pips ($6.00 USD) - R:R 1:1
-  gold_long_tp_pips: 140.0   # Target panjang saat momen tren panjang bagus: 140 pips ($14.00 USD)
-  gold_long_sl_pips: 60.0    # Stop loss momen panjang dijaga 60 pips ($6.00 USD)
   # Batas kerugian harian USC dihilangkan di jam normal karena dipantau langsung oleh user
   max_daily_loss_usd: 50.0  # Batas maksimal kerugian harian akun USD Standard (-$50 USD) 24/7
 indicators:
