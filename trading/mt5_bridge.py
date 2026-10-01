@@ -134,6 +134,14 @@ class MT5Bridge:
             logger.debug(f"Error parsing trading_hours ({self.trading_hours}): {e}")
             return True, "Pengecekan jam dilewati."
 
+    def is_us_session_window(self) -> bool:
+        """Mengecek apakah waktu WIB saat ini berada di rentang Sesi US (19:00 - 24:00 WIB)."""
+        try:
+            now_wib = datetime.now(ZoneInfo("Asia/Jakarta")).time()
+            return time(19, 0) <= now_wib <= time(23, 59, 59)
+        except Exception:
+            return False
+
     def set_enabled(self, val: bool) -> None:
         """Mengatur status aktif/nonaktif auto-trade dan menyimpannya secara persisten."""
         self.enabled = bool(val)
@@ -270,6 +278,20 @@ class MT5Bridge:
                     "Likuiditas tipis & spread berisiko melonjak. Eksekusi ditunda demi keamanan modal."
                 )
                 return False, msg, "rollover_deadzone"
+
+        # 1b. Jam Istirahat & Reset Bot (02:00 - 04:00 WIB)
+        # Sesuai instruksi mutlak pengguna: "jam 2 sampai jam 4 lu stop trading aja buat lu istirahat abis market buka lu bisa open posisi lgi biar lu bisa reset lgi bor"
+        enable_rest = bool(cfg_mt5.get("enable_midnight_rest", True))
+        if enable_rest:
+            rest_start_h = int(cfg_mt5.get("midnight_rest_start_hour", 2))
+            rest_end_h = int(cfg_mt5.get("midnight_rest_end_hour", 4))
+            if time(rest_start_h, 0) <= curr_time < time(rest_end_h, 0):
+                msg = (
+                    f"🌙 [JAM ISTIRAHAT & RESET BOT] Pukul {rest_start_h:02d}:00 - {rest_end_h:02d}:00 WIB "
+                    f"adalah jendela istirahat & reset bot sesuai arahan pengguna. Bot menghentikan open posisi baru. "
+                    f"Pasar pagi buka kembali pukul 05:00 WIB siap open posisi baru secara fresh!"
+                )
+                return False, msg, "midnight_rest_window"
 
         # 2. Max Spread Guard
         tick = mt5.symbol_info_tick(broker_sym) if not getattr(self, "_mock_tick", None) else getattr(self, "_mock_tick")
@@ -677,11 +699,21 @@ class MT5Bridge:
         - Momen Bagus Banget (Grade A+ / Skor Konfluensi >= 80%): 0.05 lot (sesuai arahan pengguna).
         - Momen Standar / Masih Riskan (Grade A / Skor 65% - 79%): 0.01 lot pengaman.
         """
+        cfg_mt5 = getattr(self, "config", {}).get("mt5", {})
         is_high_conviction = (
             confluence_score >= self.high_confidence_threshold
             or "A+" in str(setup_grade).upper()
         )
-        base_lot = self.high_confidence_lot if is_high_conviction else self.default_lot
+        is_cent = self.is_cent_account()
+
+        if is_high_conviction:
+            # Sesuai arahan pengguna: "khusus di us kita juga harus lebih agresif... mode us lu pasang 0,08 di sesi us saja"
+            if is_cent and self.is_us_session_window():
+                base_lot = float(cfg_mt5.get("us_session_aggressive_lot", 0.08))
+            else:
+                base_lot = self.high_confidence_lot
+        else:
+            base_lot = self.default_lot
 
         if self.simulation_mode or not self.use_dynamic_lot:
             return round(base_lot, 2)
@@ -873,31 +905,29 @@ class MT5Bridge:
                 }
 
         # 4c. Cegah penumpukan posisi berlebihan pada simbol yang sama (searah)
-        # Sesuai aturan:
-        # - Akun USD Standard: Maksimal 1 posisi (disiplin ketat, hold jika ada posisi aktif)
-        # - Akun CENT (USC): Maksimal 3 posisi, DENGAN SYARAT:
-        #   1. Pasar dalam kondisi Trending / Momentum Panjang (bukan Sideways/Guncangan).
-        #      Jika pasar Sideways / Berguncang, MAKSIMAL HANYA 1 POSISI (Quick Scalp).
-        #   2. Jarak harga antar-posisi (Grid Spacing) minimal $4.0 USD agar tidak menumpuk di harga yang sama.
+        # Sesuai arahan pengguna: "hanya 1 /2 posisi di sesi us jam 19-12"
+        # - Akun USD Standard: Maksimal 1 posisi (disiplin ketat)
+        # - Akun CENT (USC):
+        #   * Sesi US (19:00 - 24:00 WIB): Diizinkan maksimal 2 posisi jika ada momentum bagus
+        #   * Di luar Sesi US (siang/sore): Mutlak HANYA 1 POSISI (menghentikan boncos penumpukan posisi ganda)
         cfg = getattr(self, "config", None) or load_config()
         cfg_mt5 = cfg.get("mt5", {})
         is_cent = self.is_cent_account()
-        market_regime = getattr(sig, "market_regime", "")
-        is_sideways_regime = (
-            "BERGUNCANG" in market_regime.upper()
-            or "SIDEWAYS" in market_regime.upper()
-        )
+        is_us = self.is_us_session_window()
 
-        if not is_cent and is_sideways_regime:
-            max_positions = 1
+        if not is_cent:
+            max_positions = int(cfg_mt5.get("max_positions_usd", 1))
         else:
-            max_positions = int(cfg_mt5.get("max_positions_cent", 3) if is_cent else cfg_mt5.get("max_positions_usd", 1))
+            if is_us:
+                max_positions = int(cfg_mt5.get("us_session_max_positions", 2))
+            else:
+                max_positions = int(cfg_mt5.get("max_positions_cent", 1))
 
         if len(active_same_sym) >= max_positions:
             mode_lbl = (
-                f"USD Standard Sideways (Disiplin 1 Posisi Quick TP)"
-                if (not is_cent and is_sideways_regime)
-                else (f"CENT USC (Maks {max_positions} Posisi)" if is_cent else f"USD Standard (Maks {max_positions} Posisi)")
+                f"Sesi US Agresif (Maks {max_positions} Posisi)"
+                if (is_cent and is_us)
+                else (f"CENT USC Disiplin (Maks {max_positions} Posisi)" if is_cent else f"USD Standard (Maks {max_positions} Posisi)")
             )
             msg = (
                 f"Batas posisi tercapai ({len(active_same_sym)}/{max_positions} posisi {ticker} aktif di MT5). "

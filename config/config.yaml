@@ -56,49 +56,50 @@ mt5:
   magic_number: 777777
   default_lot: 0.01
   high_confidence_lot: 0.05
+  us_session_aggressive_lot: 0.08   # Khusus Sesi US (19:00 - 24:00 WIB) akun USC: 0.08 Lot untuk momen bagus/agresif
   high_confidence_threshold: 80.0
   risk_percent: 1.0
   max_slippage: 20
   gold_symbol: XAUUSDc
   trading_hours: all
   max_positions_usd: 1
-  max_positions_cent: 3  # Maksimal 3 posisi untuk akun Cent (USC) saat ada setup/momen konfluensi baru
-  min_grid_spacing: 1.0  # Jarak minimal antar posisi $1.00 USD (10 pips) agar sinyal candle baru tidak terblokir
-  use_trailing_stop: false  # Dinonaktifkan sesuai instruksi: murni target TP/SL sesuai mode pasar
-  enable_break_even: true   # Auto Break-Even (BEP) saat floating profit mencapai target
-  break_even_long_pips: 100.0  # Sinyal Long / TP Jauh: Otomatis BEP saat floating profit +100 pips ($10.00 USD)
-  break_even_buffer_pips: 3.0  # Buffer pengaman di atas entry: +3 pips ($0.30 USD) agar transaksi bebas risiko & menutupi komisi
+  max_positions_cent: 1             # Di luar Sesi US (siang/sore), maksimal HANYA 1 posisi (stop penumpukan posisi ganda)
+  us_session_max_positions: 2       # Khusus Sesi US (19:00 - 24:00 WIB), akun USC boleh 1 / 2 posisi agresif
+  min_grid_spacing: 1.0             # Jarak minimal antar posisi $1.00 USD (10 pips) agar sinyal candle baru tidak terblokir
+  use_trailing_stop: false          # Dinonaktifkan: fokus pengawalan target TP/SL & Auto-BEP
+  enable_break_even: true           # Auto Break-Even (BEP) saat floating profit mencapai target
+  break_even_quick_pips: 20.0       # Sinyal Cepat: Otomatis BEP saat floating profit +20 pips ($2.00 USD) agar bebas risiko!
+  break_even_long_pips: 35.0        # Sinyal Long / TP Jauh: Otomatis BEP saat floating profit +35 pips ($3.50 USD)
+  break_even_buffer_pips: 2.0       # Buffer pengaman di atas entry: +2 pips ($0.20 USD) menutup komisi/profit tipis
   enable_reversal_auto_close: true  # Mengizinkan cut loss / auto-close dini jika terkonfirmasi pembalikan tren 90% - 100% 9 Buku PDF
   reversal_auto_close_min_score: 90.0  # Batas minimal skor pembalikan untuk cut loss dini (90% - 100%)
-  enable_reversal_flip: true  # Mengizinkan pembalikan posisi (Cut loss posisi lama & langsung masuk posisi sebaliknya) jika skor >= 90%
-  min_reversal_flip_score: 90.0  # Minimal skor 90% untuk flip posisi sebaliknya sesuai 9 Buku PDF
-  enable_fast_reversal_guard: true   # Deteksi junam kilat berlawanan arah secara real-time (TF 1m/5m)
+  enable_reversal_flip: true        # Mengizinkan pembalikan posisi (Cut loss posisi lama & langsung masuk posisi sebaliknya) jika skor >= 90%
+  min_reversal_flip_score: 90.0     # Minimal skor 90% untuk flip posisi sebaliknya sesuai 9 Buku PDF
+  enable_fast_reversal_guard: true  # Deteksi junam kilat berlawanan arah secara real-time (TF 1m/5m)
   fast_reversal_pips_threshold: 22.0 # Cut loss dini & auto-flip jika junam >= 22 pips berlawanan arah
-  enable_judas_swing_filter: true    # Filter anti-manipulasi likuiditas Sesi London (14:00 - 15:30 WIB)
-  london_h1_confirmation: true       # Khusus Sesi London: Open posisi wajib konfirmasi searah tren & candle H1 (1-Hour)
-  london_h1_max_hour: 17             # Maksimal jam 17:00 WIB (setelah jam 5 sore manipulasi reda, kembali ke M15 biasa)
+  enable_judas_swing_filter: true   # Filter anti-manipulasi likuiditas Sesi London (14:00 - 15:30 WIB)
+  london_h1_confirmation: true      # Khusus Sesi London: Open posisi wajib konfirmasi searah tren & candle H1 (1-Hour)
+  london_h1_max_hour: 17            # Maksimal jam 17:00 WIB (setelah jam 5 sore manipulasi reda, kembali ke M15 biasa)
   # Target Take Profit & Stop Loss Gold XAUUSD
-  # Kaidah Pengguna: Sinyal cepat TP 45-50 pips (R:R >= 1:1), sinyal TP jauh wajib R:R 3:1 (TP 3, SL 1, dilarang TP 1 SL 2)
-  gold_short_tp_pips: 48.0           # Target Take Profit cepat: 45-50 pips ($4.80 USD) - Cepat tersentuh & hindari fakeout
-  gold_short_sl_pips: 42.0           # Stop Loss sinyal cepat: 42 pips ($4.20 USD) - R:R minimal 1:1 (Profit > Loss)
-  gold_long_tp_pips: 135.0           # Target TP jauh saat tren kuat: 135 pips ($13.50 USD) - Rasio 3:1 (TP 3, SL 1)
-  gold_long_sl_pips: 45.0            # Stop Loss tren jauh: 45 pips ($4.50 USD) - Rasio mutlak 3:1
-  min_risk_reward_ratio: 1.0         # Rasio R:R mutlak minimal 1:1 (Dilarang keras TP 1 SL 2!)
-  long_risk_reward_ratio: 3.0        # Rasio R:R sinyal TP jauh: wajib 3:1 (TP 3, SL 1)
-  max_spread_usd: 0.65  # Maksimal spread $0.65 USD (65 pips) agar tidak entry saat spread malam melebar
-  enable_rollover_guard: true  # Menahan entry saat jam rollover malam broker (04:45 - 05:20 WIB)
-  max_consecutive_losses: 2  # Jika 2x SL beruntun, aktifkan cooldown pengamanan 60 menit
+  # Kaidah Pengguna: Sinyal sideways TP cepat 35 pips (R:R >= 1:1), sinyal momentum bagus wajib Long TP rasio 3:1
+  gold_short_tp_pips: 35.0          # Target TP cepat mode sideways/normal: 35 pips ($3.50 USD) - Cepat tersentuh & anti fakeout
+  gold_short_sl_pips: 32.0          # Stop Loss sinyal cepat: 32 pips ($3.20 USD) - R:R minimal 1:1 (Profit > Loss)
+  gold_long_tp_pips: 135.0          # Target TP jauh saat tren momentum kuat: 135 pips ($13.50 USD) - Rasio 3:1 (TP 3, SL 1)
+  gold_long_sl_pips: 45.0           # Stop Loss tren jauh: 45 pips ($4.50 USD) - Rasio mutlak 3:1
+  min_risk_reward_ratio: 1.0        # Rasio R:R mutlak minimal 1:1 (Dilarang keras TP 1 SL 2!)
+  long_risk_reward_ratio: 3.0       # Rasio R:R sinyal TP jauh: wajib 3:1 (TP 3, SL 1)
+  max_spread_usd: 0.65              # Maksimal spread $0.65 USD (65 pips) agar tidak entry saat spread malam melebar
+  enable_rollover_guard: true       # Menahan entry saat jam rollover malam broker (04:45 - 05:20 WIB)
+  max_consecutive_losses: 2         # Jika 2x SL beruntun, aktifkan cooldown pengamanan 60 menit
   consecutive_loss_cooldown_mins: 60
-  enable_midnight_guard: true  # Proteksi tidur tengah malam (02:00 - 04:30 WIB) agar tidak boncos saat user istirahat
-  midnight_start_hour: 2  # 02:00 WIB
-  midnight_end_hour: 4    # 04:30 WIB (sebelum rollover 04:45 WIB)
-  midnight_end_minute: 30
-  midnight_max_loss_usc: 50.0  # Batas maksimal kerugian di jam tidur tengah malam akun Cent (-50 USC)
-  min_confluence_score: 65.0  # Batas minimal skor akurasi 9 Buku PDF untuk eksekusi MT5 (Grade A)
-  usd_only_high_grade: true   # Akun USD Standard HANYA masuk sinyal Grade A+ (0.05 lot bagus). Sinyal standar/0.01 dilewati.
-  usd_execution_lot: 0.01     # Ukuran lot khusus akun USD Standard pada sinyal Grade A+: mutlak 0.01 Lot
+  enable_midnight_rest: true        # Jendela istirahat & reset bot pukul 02:00 - 04:00 WIB (stop trading)
+  midnight_rest_start_hour: 2       # 02:00 WIB: Stop trading / istirahat
+  midnight_rest_end_hour: 4         # 04:00 WIB: Reset state, siap buka posisi lagi saat pasar pagi aktif (05:00 WIB)
+  min_confluence_score: 65.0        # Batas minimal skor akurasi 9 Buku PDF untuk eksekusi MT5 (Grade A)
+  usd_only_high_grade: true         # Akun USD Standard HANYA masuk sinyal Grade A+ (0.05 lot bagus). Sinyal standar/0.01 dilewati.
+  usd_execution_lot: 0.01           # Ukuran lot khusus akun USD Standard pada sinyal Grade A+: mutlak 0.01 Lot
   # Batas kerugian harian USC dihilangkan di jam normal karena dipantau langsung oleh user
-  max_daily_loss_usd: 50.0  # Batas maksimal kerugian harian akun USD Standard (-$50 USD) 24/7
+  max_daily_loss_usd: 50.0          # Batas maksimal kerugian harian akun USD Standard (-$50 USD) 24/7
 indicators:
   moving_averages:
     periods:

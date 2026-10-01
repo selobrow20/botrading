@@ -824,9 +824,12 @@ class PipelineRunner:
             if not gold_positions:
                 return
 
-            # Konfigurasi parameter BEP untuk Sinyal Long / TP Jauh (+100 pips)
-            bep_long_threshold = float(cfg_mt5.get("break_even_long_pips", 100.0)) / 10.0  # 100 pips = $10.00 USD
-            bep_offset = float(cfg_mt5.get("break_even_buffer_pips", 3.0)) / 10.0          # 3 pips = $0.30 USD
+            # Konfigurasi parameter BEP:
+            # - Sinyal Cepat: Otomatis BEP saat floating profit +20 pips ($2.00 USD)
+            # - Sinyal Long / TP Jauh: Otomatis BEP saat floating profit +35 pips ($3.50 USD)
+            bep_long_threshold = float(cfg_mt5.get("break_even_long_pips", 35.0)) / 10.0
+            bep_quick_threshold = float(cfg_mt5.get("break_even_quick_pips", 20.0)) / 10.0
+            bep_offset = float(cfg_mt5.get("break_even_buffer_pips", 2.0)) / 10.0          # 2 pips = $0.20 USD
 
             # Konfigurasi Trailing Stop adaptif per sesi pasar (hanya jika use_trailing_stop = True)
             session_code, session_name = get_trading_session()
@@ -883,14 +886,17 @@ class PipelineRunner:
                                 except Exception as ex_t:
                                     logger.debug(f"Error kirim trailing stop alert: {ex_t}")
 
-                    # Stage 1: Break-Even Protection (BEP Lock) untuk sinyal Long / TP Jauh saat +100 pips
-                    elif enable_bep and is_tp_jauh and profit_dist >= bep_long_threshold:
+                    # Stage 1: Break-Even Protection (BEP Lock) universal
+                    # Posisi Long: aktif saat +35 pips. Posisi Cepat: aktif saat +20 pips!
+                    req_bep_threshold = bep_long_threshold if is_tp_jauh else bep_quick_threshold
+                    if enable_bep and profit_dist >= req_bep_threshold:
                         bep_sl = round(price_open + bep_offset, 2)
                         if sl_curr < bep_sl:
                             m_res = bridge.modify_position(ticket, sl=bep_sl)
                             if m_res.get("success"):
+                                mode_tag = "LONG/TP JAUH" if is_tp_jauh else "QUICK SCALP"
                                 logger.info(
-                                    f"🛡️ [BEP LOCK AKTIF - LONG/TP JAUH - {session_name}] XAUUSD #{ticket} BUY: SL digeser ke ${bep_sl:.2f} "
+                                    f"🛡️ [BEP LOCK AKTIF - {mode_tag} - {session_name}] XAUUSD #{ticket} BUY: SL digeser ke ${bep_sl:.2f} "
                                     f"(Floating: +${profit_dist:.2f} USD / +{int(profit_dist*10)} pips). Transaksi kini BEBAS RISIKO (Risk-Free)!"
                                 )
                                 try:
@@ -938,14 +944,16 @@ class PipelineRunner:
                                 except Exception as ex_t:
                                     logger.debug(f"Error kirim trailing stop alert: {ex_t}")
 
-                    # Stage 1: Break-Even Protection (BEP Lock) untuk sinyal Long / TP Jauh saat +100 pips
-                    elif enable_bep and is_tp_jauh and profit_dist >= bep_long_threshold:
+                    # Stage 1: Break-Even Protection (BEP Lock) universal
+                    req_bep_threshold = bep_long_threshold if is_tp_jauh else bep_quick_threshold
+                    if enable_bep and profit_dist >= req_bep_threshold:
                         bep_sl = round(price_open - bep_offset, 2)
                         if sl_curr == 0.0 or sl_curr > bep_sl:
                             m_res = bridge.modify_position(ticket, sl=bep_sl)
                             if m_res.get("success"):
+                                mode_tag = "LONG/TP JAUH" if is_tp_jauh else "QUICK SCALP"
                                 logger.info(
-                                    f"🛡️ [BEP LOCK AKTIF - LONG/TP JAUH - {session_name}] XAUUSD #{ticket} SELL: SL digeser ke ${bep_sl:.2f} "
+                                    f"🛡️ [BEP LOCK AKTIF - {mode_tag} - {session_name}] XAUUSD #{ticket} SELL: SL digeser ke ${bep_sl:.2f} "
                                     f"(Floating: +${profit_dist:.2f} USD / +{int(profit_dist*10)} pips). Transaksi kini BEBAS RISIKO (Risk-Free)!"
                                 )
                                 try:

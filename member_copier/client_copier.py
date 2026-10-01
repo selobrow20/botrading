@@ -510,16 +510,36 @@ class MT5MemberBridge:
                 print(f"\n{msg_opp}\n")
                 return {"success": False, "message": msg_opp}
 
-        # Batasan posisi terbuka berdasarkan tipe akun:
-        # Akun Cent (USC): Maksimal 3 posisi (sesuai instruksi: "ubah jadi 3 aja max bor")
-        # Akun USD Standard: Maksimal 1 posisi (disiplin ketat)
+        # Batasan posisi terbuka berdasarkan tipe akun & sesi pasar:
+        # Sesuai arahan pengguna: "hanya 1 /2 posisi di sesi us jam 19-12"
+        # - Akun USD Standard: Maksimal 1 posisi (disiplin ketat)
+        # - Akun CENT (USC):
+        #   * Sesi US (19:00 - 24:00 WIB): Diizinkan maksimal 2 posisi jika ada momentum bagus
+        #   * Di luar Sesi US (siang/sore): Mutlak HANYA 1 POSISI (menghentikan boncos penumpukan posisi ganda)
         is_cent = self.is_cent_account()
-        max_cent = int(self.cfg.get("max_positions_cent", 3))
-        max_std = int(self.cfg.get("max_positions_standard", 1))
-        max_positions = max_cent if is_cent else max_std
+        is_us = False
+        try:
+            from zoneinfo import ZoneInfo
+            from datetime import datetime, time
+            now_wib = datetime.now(ZoneInfo("Asia/Jakarta")).time()
+            is_us = time(19, 0) <= now_wib <= time(23, 59, 59)
+        except Exception:
+            pass
+
+        if not is_cent:
+            max_positions = int(self.cfg.get("max_positions_standard", 1))
+        else:
+            if is_us:
+                max_positions = int(self.cfg.get("us_session_max_positions", 2))
+            else:
+                max_positions = int(self.cfg.get("max_positions_cent", 1))
 
         if len(open_pos) >= max_positions:
-            mode_lbl = f"CENT USC (Maks {max_positions} Posisi)" if is_cent else f"USD Standard (Maks {max_positions} Posisi)"
+            mode_lbl = (
+                f"Sesi US Agresif (Maks {max_positions} Posisi)"
+                if (is_cent and is_us)
+                else (f"CENT USC Disiplin (Maks {max_positions} Posisi)" if is_cent else f"USD Standard (Maks {max_positions} Posisi)")
+            )
             return {
                 "success": False,
                 "message": f"Batas posisi tercapai ({len(open_pos)}/{max_positions} posisi {sym} aktif di MT5). Mode: {mode_lbl}. Menunggu posisi selesai sebelum open baru."

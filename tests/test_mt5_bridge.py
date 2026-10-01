@@ -332,7 +332,23 @@ def test_mt5_midnight_sleep_guard_and_daytime_usc_unlimited():
         assert ok is True
         assert status == "ok"
 
-    # 2. Akun USC di Jam Tengah Malam (03:00 WIB) dengan loss midnight >= 50 USC -> DIBLOKIR Midnight Sleep Guard
+    # 2a. Akun USC di Jam Tengah Malam (03:00 WIB) dengan enable_midnight_rest=True -> DIBLOKIR Jendela Istirahat (02:00-04:00 WIB)
+    bridge.config["mt5"]["enable_midnight_rest"] = True
+    with patch.object(bridge, "is_cent_account", return_value=True), \
+         patch("trading.mt5_bridge.datetime") as mock_dt, \
+         patch("trading.mt5_bridge.mt5.symbol_info_tick", return_value=None):
+        mock_now = MagicMock()
+        mock_now.time.return_value = time(3, 0)
+        mock_now.strftime.return_value = "2026-09-30"
+        mock_dt.now.return_value = mock_now
+
+        ok, msg, status = bridge.check_overnight_safety_guards("XAUUSDc", score=80.0)
+        assert ok is False
+        assert status == "midnight_rest_window"
+        assert "JAM ISTIRAHAT & RESET BOT" in msg
+
+    # 2b. Akun USC di Jam Tengah Malam dengan enable_midnight_rest=False tapi loss >= 50 USC -> DIBLOKIR Midnight Sleep Guard
+    bridge.config["mt5"]["enable_midnight_rest"] = False
     midnight_deals = [
         {"profit": -55.0, "time_wib": "2026-09-30 02:45:00"}
     ]
@@ -530,6 +546,70 @@ def test_usd_account_filter_and_lot_sizing():
         assert res_high["success"] is True
         assert res_high["volume"] == 0.01
         assert res_high["status"] == "executed"
+
+
+def test_us_session_aggressive_mode_and_position_limits():
+    """
+    Menguji aturan khusus Sesi US (19:00 - 24:00 WIB):
+    1. Lot akun Cent (USC) di Sesi US untuk Grade A+: 0.08 Lot (agresif).
+    2. Lot akun Cent (USC) di luar Sesi US untuk Grade A+: 0.05 Lot (normal).
+    3. Di luar Sesi US: Maksimal 1 posisi (disiplin anti penumpukan posisi).
+    4. Di Sesi US: Maksimal 2 posisi.
+    """
+    from unittest.mock import patch
+
+    bridge = MT5Bridge(simulation_mode=True)
+    bridge.enabled = True
+    bridge.trading_hours = "all"
+    bridge.config["mt5"]["us_session_aggressive_lot"] = 0.08
+    bridge.config["mt5"]["high_confidence_lot"] = 0.05
+    bridge.config["mt5"]["us_session_max_positions"] = 2
+    bridge.config["mt5"]["max_positions_cent"] = 1
+    bridge._simulated_positions.clear()
+
+    grade_aplus_sig = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="Master_Confluence",
+        signal="BUY",
+        price=2750.0,
+        candle_time="2026-10-02 20:00:00",
+        take_profit_price=2775.0,
+        stop_loss_price=2735.0,
+        pdf_confluence_score=85.0,
+        setup_grade="Grade A+",
+    )
+
+    # 1. Di dalam Sesi US (is_us_session_window=True) -> Lot 0.08
+    with patch.object(bridge, "is_cent_account", return_value=True), \
+         patch.object(bridge, "is_us_session_window", return_value=True):
+        lot_us = bridge.calculate_lot_size("XAUUSD", 2750.0, 2735.0, confluence_score=85.0, setup_grade="Grade A+")
+        assert lot_us == 0.08
+
+    # 2. Di luar Sesi US (is_us_session_window=False) -> Lot 0.05
+    with patch.object(bridge, "is_cent_account", return_value=True), \
+         patch.object(bridge, "is_us_session_window", return_value=False):
+        lot_non_us = bridge.calculate_lot_size("XAUUSD", 2750.0, 2735.0, confluence_score=85.0, setup_grade="Grade A+")
+        assert lot_non_us == 0.05
+
+    # 3. Batas Posisi: Di luar Sesi US -> Maksimal 1 Posisi
+    bridge._simulated_positions = [
+        {"ticket": 101, "symbol": "XAUUSD", "type": "BUY", "price_open": 2740.0, "volume": 0.05}
+    ]
+    with patch.object(bridge, "is_cent_account", return_value=True), \
+         patch.object(bridge, "is_us_session_window", return_value=False):
+        res_non_us = bridge.execute_signal(grade_aplus_sig)
+        assert res_non_us["success"] is False
+        assert res_non_us["status"] == "already_open"
+        assert "Batas posisi tercapai" in res_non_us["message"]
+
+    # 4. Batas Posisi: Di dalam Sesi US -> Diizinkan sampai 2 Posisi
+    with patch.object(bridge, "is_cent_account", return_value=True), \
+         patch.object(bridge, "is_us_session_window", return_value=True):
+        res_us = bridge.execute_signal(grade_aplus_sig)
+        assert res_us["success"] is True
+        assert res_us["volume"] == 0.08
+        assert res_us["status"] == "executed"
+
 
 
 
