@@ -634,8 +634,8 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
         print("[!] Modul 'telethon' belum terpasang. Jalankan: pip install telethon")
         return
 
-    API_ID = int(os.getenv("TELEGRAM_API_ID", "2040"))
-    API_HASH = os.getenv("TELEGRAM_API_HASH", "b18441a1ff607e10a989891a5462e627")
+    API_ID = int(cfg.get("telegram_api_id") or os.getenv("TELEGRAM_API_ID", "2040"))
+    API_HASH = str(cfg.get("telegram_api_hash") or os.getenv("TELEGRAM_API_HASH", "b18441a1ff607e10a989891a5462e627"))
     cfg_bot = cfg.get("bot_username", "selo_saham_bot").lstrip("@")
     target_bots = list(dict.fromkeys([cfg_bot, "selo_saham_bot", "Selobrow_bot"]))
     target_bot = target_bots[0]
@@ -645,6 +645,9 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
         session_name,
         API_ID,
         API_HASH,
+        device_model="Windows PC Desktop",
+        system_version="Windows 10/11",
+        app_version="4.16.8 x64",
         connection_retries=None,  # Retry tak terbatas jika jaringan drop
         retry_delay=2,            # Sambung ulang cepat dalam 2 detik
         auto_reconnect=True,
@@ -653,36 +656,115 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
     )
 
     print(f"\n[+] Menghubungkan ke jaringan Telegram...")
+    await client.connect()
 
-    def prompt_phone():
-        print("\n" + "=" * 60)
-        print("📲 LOGIN TELEGRAM MEMBER (HANYA SEKALI DI AWAL)")
-        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print("Masukkan NOMOR HP Telegram Anda (gunakan awalan kode +62)")
-        print("Contoh: +6281234567890")
-        print("")
-        print("⚠️ PERHATIAN: BUKAN TOKEN BOT! Masukkan nomor HP Telegram Anda")
-        print("agar copier terhubung ke akun VIP yang sudah di-approve Admin.")
-        print("=" * 60)
-        return input("\nNomor HP Telegram (+62...): ").strip()
+    def clean_phone_number(phone_str: str) -> str:
+        raw = re.sub(r"[^\d+]", "", phone_str.strip())
+        if raw.startswith("0"):
+            raw = "+62" + raw[1:]
+        elif raw.startswith("62") and not raw.startswith("+"):
+            raw = "+" + raw
+        elif raw.startswith("+620"):
+            raw = "+62" + raw[4:]
+        elif not raw.startswith("+"):
+            raw = "+" + raw
+        return raw
 
-    def prompt_code():
-        print("\n📩 Masukkan KODE OTP 5-digit yang baru masuk ke aplikasi Telegram Anda:")
-        return input("Kode OTP Telegram: ").strip()
-
-    def prompt_password():
+    if not await client.is_user_authorized():
+        from telethon.errors import (
+            PhoneNumberInvalidError,
+            FloodWaitError,
+            PhoneCodeInvalidError,
+            PhoneCodeExpiredError,
+            PhoneCodeEmptyError,
+            SessionPasswordNeededError,
+            PasswordHashInvalidError,
+        )
         import getpass
-        print("\n🔒 Masukkan Password Verifikasi 2 Langkah (2FA) Telegram (jika aktif):")
-        try:
-            return getpass.getpass("Password 2FA: ")
-        except Exception:
-            return input("Password 2FA: ").strip()
 
-    await client.start(
-        phone=prompt_phone,
-        code_callback=prompt_code,
-        password=prompt_password,
-    )
+        clean_p = ""
+        while True:
+            print("\n" + "=" * 65)
+            print("📲 LOGIN TELEGRAM MEMBER (HANYA SEKALI DI AWAL)")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print("Ketik NOMOR HP Telegram Anda:")
+            print("• Contoh: 081234567890 atau +6281234567890")
+            print("")
+            print("⚠️ PERHATIAN: BUKAN TOKEN BOT! Masukkan nomor HP Telegram Anda")
+            print("agar copier terhubung ke akun VIP yang sudah di-approve Admin.")
+            print("=" * 65)
+            phone_input = input("\nNomor HP Telegram: ").strip()
+            clean_p = clean_phone_number(phone_input)
+
+            if len(clean_p) < 10:
+                print(f"❌ Format nomor '{phone_input}' tidak valid. Silakan coba lagi.")
+                continue
+
+            print(f"\n[+] Mengirim permintaan kode OTP ke nomor: {clean_p} ...")
+            try:
+                await client.send_code_request(clean_p)
+                break
+            except PhoneNumberInvalidError:
+                print(f"❌ Nomor {clean_p} tidak terdaftar di Telegram atau format salah. Periksa kembali nomor Anda.")
+            except FloodWaitError as e:
+                print(f"⚠️ Telegram membatasi pengiriman kode karena terlalu sering mencoba. Harap tunggu {e.seconds} detik.")
+                await client.disconnect()
+                return
+            except Exception as ex:
+                print(f"❌ Gagal mengirim kode OTP: {ex}")
+                ulang = input("Apakah ingin mencoba nomor lain? (y/n): ").strip().lower()
+                if ulang != "y":
+                    await client.disconnect()
+                    return
+
+        print("\n" + "=" * 65)
+        print("📩 KODE OTP 5-DIGIT TELAH DIKIRIM OLEH TELEGRAM! 🚀")
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("⚠️ PERHATIAN PENTING - BACA BAIK-BAIK:")
+        print("1. Kode OTP TIDAK DIKIRIM KE SMS PULSA HP!")
+        print("2. Buka APLIKASI TELEGRAM di HP atau PC Anda sekarang juga.")
+        print("3. Cari chat resmi dari 'Telegram' (dengan centang biru verified).")
+        print("   Pesan berisi: 'Login code: XXXXX. Do not give this code...'")
+        print("=============================================================\n")
+
+        for attempt in range(3):
+            otp_input = input("👉 Masukkan 5-Digit Kode OTP Telegram: ").strip()
+            clean_otp = re.sub(r"\D", "", otp_input)
+            if not clean_otp:
+                print("❌ Kode OTP tidak boleh kosong.")
+                continue
+
+            try:
+                await client.sign_in(clean_p, code=clean_otp)
+                print("✅ Verifikasi kode OTP berhasil!")
+                break
+            except SessionPasswordNeededError:
+                print("\n🔒 Akun Anda mengaktifkan Verifikasi 2 Langkah (Two-Step Verification).")
+                try:
+                    pwd = getpass.getpass("Password 2FA Telegram Anda: ")
+                except Exception:
+                    pwd = input("Password 2FA Telegram Anda: ").strip()
+                try:
+                    await client.sign_in(password=pwd)
+                    print("✅ Verifikasi password 2FA berhasil!")
+                    break
+                except PasswordHashInvalidError:
+                    print("❌ Password 2FA salah!")
+                    await client.disconnect()
+                    return
+            except (PhoneCodeInvalidError, PhoneCodeEmptyError):
+                print(f"❌ Kode OTP salah! Sisa percobaan: {2 - attempt}")
+                if attempt == 2:
+                    await client.disconnect()
+                    return
+            except PhoneCodeExpiredError:
+                print("❌ Kode OTP sudah kedaluwarsa. Silakan jalankan ulang copier untuk meminta kode baru.")
+                await client.disconnect()
+                return
+            except Exception as ex_sign:
+                print(f"❌ Gagal verifikasi login: {ex_sign}")
+                await client.disconnect()
+                return
 
 
     me = await client.get_me()

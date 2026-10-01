@@ -44,9 +44,13 @@ LANGKAH 3: MENJALANKAN AUTO-COPIER
    dan terhubung ke akun trading broker kamu (Exness, HFM, Octa, XM, dll).
 2. Klik ganda file: `START_COPIER.bat`
 3. Saat pertama kali dijalankan, kamu akan diminta memasukkan nomor HP Telegram:
-   - Ketik nomor HP Telegram kamu dengan awalan +62 (Contoh: +6281234567890).
-   - ⚠️ PERHATIAN: JANGAN MASUKKAN TOKEN BOT! Cukup masukkan nomor HP kamu.
-   - Ketik kode OTP yang dikirim Telegram ke aplikasi Telegram kamu.
+   - Ketik nomor HP Telegram kamu (Bisa ketik 0812... atau +62812...).
+   - ⚠️ PERHATIAN BESAR (KENAPA OTP SERING DIKIRA GAK MASUK):
+     KODE OTP TIDAK DIKIRIM KE SMS PULSA HP!
+     Buka APLIKASI TELEGRAM di HP atau PC kamu sekarang juga.
+     Cari pesan dari chat resmi: "Telegram" (Centang Biru Resmi).
+     Salin 5 angka kode OTP yang ada di chat Telegram tersebut (Contoh: "Login code: 12345").
+   - Ketik kode OTP tersebut di layar copier lalu tekan Enter.
 4. Setelah muncul tulisan:
    "✅ [LISENSI TERVERIFIKASI RESMI DARI MASTER ADMIN]"
    Artinya copier sudah berjalan! Biarkan jendela ini tetap terbuka.
