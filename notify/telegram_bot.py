@@ -1240,8 +1240,8 @@ class TelegramBotCommands:
                 await query.answer("🚫 Akses Anda telah diblokir total oleh Admin.", show_alert=True)
                 return
 
-        # Chart style switching dapat diakses oleh semua pengguna yang terdaftar
-        if not data.startswith("chart_") and not self._is_admin(update):
+        # Chart style switching, candlestick, dan copier dapat diakses oleh semua pengguna yang terdaftar
+        if not data.startswith(("chart_", "candle_", "copier_")) and not self._is_admin(update):
             await query.answer("⛔ Hanya Admin yang berhak memproses tindakan ini.", show_alert=True)
             return
 
@@ -1488,6 +1488,14 @@ class TelegramBotCommands:
                                 parse_mode=ParseMode.HTML,
                                 reply_markup=tv_btn,
                             )
+            return
+
+        elif data.startswith("candle_"):
+            parts = data.split("_")
+            c_ticker = parts[1] if len(parts) > 1 else "XAUUSD"
+            await query.answer("🕯️ Menyiapkan analisa pola candlestick...")
+            context.args = [c_ticker]
+            await self.candle_command(update, context)
             return
 
         elif data in ["mt5_toggle_on", "mt5_toggle_off", "mt5_refresh", "mt5_mode_24h", "mt5_mode_night"]:
@@ -1983,6 +1991,14 @@ class TelegramBotCommands:
             "• /status - Cek status bot & strategi aktif",
             "• /lasthistory - Tampilkan 5 riwayat sinyal terakhir",
             "• /help - Bantuan & panduan penggunaan bot",
+            "",
+            "💬 <b>Fitur Ngobrol Santai (AI Natural Chat):</b>",
+            "Anda juga bisa langsung chat santai dengan bot tanpa garis miring (/):",
+            "• <i>'bor minta chart xauusd'</i> (Live Chart Visual)",
+            "• <i>'gimana analisa bbca hari ini?'</i> (Analisa Saham Kilat)",
+            "• <i>'cek posisi akun mt5'</i> (Status Akun & Posisi Terbuka)",
+            "• <i>'jelasin apa itu fibonacci golden pocket'</i> (Edukasi 9 Buku PDF)",
+            "• <i>'ada saham apa yang berpotensi?'</i> (Radar Sinyal Cuan)",
         ]
 
         if self._is_admin(update):
@@ -2514,7 +2530,10 @@ class TelegramBotCommands:
         is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
         disp_ticker = "XAU/USD (Gold)" if is_gold else clean_ticker.replace(".JK", "")
 
-        await update.message.reply_html(f"🕯️ <i>Menganalisis pola candlestick & price action untuk <b>{disp_ticker}</b>...</i>")
+        msg = update.message or (update.callback_query.message if update.callback_query else None)
+        if not msg:
+            return
+        await msg.reply_html(f"🕯️ <i>Menganalisis pola candlestick & price action untuk <b>{disp_ticker}</b>...</i>")
 
         def _fetch_and_eval():
             interval = "15m"
@@ -2584,7 +2603,7 @@ class TelegramBotCommands:
 
         res = await asyncio.to_thread(_fetch_and_eval)
         if not res:
-            await update.message.reply_text(f"Data tidak ditemukan atau feed sedang offline untuk {ticker_arg}.")
+            await msg.reply_text(f"Data tidak ditemukan atau feed sedang offline untuk {ticker_arg}.")
             return
 
         price_fmt = f"${res['close']:,.2f}" if res["is_gold"] else f"Rp {res['close']:,.0f}"
@@ -2628,7 +2647,7 @@ class TelegramBotCommands:
         tv_markup = InlineKeyboardMarkup([[
             InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(clean_ticker))
         ]])
-        await update.message.reply_html("\n".join(lines), reply_markup=tv_markup)
+        await msg.reply_html("\n".join(lines), reply_markup=tv_markup)
 
     async def winrate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /winrate dan /performance untuk rekam jejak akurasi Win/Lose bot khusus Gold (XAU/USD)."""
@@ -3184,8 +3203,116 @@ class TelegramBotCommands:
             else:
                 await update.message.reply_html(caption, reply_markup=tv_item_markup)
 
+    async def handle_ticker_chat_analysis(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        target_ticker: str,
+        user_name: str,
+    ) -> None:
+        """Handler analisis kilat saham / emas natural language chat."""
+        from data.fetcher import DataFetcher
+        from indicators.technical import TechnicalIndicators
+        from strategy.rules import get_strategy, DEFAULT_STRATEGY
+        from strategy.signal_engine import SignalEngine
+        from notify.chat_agent import ChatAgent
+        import asyncio
+
+        fetcher = DataFetcher(storage=self.storage)
+        clean_ticker = fetcher.normalize_ticker(target_ticker)
+        is_gold = any(k in clean_ticker for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        disp_ticker = "XAU/USD (Gold Spot)" if is_gold else clean_ticker.replace(".JK", "")
+
+        wait_msg = await update.message.reply_html(f"🔍 <i>Menganalisa pergerakan data real-time & sinyal untuk <b>{disp_ticker}</b>...</i>")
+
+        def _compute():
+            interval = "15m"
+            period = "5d" if is_gold else "60d"
+            df = fetcher.get_data(clean_ticker, interval=interval, period=period, force_fetch=True if is_gold else False)
+            if df.empty or len(df) < 15:
+                df = fetcher.get_data(clean_ticker, interval="1d", period="1y", force_fetch=True if is_gold else False)
+            if df.empty or len(df) < 15:
+                return None
+
+            df_ind = TechnicalIndicators.add_all_indicators(df)
+            strategy = get_strategy("DayTrading_Intraday_Momentum") or DEFAULT_STRATEGY
+            engine = SignalEngine([strategy])
+            sig = engine.evaluate_bar(df_ind, ticker=clean_ticker, strategy=strategy)
+
+            # Hitung persentase perubahan harga
+            last_close = float(df_ind.iloc[-1]["Close"])
+            prev_close = float(df_ind.iloc[-2]["Close"]) if len(df_ind) >= 2 else last_close
+            change_pct = ((last_close - prev_close) / max(prev_close, 0.01)) * 100.0
+
+            # Level acuan TP & SL
+            is_bearish = "bearish" in (sig.market_direction_prediction or "").lower() or sig.signal == "SELL"
+            tp_val = sig.take_profit_price
+            sl_val = sig.stop_loss_price
+            if not tp_val or not sl_val:
+                if is_gold:
+                    if is_bearish:
+                        tp_val = round(sig.price * (1.0 - 0.008), 2)
+                        sl_val = round(sig.price * (1.0 + 0.004), 2)
+                    else:
+                        tp_val = round(sig.price * (1.0 + 0.008), 2)
+                        sl_val = round(sig.price * (1.0 - 0.004), 2)
+                else:
+                    tp_val = round(sig.price * 1.03, 0)
+                    sl_val = round(sig.price * 0.98, 0)
+
+            rrr_val = sig.risk_reward_ratio
+            if not rrr_val and tp_val and sl_val:
+                dist_tp = abs(tp_val - sig.price)
+                dist_sl = abs(sig.price - sl_val)
+                rrr_val = round(dist_tp / max(dist_sl, 0.01), 2)
+
+            return {
+                "sig": sig,
+                "change_pct": change_pct,
+                "tp_val": tp_val,
+                "sl_val": sl_val,
+                "rrr_val": rrr_val,
+            }
+
+        res = await asyncio.to_thread(_compute)
+        if not res:
+            await wait_msg.edit_text(f"Waduh bor, data untuk {disp_ticker} lagi ga bisa diakses dari feed bursa. Coba beberapa saat lagi ya!")
+            return
+
+        sig = res["sig"]
+        analysis_text = ChatAgent.generate_ticker_analysis_response(
+            ticker=clean_ticker,
+            price=sig.price,
+            signal=sig.signal,
+            change_pct=res["change_pct"],
+            setup_grade=sig.setup_grade,
+            pdf_confluence_score=sig.pdf_confluence_score,
+            indicators=sig.indicators_snapshot,
+            tp_price=res["tp_val"],
+            sl_price=res["sl_val"],
+            rrr=res["rrr_val"],
+            prediction=sig.market_direction_prediction,
+            reasons=sig.reasons,
+            user_name=user_name,
+        )
+
+        reply_markup = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📊 Buka Live Chart", callback_data=f"chart_{clean_ticker}_candles"),
+                InlineKeyboardButton("🕯️ Pola Candlestick", callback_data=f"candle_{clean_ticker}"),
+            ],
+            [
+                InlineKeyboardButton("📈 Buka di TradingView", url=get_tradingview_url(clean_ticker)),
+            ]
+        ])
+
+        try:
+            await wait_msg.edit_text(analysis_text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        except Exception:
+            await update.message.reply_html(analysis_text, reply_markup=reply_markup)
+
     async def chat_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler pesan teks percakapan natural (bahasa gaul) & permintaan live chart instan."""
+        """Handler pesan teks percakapan natural (bahasa gaul) & interaksi seluruh fitur bot."""
         if not await self.check_user_access(update, context):
             return
 
@@ -3278,37 +3405,103 @@ class TelegramBotCommands:
                 await update.message.reply_html(caption, reply_markup=tv_markup)
             return
 
-        # 2. Intent POTENSI: Pengguna meminta info saham/emas yang sedang berpotensi
+        # 2. Intent CANDLE: Pengguna meminta analisis pola candlestick & price action
+        if intent == "CANDLE":
+            context.args = [target_ticker or "XAUUSD"]
+            await self.candle_command(update, context)
+            return
+
+        # 3. Intent ANALYSIS: Pengguna menanyakan kondisi / analisa saham atau emas tertentu
+        if intent == "ANALYSIS":
+            target_ticker = target_ticker or "XAUUSD"
+            await self.handle_ticker_chat_analysis(update, context, target_ticker, user_name)
+            return
+
+        # 4. Intent MT5: Pengguna menanyakan status akun / autotrade MT5
+        if intent == "MT5":
+            await self.mt5_command(update, context)
+            return
+
+        # 5. Intent SCAN: Pengguna meminta scan pasar
+        if intent == "SCAN":
+            await self.scan_command(update, context)
+            return
+
+        # 6. Intent POTENSI: Pengguna meminta info saham/emas yang sedang berpotensi
         if intent == "POTENSI":
             await self.potensi_command(update, context)
             return
 
-        # 3. Intent GOLD: Pengguna menanyakan seputar emas
+        # 7. Intent GOLD: Pengguna menanyakan seputar emas
         if intent == "GOLD":
             await self.gold_command(update, context)
             return
 
-        # 4. Intent WINRATE: Pengguna menanyakan winrate / akurasi
+        # 8. Intent WINRATE: Pengguna menanyakan winrate / akurasi
         if intent == "WINRATE":
             await self.winrate_command(update, context)
             return
 
-        # 5. Intent HARIAN: Pengguna menanyakan rekomendasi harian
+        # 9. Intent HARIAN: Pengguna menanyakan rekomendasi harian
         if intent == "HARIAN":
             await self.harian_command(update, context)
             return
 
-        # 6. Intent WATCHLIST: Pengguna menanyakan daftar watchlist
+        # 10. Intent HISTORY: Pengguna menanyakan riwayat sinyal
+        if intent == "HISTORY":
+            await self.lasthistory_command(update, context)
+            return
+
+        # 11. Intent WATCHLIST: Pengguna menanyakan daftar watchlist
         if intent == "WATCHLIST":
             await self.watchlist_command(update, context)
             return
 
-        # 7. Intent NEWS: Pengguna menanyakan jadwal news atau prediksi FOMC/CPI/NFP
+        # 12. Intent TUTUP: Pengguna menanyakan laporan tutup saham
+        if intent == "TUTUP":
+            await self.tutup_command(update, context)
+            return
+
+        # 13. Intent NEWS: Pengguna menanyakan jadwal news atau prediksi FOMC/CPI/NFP
         if intent == "NEWS":
             await self.news_command(update, context)
             return
 
-        # 8. Intent STATUS, GREETING, THANKS, CHITCHAT
+        # 14. Intent COPIER: Pengguna menanyakan cara pasang copier / copy trade
+        if intent == "COPIER":
+            is_adm = self._is_admin(update)
+            reply_text = ChatAgent.generate_copier_guide_response(user_name=user_name, is_admin=is_adm)
+            kb = []
+            if is_adm:
+                kb.append([InlineKeyboardButton("📦 Broadcast File Copier VIP", callback_data="sendcopier_all")])
+            await update.message.reply_html(reply_text, reply_markup=InlineKeyboardMarkup(kb) if kb else None)
+            return
+
+        # 15. Intent LICENSE: Pengguna menanyakan status lisensi / masa aktif
+        if intent == "LICENSE":
+            await self.license_command(update, context)
+            return
+
+        # 16. Intent EDUCATION: Edukasi strategi trading 9 buku PDF & Money Management
+        if intent == "EDUCATION":
+            subtopic = classification.get("subtopic", "9_pdf")
+            reply_text = ChatAgent.generate_education_response(topic=subtopic, user_name=user_name)
+            await update.message.reply_html(reply_text)
+            return
+
+        # 17. Intent MENU: Pengguna menanyakan menu / panduan fitur obrolan
+        if intent == "MENU":
+            reply_text = ChatAgent.generate_menu_response(user_name=user_name)
+            await update.message.reply_html(reply_text)
+            return
+
+        # 18. Intent STATUS: Pengguna menanyakan status bot
+        if intent == "STATUS":
+            reply_text = ChatAgent.generate_chat_response(intent="STATUS", user_name=user_name)
+            await update.message.reply_html(reply_text)
+            return
+
+        # 19. Default: GREETING, THANKS, CHITCHAT
         reply_text = ChatAgent.generate_chat_response(intent=intent, user_name=user_name)
         await update.message.reply_html(reply_text)
 

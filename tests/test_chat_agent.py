@@ -15,15 +15,18 @@ def test_extract_ticker_idx_stocks():
     assert ChatAgent.extract_ticker("tampilin live chart bbri.jk") == "BBRI.JK"
     assert ChatAgent.extract_ticker("gimana chart tlkm sekarang") == "TLKM.JK"
     assert ChatAgent.extract_ticker("bmri prospeknya gimana") == "BMRI.JK"
+    assert ChatAgent.extract_ticker("saham adro bagus ga") == "ADRO.JK"
+    assert ChatAgent.extract_ticker("saham cuan hari ini") == "CUAN.JK"
 
 
 def test_stopwords_not_extracted_as_ticker():
     # Words like 'yang', 'bisa', 'pada', 'dong', 'sama' shouldn't be treated as tickers
     assert ChatAgent.extract_ticker("yang mana yang bisa naik dong") is None
     assert ChatAgent.extract_ticker("kalo hari ini bisa cuan sama kita") is None
+    assert ChatAgent.extract_ticker("kapan waktu santai buat kita") is None
 
 
-def test_classify_intent():
+def test_classify_intent_existing():
     # 1. Chart intent with explicit ticker
     res_chart = ChatAgent.classify_intent("bor, minta chart xau/usd lgsung tampilin yg live ya")
     assert res_chart["intent"] == "CHART"
@@ -61,6 +64,91 @@ def test_classify_intent():
     assert res_thanks["intent"] == "THANKS"
 
 
+def test_classify_intent_candlestick():
+    res_c1 = ChatAgent.classify_intent("bor cek pola candle xauusd dong")
+    assert res_c1["intent"] == "CANDLE"
+    assert res_c1["ticker"] == "XAUUSD"
+
+    res_c2 = ChatAgent.classify_intent("ada pola pinbar atau engulfing di bbri ga")
+    assert res_c2["intent"] == "CANDLE"
+    assert res_c2["ticker"] == "BBRI.JK"
+
+    res_c3 = ChatAgent.classify_intent("candle bbca gimana bor")
+    assert res_c3["intent"] == "CANDLE"
+    assert res_c3["ticker"] == "BBCA.JK"
+
+
+def test_classify_intent_mt5_and_scan():
+    res_mt5_1 = ChatAgent.classify_intent("gimana posisi akun mt5 sekarang bor")
+    assert res_mt5_1["intent"] == "MT5"
+
+    res_mt5_2 = ChatAgent.classify_intent("autotrade mt5 aktif ga")
+    assert res_mt5_2["intent"] == "MT5"
+
+    res_mt5_3 = ChatAgent.classify_intent("saldo mt5 berapa sekarang")
+    assert res_mt5_3["intent"] == "MT5"
+
+    res_scan = ChatAgent.classify_intent("scan semua saham dong bor")
+    assert res_scan["intent"] == "SCAN"
+
+
+def test_classify_intent_analysis_and_history():
+    res_a1 = ChatAgent.classify_intent("gimana analisa bbca sekarang")
+    assert res_a1["intent"] == "ANALYSIS"
+    assert res_a1["ticker"] == "BBCA.JK"
+
+    res_a2 = ChatAgent.classify_intent("prospek saham bmri hari ini")
+    assert res_a2["intent"] == "ANALYSIS"
+    assert res_a2["ticker"] == "BMRI.JK"
+
+    res_hist = ChatAgent.classify_intent("rekap riwayat trading sinyal kemarin")
+    assert res_hist["intent"] == "HISTORY"
+
+    res_tutup = ChatAgent.classify_intent("laporan tutup saham hari ini")
+    assert res_tutup["intent"] == "TUTUP"
+
+
+def test_classify_intent_copier_license_menu():
+    res_copier = ChatAgent.classify_intent("gimana cara pasang copier mt5 bor")
+    assert res_copier["intent"] == "COPIER"
+
+    res_lic = ChatAgent.classify_intent("cek sisa lisensi masa aktif saya")
+    assert res_lic["intent"] == "LICENSE"
+
+    res_menu = ChatAgent.classify_intent("kamu bisa bantu apa aja bor? ada fitur apa?")
+    assert res_menu["intent"] == "MENU"
+
+
+def test_classify_intent_education():
+    res_edu1 = ChatAgent.classify_intent("apa itu 9 buku pdf yang dipake bot")
+    assert res_edu1["intent"] == "EDUCATION"
+    assert res_edu1["subtopic"] == "9_pdf"
+
+    res_edu2 = ChatAgent.classify_intent("jelasin fibonacci golden pocket dong")
+    assert res_edu2["intent"] == "EDUCATION"
+    assert res_edu2["subtopic"] == "fibo"
+
+    res_edu3 = ChatAgent.classify_intent("apa itu bob volman pullback dan buildup")
+    assert res_edu3["intent"] == "EDUCATION"
+    assert res_edu3["subtopic"] == "volman"
+
+    res_edu4 = ChatAgent.classify_intent("awan ichimoku kumo cara bacanya gimana")
+    assert res_edu4["intent"] == "EDUCATION"
+    assert res_edu4["subtopic"] == "ichimoku"
+
+    res_edu5 = ChatAgent.classify_intent("jelasin konsep smart money order block dan fair value gap")
+    assert res_edu5["intent"] == "EDUCATION"
+    assert res_edu5["subtopic"] == "smc"
+
+    res_edu6 = ChatAgent.classify_intent("apa bedanya setup grade a+ sama grade b")
+    assert res_edu6["intent"] == "EDUCATION"
+    assert res_edu6["subtopic"] == "grade"
+
+    res_edu7 = ChatAgent.classify_intent("kenapa kita harus selalu pasang stop loss dan atur rrr")
+    assert res_edu7["intent"] == "EDUCATION"
+    assert res_edu7["subtopic"] == "risk_management"
+
+
 def test_generate_chart_caption():
     caption = ChatAgent.generate_chart_caption(
         ticker="XAUUSD",
@@ -79,12 +167,68 @@ def test_generate_chart_caption():
     assert "Grade A+" in caption
 
 
+def test_generate_ticker_analysis_response():
+    resp = ChatAgent.generate_ticker_analysis_response(
+        ticker="BBCA.JK",
+        price=10250.0,
+        signal="BUY",
+        change_pct=1.45,
+        setup_grade="A+",
+        pdf_confluence_score=0.80,
+        indicators={"rsi": 56.4, "ema_20": 10100.0, "ema_50": 9950.0, "volume_ratio": 1.45},
+        tp_price=10500.0,
+        sl_price=10100.0,
+        rrr=1.67,
+        prediction="Bullish Momentum di atas EMA 20",
+        reasons=["RSI Oversold Rebound", "Bob Volman Buildup"],
+        user_name="Bro",
+    )
+    assert "BBCA" in resp
+    assert "Rp 10,250" in resp
+    assert "+1.45%" in resp
+    assert "BUY" in resp
+    assert "Grade A+" in resp
+    assert "80% Konfluensi" in resp
+    assert "RSI (14):" in resp
+    assert "Target TP:" in resp
+    assert "Batas SL:" in resp
+    assert "1 : 1.67" in resp
+
+
+def test_generate_education_response():
+    resp_pdf = ChatAgent.generate_education_response("9_pdf", user_name="Budi")
+    assert "Budi" in resp_pdf
+    assert "Bob Volman" in resp_pdf
+    assert "Smart Money Concepts" in resp_pdf
+
+    resp_fibo = ChatAgent.generate_education_response("fibo")
+    assert "61.8%" in resp_fibo
+    assert "Golden Pocket" in resp_fibo
+
+    resp_mm = ChatAgent.generate_education_response("risk_management")
+    assert "Stop Loss" in resp_mm
+    assert "1-2%" in resp_mm
+
+
+def test_generate_copier_and_menu_response():
+    resp_copier = ChatAgent.generate_copier_guide_response(user_name="Andi", is_admin=True)
+    assert "Andi" in resp_copier
+    assert "TelegramSignalReceiver.mq5" in resp_copier
+    assert "/sendcopier" in resp_copier
+
+    resp_menu = ChatAgent.generate_menu_response(user_name="Andi")
+    assert "Andi" in resp_menu
+    assert "Live Chart" in resp_menu
+    assert "Analisa Kilat" in resp_menu
+    assert "Auto-Trade MT5" in resp_menu
+
+
 def test_generate_chat_response():
     resp_greet = ChatAgent.generate_chat_response("GREETING", user_name="Nabil")
     assert "Nabil" in resp_greet
     assert "standby" in resp_greet
 
-    resp_thanks = ChatAgent.generate_chat_response("THANKS")
+    resp_thanks = ChatAgent.generate_chat_response("THANKS", user_name="Nabil")
     assert "Sama-sama bor" in resp_thanks
 
     resp_status = ChatAgent.generate_chat_response("STATUS")

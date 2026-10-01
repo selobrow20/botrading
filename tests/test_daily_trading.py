@@ -110,6 +110,8 @@ def test_daily_and_intraday_trading():
     # ==============================================================
     print(f"\n[3/3] Menguji Swing Trading Harian (Candle 1D) dengan TP = +5.0% & SL = -3.0%...")
     df_daily = storage.load_ohlcv(ticker, interval="1d")
+    if df_daily.empty or len(df_daily) < 50:
+        df_daily = fetcher.get_data(ticker, interval="1d", period="1y")
 
     swing_strat = Strategy(
         name="Daily_Swing_Pullback",
