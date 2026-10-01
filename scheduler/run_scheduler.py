@@ -283,8 +283,21 @@ class PipelineRunner:
                 # Hitung Indikator
                 df_ind = TechnicalIndicators.add_all_indicators(df)
 
+                # Ambil data H1 khusus Gold untuk konfirmasi Sesi London (1-Hour)
+                df_h1_ind = None
+                if is_gold:
+                    from strategy.signal_engine import get_trading_session
+                    s_code, _ = get_trading_session()
+                    if s_code == "LONDON":
+                        try:
+                            df_h1 = self.fetcher.fetch_ohlcv(ticker, interval="1h", period="7d")
+                            if not df_h1.empty and len(df_h1) >= 2:
+                                df_h1_ind = TechnicalIndicators.add_all_indicators(df_h1)
+                        except Exception as ex_h1:
+                            logger.debug(f"Gagal mengambil data H1 London {ticker}: {ex_h1}")
+
                 # Evaluasi Sinyal (candle terakhir)
-                sig_result = self.signal_engine.evaluate_bar(df_ind, ticker=ticker, bar_idx=-1)
+                sig_result = self.signal_engine.evaluate_bar(df_ind, ticker=ticker, bar_idx=-1, df_h1=df_h1_ind)
 
                 # Sesuai arahan pengguna: Saham IDX khusus mode BUY (Long-Only), sinyal SELL ditiadakan
                 if not is_gold and sig_result.signal == "SELL":

@@ -574,6 +574,43 @@ def test_check_london_judas_swing_trap():
     assert "sapuan likuiditas di pucuk High Asia" in reason
 
 
+def test_validate_london_h1_confirmation():
+    """Menguji validasi konfirmasi H1 (1-Hour) wajib khusus Sesi London."""
+    # Data H1 dummy: candle 1 (sebelumnya) dan candle 2 (berjalan)
+    # Kasus 1: Sinyal BUY tapi H1 sedang Bearish (Open 4180 > Harga 4172, di bawah EMA50 4178)
+    df_h1_bearish = pd.DataFrame([
+        {"Open": 4185.0, "Close": 4180.0, "High": 4188.0, "Low": 4178.0, "ema_50": 4178.0},
+        {"Open": 4180.0, "Close": 4170.0, "High": 4181.0, "Low": 4168.0, "ema_50": 4178.0},
+    ])
+
+    h1_ok, reason = SignalEngine.validate_london_h1_confirmation("BUY", df_h1_bearish, curr_price=4172.0)
+    assert h1_ok is False
+    assert "Sesi London Wajib Konfirmasi H1" in reason
+    assert "Candle H1 berjalan sedang Bearish" in reason
+
+    # Kasus 2: Sinyal BUY dan H1 Bullish (Open 4170 < Harga 4180, di atas EMA50 4165)
+    df_h1_bullish = pd.DataFrame([
+        {"Open": 4160.0, "Close": 4170.0, "High": 4172.0, "Low": 4158.0, "ema_50": 4165.0},
+        {"Open": 4170.0, "Close": 4182.0, "High": 4185.0, "Low": 4169.0, "ema_50": 4165.0},
+    ])
+
+    h1_ok, reason = SignalEngine.validate_london_h1_confirmation("BUY", df_h1_bullish, curr_price=4180.0)
+    assert h1_ok is True
+    assert "Konfirmasi H1 Sesi London" in reason
+
+    # Kasus 3: Sinyal SELL tapi H1 sedang Bullish (Open 4170 < Harga 4180, di atas EMA50 4165)
+    h1_ok, reason = SignalEngine.validate_london_h1_confirmation("SELL", df_h1_bullish, curr_price=4180.0)
+    assert h1_ok is False
+    assert "Sesi London Wajib Konfirmasi H1" in reason
+    assert "Candle H1 berjalan sedang Bullish" in reason
+
+    # Kasus 4: Sinyal SELL dan H1 Bearish (Open 4180 > Harga 4170, di bawah EMA50 4178)
+    h1_ok, reason = SignalEngine.validate_london_h1_confirmation("SELL", df_h1_bearish, curr_price=4170.0)
+    assert h1_ok is True
+    assert "Konfirmasi H1 Sesi London" in reason
+
+
+
 
 
 

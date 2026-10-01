@@ -566,6 +566,81 @@ class SignalEngine:
             logger.debug(f"Pengecekan judas swing trap: {ex}")
             return False, ""
 
+    @staticmethod
+    def validate_london_h1_confirmation(
+        sig_type: str,
+        df_h1: pd.DataFrame,
+        curr_price: float,
+    ) -> Tuple[bool, str]:
+        """
+        Validasi Konfirmasi Wajib Timeframe H1 (1-Hour) Khusus Sesi London (14:00 - 19:00 WIB).
+        Sesuai kaidah trader profesional & instruksi pengguna:
+        Di Sesi London yang sarat volatilitas & manipulasi likuiditas, open posisi HANYA diizinkan
+        jika arah sinyal telah terkonfirmasi sejalan 100% dengan tren & struktur candle H1 (1-Hour).
+        """
+        if df_h1 is None or df_h1.empty or len(df_h1) < 2:
+            return True, ""  # Data tidak cukup, loloskan default
+
+        curr_h1 = df_h1.iloc[-1]
+        prev_h1 = df_h1.iloc[-2]
+
+        open_h1 = float(curr_h1.get("Open", curr_h1.get("open", curr_price)))
+        close_h1 = float(curr_h1.get("Close", curr_h1.get("close", curr_price)))
+        high_h1 = float(curr_h1.get("High", curr_h1.get("high", curr_price)))
+        low_h1 = float(curr_h1.get("Low", curr_h1.get("low", curr_price)))
+
+        ema20_h1 = float(curr_h1.get("ema_20", 0.0))
+        ema50_h1 = float(curr_h1.get("ema_50", 0.0))
+
+        prev_close_h1 = float(prev_h1.get("Close", prev_h1.get("close", open_h1)))
+        prev_open_h1 = float(prev_h1.get("Open", prev_h1.get("open", prev_close_h1)))
+
+        if sig_type == "BUY":
+            # Syarat BUY di Sesi London:
+            # 1. Candle H1 berjalan tidak boleh sedang bearish tajam (Close < Open)
+            is_candle_bearish = (curr_price < open_h1 - 1.0) or (close_h1 < open_h1 - 1.0)
+            # 2. Jika prev H1 dan curr H1 dua-duanya candle merah tebal
+            is_double_red = (prev_close_h1 < prev_open_h1) and (curr_price < open_h1)
+            # 3. Jika harga di bawah EMA 50 H1
+            is_below_ema50 = (ema50_h1 > 0 and curr_price < ema50_h1 - 1.50)
+
+            if is_candle_bearish or is_double_red or is_below_ema50:
+                reasons = []
+                if is_candle_bearish:
+                    reasons.append(f"Candle H1 berjalan sedang Bearish (Open ${open_h1:.2f} ➔ Harga ${curr_price:.2f})")
+                if is_double_red:
+                    reasons.append("Candle H1 sebelumnya juga ditutup Bearish")
+                if is_below_ema50:
+                    reasons.append(f"Harga berada di bawah Tren Mayor EMA 50 H1 (${ema50_h1:.2f})")
+                detail = "; ".join(reasons)
+                return False, f"🛑 Sesi London Wajib Konfirmasi H1: Sinyal BUY ditolak karena H1 Bearish ({detail}). Menghindari terjebak manipulasi intraday."
+
+            return True, "✅ Konfirmasi H1 Sesi London: Struktur & Tren H1 Bullish sejalan dengan sinyal BUY."
+
+        elif sig_type == "SELL":
+            # Syarat SELL di Sesi London:
+            # 1. Candle H1 berjalan tidak boleh sedang bullish tajam (Close > Open)
+            is_candle_bullish = (curr_price > open_h1 + 1.0) or (close_h1 > open_h1 + 1.0)
+            # 2. Jika prev H1 dan curr H1 dua-duanya candle hijau tebal
+            is_double_green = (prev_close_h1 > prev_open_h1) and (curr_price > open_h1)
+            # 3. Jika harga di atas EMA 50 H1
+            is_above_ema50 = (ema50_h1 > 0 and curr_price > ema50_h1 + 1.50)
+
+            if is_candle_bullish or is_double_green or is_above_ema50:
+                reasons = []
+                if is_candle_bullish:
+                    reasons.append(f"Candle H1 berjalan sedang Bullish (Open ${open_h1:.2f} ➔ Harga ${curr_price:.2f})")
+                if is_double_green:
+                    reasons.append("Candle H1 sebelumnya juga ditutup Bullish")
+                if is_above_ema50:
+                    reasons.append(f"Harga berada di atas Tren Mayor EMA 50 H1 (${ema50_h1:.2f})")
+                detail = "; ".join(reasons)
+                return False, f"🛑 Sesi London Wajib Konfirmasi H1: Sinyal SELL ditolak karena H1 Bullish ({detail}). Menghindari terjebak manipulasi intraday."
+
+            return True, "✅ Konfirmasi H1 Sesi London: Struktur & Tren H1 Bearish sejalan dengan sinyal SELL."
+
+        return True, ""
+
     def evaluate_bar(
         self,
         df: pd.DataFrame,
@@ -573,6 +648,7 @@ class SignalEngine:
         strategy: Optional[Strategy] = None,
         bar_idx: int = -1,
         apply_pdf_filter: bool = True,
+        df_h1: Optional[pd.DataFrame] = None,
     ) -> SignalResult:
         """
         Mengevaluasi bar/candle tertentu (default candle terkini -1) terhadap strategi.
@@ -778,6 +854,17 @@ class SignalEngine:
                 curr_row=curr_row,
             )
 
+        # Filter Khusus Sesi London: Wajib konfirmasi H1 (1-Hour) searah tren
+        h1_ok = True
+        h1_reason = ""
+        enable_h1_london = self.config.get("mt5", {}).get("london_h1_confirmation", True)
+        if is_london_session and enable_h1_london and df_h1 is not None and apply_pdf_filter:
+            h1_ok, h1_reason = self.validate_london_h1_confirmation(
+                sig_type=target_sig_type,
+                df_h1=df_h1,
+                curr_price=curr_price,
+            )
+
         if is_buy:
             if apply_pdf_filter and not pdf_approved:
                 # Sinyal BUY ditahan jika konfluensi 9 buku belum tembus Grade A (65%)
@@ -792,6 +879,9 @@ class SignalEngine:
                     f"Sinyal beli ditahan (Mode Hati-Hati Sesi London). Skor konfluensi {pdf_score:.0f}% < {london_min_score:.0f}% ({setup_grade}). "
                     f"Sesi London sering terjadi manipulasi likuiditas / Judas swing, hanya sinyal Grade A+ kuat (>=75%) yang diizinkan."
                 ]
+            elif not h1_ok:
+                signal = "HOLD"
+                reasons = [h1_reason]
             elif judas_trap:
                 signal = "HOLD"
                 reasons = [judas_reason]
@@ -801,6 +891,8 @@ class SignalEngine:
                 reasons.append(f"Telaah 9 Buku: {setup_grade} ({pdf_score:.0f}%)")
                 if is_london_session:
                     reasons.append(f"🛡️ Sesi London: Terkonfirmasi Kuat ({pdf_score:.0f}% >= 75%) Lolos Filter Anti-Manipulasi")
+                    if h1_reason:
+                        reasons.append(h1_reason)
                 if patterns_detected:
                     reasons.append(f"Pola: {', '.join(patterns_detected[:2])}")
         elif is_sell:
@@ -824,6 +916,9 @@ class SignalEngine:
                     f"Sinyal short ditahan (Mode Hati-Hati Sesi London). Skor konfluensi {pdf_score:.0f}% < {london_min_score:.0f}% ({setup_grade}). "
                     f"Sesi London sering terjadi manipulasi likuiditas / Judas swing, hanya sinyal Grade A+ kuat (>=75%) yang diizinkan."
                 ]
+            elif not h1_ok:
+                signal = "HOLD"
+                reasons = [h1_reason]
             elif judas_trap:
                 signal = "HOLD"
                 reasons = [judas_reason]
@@ -833,11 +928,16 @@ class SignalEngine:
                 reasons.append(f"Telaah 9 Buku: {setup_grade} ({pdf_score:.0f}%)")
                 if is_london_session:
                     reasons.append(f"🛡️ Sesi London: Terkonfirmasi Kuat ({pdf_score:.0f}% >= 75%) Lolos Filter Anti-Manipulasi")
+                    if h1_reason:
+                        reasons.append(h1_reason)
         else:
             # Jika sinyal dasar masih netral namun telaah 9 Buku PDF membuktikan Grade A (>=65% atau >=75% di London)
             min_promo_score = london_min_score if is_london_session else 65.0
             if apply_pdf_filter and pdf_score >= min_promo_score and is_gold:
-                if judas_trap:
+                if not h1_ok:
+                    signal = "HOLD"
+                    reasons = [h1_reason]
+                elif judas_trap:
                     signal = "HOLD"
                     reasons = [judas_reason]
                 elif target_sig_type == "BUY" and curr_price >= snapshot.get("ema_50", 0.0):
@@ -848,6 +948,8 @@ class SignalEngine:
                     ]
                     if is_london_session:
                         reasons.append(f"🛡️ Sesi London: Terkonfirmasi Kuat ({pdf_score:.0f}% >= 75%) Lolos Filter Anti-Manipulasi")
+                        if h1_reason:
+                            reasons.append(h1_reason)
                     if patterns_detected:
                         reasons.append(f"Pola: {', '.join(patterns_detected[:2])}")
                 elif target_sig_type == "SELL" and curr_price <= snapshot.get("ema_50", 0.0):
@@ -858,6 +960,8 @@ class SignalEngine:
                     ]
                     if is_london_session:
                         reasons.append(f"🛡️ Sesi London: Terkonfirmasi Kuat ({pdf_score:.0f}% >= 75%) Lolos Filter Anti-Manipulasi")
+                        if h1_reason:
+                            reasons.append(h1_reason)
                     if patterns_detected:
                         reasons.append(f"Pola: {', '.join(patterns_detected[:2])}")
                 else:
