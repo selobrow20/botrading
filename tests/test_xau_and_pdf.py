@@ -610,6 +610,34 @@ def test_validate_london_h1_confirmation():
     assert "Konfirmasi H1 Sesi London" in reason
 
 
+def test_london_h1_window_limit():
+    """Menguji bahwa konfirmasi H1 Sesi London hanya diwajibkan s/d jam 17:00 WIB (setelah jam 5 sore lolos)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    engine = SignalEngine()
+    tz = ZoneInfo("Asia/Jakarta")
+
+    # Bar pada jam 17:15 WIB (London Lanjutan / Manipulasi sudah reda)
+    dt_1715 = datetime(2026, 10, 1, 17, 15, tzinfo=tz)
+    df_m15 = pd.DataFrame([{
+        "Close": 4310.0, "High": 4315.0, "Low": 4300.0, "Open": 4305.0,
+        "ema_20": 4308.0, "ema_50": 4290.0, "rsi": 55.0, "volume_ratio": 1.2,
+        "pattern_pinbar": 1, "volman_pullback": 1,
+    }], index=pd.DatetimeIndex([dt_1715]))
+
+    # H1 bearish bertentangan dengan BUY
+    df_h1_bearish = pd.DataFrame([
+        {"Open": 4320.0, "Close": 4300.0, "High": 4325.0, "Low": 4295.0, "ema_50": 4305.0},
+        {"Open": 4315.0, "Close": 4295.0, "High": 4318.0, "Low": 4290.0, "ema_50": 4305.0},
+    ])
+
+    res = engine.evaluate_bar(df_m15, ticker="XAUUSD", bar_idx=-1, df_h1=df_h1_bearish)
+    # Setelah jam 17:00 WIB, sinyal BUY tidak boleh ditahan oleh H1
+    assert "Sesi London Wajib Konfirmasi H1" not in " ".join(res.reasons)
+
+
+
 
 
 

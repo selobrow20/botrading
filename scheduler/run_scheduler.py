@@ -283,12 +283,15 @@ class PipelineRunner:
                 # Hitung Indikator
                 df_ind = TechnicalIndicators.add_all_indicators(df)
 
-                # Ambil data H1 khusus Gold untuk konfirmasi Sesi London (1-Hour)
+                # Ambil data H1 khusus Gold untuk konfirmasi Sesi London Awal (14:00 - 17:00 WIB)
                 df_h1_ind = None
                 if is_gold:
                     from strategy.signal_engine import get_trading_session
+                    from datetime import time as dtime
                     s_code, _ = get_trading_session()
-                    if s_code == "LONDON":
+                    now_wib_t = datetime.now(ZoneInfo("Asia/Jakarta")).time()
+                    cfg_london_max_h = int(self.config.get("mt5", {}).get("london_h1_max_hour", 17))
+                    if s_code == "LONDON" and dtime(14, 0) <= now_wib_t < dtime(cfg_london_max_h, 0):
                         try:
                             df_h1 = self.fetcher.fetch_ohlcv(ticker, interval="1h", period="7d")
                             if not df_h1.empty and len(df_h1) >= 2:

@@ -854,11 +854,28 @@ class SignalEngine:
                 curr_row=curr_row,
             )
 
-        # Filter Khusus Sesi London: Wajib konfirmasi H1 (1-Hour) searah tren
+        # Filter Khusus Sesi London: Wajib konfirmasi H1 (1-Hour) searah tren (HANYA Jam 14:00 - 17:00 WIB)
+        # Sesuai arahan pengguna: "ampe jam 5 aja max pake h1 sesi london, karna setelah jam segitu manipulasi udah jarang"
         h1_ok = True
         h1_reason = ""
         enable_h1_london = self.config.get("mt5", {}).get("london_h1_confirmation", True)
-        if is_london_session and enable_h1_london and df_h1 is not None and apply_pdf_filter:
+        london_h1_max_hour = int(self.config.get("mt5", {}).get("london_h1_max_hour", 17))
+        is_london_h1_time = False
+
+        if is_london_session:
+            from zoneinfo import ZoneInfo
+            from datetime import time as dtime
+            if isinstance(bar_dt, pd.Timestamp):
+                ts_wib = bar_dt.tz_convert(ZoneInfo("Asia/Jakarta")) if bar_dt.tzinfo else bar_dt.tz_localize(ZoneInfo("Asia/Jakarta"))
+            elif isinstance(bar_dt, datetime):
+                ts_wib = bar_dt.astimezone(ZoneInfo("Asia/Jakarta")) if bar_dt.tzinfo else bar_dt.replace(tzinfo=ZoneInfo("Asia/Jakarta"))
+            else:
+                ts_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
+
+            # Wajib H1 hanya berlaku mulai jam 14:00 sampai maksimal jam 17:00 WIB (jam 5 sore)
+            is_london_h1_time = dtime(14, 0) <= ts_wib.time() < dtime(london_h1_max_hour, 0)
+
+        if is_london_session and is_london_h1_time and enable_h1_london and df_h1 is not None and apply_pdf_filter:
             h1_ok, h1_reason = self.validate_london_h1_confirmation(
                 sig_type=target_sig_type,
                 df_h1=df_h1,
