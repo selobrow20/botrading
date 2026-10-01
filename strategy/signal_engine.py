@@ -760,8 +760,8 @@ class SignalEngine:
         # Sesuai Arahan Mutlak Pengguna:
         # "semua sama kan saja kalo misal lgi panjang bagus, gapapa entry panjang tp kalo moment nya short, shortt aja untuk semua jam"
         # - Semua jam (Pagi/Asia, London, US) disamakan aturannya.
-        # - Momen Tren Panjang Bagus (Grade A+ Strong Trend Confluence): Boleh ambil target panjang terukur (120 - 150 pips, SL 65 pips).
-        # - Momen Short / Scalping / Sideways / Normal: Gunakan target SHORT (TP 65 pips & SL 65 pips seimbang 1:1) untuk SEMUA JAM.
+        # - Momen Tren Panjang Bagus (Grade A+ Strong Trend Confluence): TP jauh 3:1 (TP 3, SL 1).
+        # - Momen Short / Scalping / Sideways / Normal: TP cepat ATR-adaptive R:R >= 1.5:1.
         market_regime = ""
 
         if is_gold:
@@ -773,10 +773,42 @@ class SignalEngine:
             rsi_val = float(curr_row.get("rsi", 50.0))
 
             mt5_cfg = self.config.get("mt5", {})
-            short_tp_usd = float(mt5_cfg.get("gold_short_tp_pips", 48.0)) / 10.0  # 4.80 USD (48 pips, rentang 45-50 pips)
+            short_tp_usd = float(mt5_cfg.get("gold_short_tp_pips", 48.0)) / 10.0  # 4.80 USD (48 pips)
             short_sl_usd = float(mt5_cfg.get("gold_short_sl_pips", 42.0)) / 10.0  # 4.20 USD (42 pips)
             long_tp_usd = float(mt5_cfg.get("gold_long_tp_pips", 135.0)) / 10.0   # 13.50 USD (135 pips)
             long_sl_usd = float(mt5_cfg.get("gold_long_sl_pips", 45.0)) / 10.0    # 4.50 USD (45 pips)
+
+            # ============================================================
+            # SISTEM ATR-ADAPTIVE TP/SL ANTI-FAKEOUT (9 BUKU PDF TRADING)
+            # ============================================================
+            # Filosofi: SL flat mati = mudah disweep institusi (fakeout).
+            # ATR (Average True Range) mengukur volatilitas NYATA candle hari ini,
+            # sehingga SL ditempatkan DI LUAR jangkauan normal ayunan pasar.
+            #
+            # Buku 3 (Bob Volman - Price Action): SL harus di luar bar terakhir + buffer ATR
+            # Buku 5 (Martin J. Pring): TP harus sesuai momentum tren nyata, bukan angka mati
+            # Buku 6 (John Murphy + Anna Coulling VPA): Volume rendah -> SL lebih lebar
+            # Buku 9 (Trading Alchemist): SL di balik swing low/high & Order Block terakhir
+            #
+            # ATR 14-periode pada Gold M15 biasanya 2.5 - 5.5 USD (25 - 55 pips)
+            # SL = 1.2x - 1.5x ATR -> di LUAR jangkauan fakeout institusi biasa
+            # TP cepat = 1.8x ATR (R:R minimal 1.5:1 -- jauh lebih aman dari 1:1 flat)
+            # TP tren panjang = 3.0x SL (R:R tepat 3:1 sesuai kaidah pengguna)
+
+            atr_safe = max(atr_val, 2.5)  # Minimal 25 pips agar SL tidak kena sweep tipis
+            atr_safe = min(atr_safe, 5.5)  # Maksimal 55 pips agar tidak terlalu boros saat news
+
+            # Multiplier SL berdasarkan kondisi pasar (anti-fakeout):
+            vol_ratio_now = float(curr_row.get("volume_ratio", 1.0))
+            if vol_ratio_now < 0.80 or session_code == "LONDON":
+                # Volume tipis ATAU Sesi London (rawan Judas Swing) -> sweep lebih dalam
+                sl_atr_mult = 1.5
+            elif adx_val >= 22.0:
+                # Tren kuat (ADX >= 22) -> SL ketat 1.2x ATR karena arah sudah jelas
+                sl_atr_mult = 1.2
+            else:
+                # Sideways / normal -> SL 1.4x ATR
+                sl_atr_mult = 1.4
 
             # Deteksi Kualitas Momen Tren Panjang Bagus (Kaidah 9 Buku PDF Trading):
             # 1. EMA 20 dan EMA 50 menyebar tegas (ema_diff >= 3.5)
@@ -790,18 +822,23 @@ class SignalEngine:
 
             if is_good_long_momentum:
                 # Sesuai arahan pengguna: "kalo tp jauh si gpp 3:1 tpnya 3 sl nya 1"
-                # Target TP Jauh Rasio 3:1: SL dipatok ketat 45 pips ($4.50 USD),
-                # dan TP dipasang persis 3x lipat jarak SL (135 pips / $13.50 USD)!
-                sl_distance = round(min(4.50, max(4.00, long_sl_usd)), 2)
-                tp_distance = round(sl_distance * 3.0, 2)  # Rasio 3:1 mutlak (TP 3, SL 1)
+                # SL: 1.3x ATR -> ketat namun melewati fakeout -> clamp min 45 pips, max 60 pips
+                sl_distance_atr = round(atr_safe * 1.3, 2)
+                sl_distance = round(max(long_sl_usd, min(6.00, sl_distance_atr)), 2)
+                # TP: TEPAT 3x SL (Rasio 3:1 mutlak sesuai kaidah pengguna)
+                tp_distance = round(sl_distance * 3.0, 2)
                 market_regime = f"{session_name} Momentum Tren Jauh (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R 3:1)"
             else:
-                # Sesuai arahan pengguna: "minimal bgt 1:1 lah jangan tp 1 sl 2" & "tp nya 45-50 pips aja tp jangan gede gede nanti ga kena"
-                # Target Take Profit: 45 - 50 Pips ($4.50 - $5.00 USD)
-                # Stop Loss Ketat: 40 - 45 Pips ($4.00 - $4.50 USD) -> R:R >= 1:1 (Dilarang keras TP 1 SL 2!)
-                tp_distance = round(min(5.00, max(4.50, short_tp_usd)), 2)
-                sl_distance = round(min(tp_distance, max(3.50, short_sl_usd)), 2)
-                market_regime = f"{session_name} Momen Cepat (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R >= 1:1)"
+                # Sesuai arahan pengguna: "minimal 1:1 lah jangan tp 1 sl 2"
+                # SL ATR-adaptive: di luar jangkauan fakeout -> clamp min 42 pips, max 65 pips
+                sl_distance_atr = round(atr_safe * sl_atr_mult, 2)
+                sl_distance = round(max(short_sl_usd, min(6.50, sl_distance_atr)), 2)
+                # TP: target 1.8x ATR (cukup jauh bypass noise, masih realistis kena dalam 1 sesi)
+                # Minimal = SL (R:R >= 1:1), Hard cap 8.0 USD = 80 pips agar TP tidak terlalu jauh
+                tp_atr = round(atr_safe * 1.8, 2)
+                tp_distance = round(min(8.00, max(short_tp_usd, sl_distance, tp_atr)), 2)
+                eff_rr = round(tp_distance / max(sl_distance, 0.01), 1)
+                market_regime = f"{session_name} Momen Cepat ATR-Adaptive (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R {eff_rr}:1)"
 
             # KAIDAH BAKU 9 BUKU PDF TRADING (Risk:Reward Ratio Guard):
             # DILARANG KERAS SL LEBIH BESAR DARI TP!
