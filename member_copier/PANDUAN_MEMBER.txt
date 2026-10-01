@@ -42,6 +42,10 @@ LANGKAH 3: MENJALANKAN AUTO-COPIER
 ----------------------------------------------------------------------
 1. Pastikan aplikasi MetaTrader 5 (MT5) di laptop/PC kamu SUDAH TERBUKA
    dan terhubung ke akun trading broker kamu (Exness, HFM, Octa, XM, dll).
+   ⚠️ SANGAT PENTING (HINDARI ERROR 10027):
+   Pastikan tombol "Algo Trading" di toolbar atas MetaTrader 5 sudah AKTIF (BERWARNA HIJAU)!
+   Jika warnanya masih merah, KLIK tombol tersebut sampai berubah HIJAU (atau tekan: Ctrl + E).
+   Pastikan juga di MT5: Tools -> Options -> Expert Advisors -> Centang "Allow Algo Trading".
 2. Klik ganda file: `START_COPIER.bat`
 3. Saat pertama kali dijalankan, kamu akan diminta memasukkan nomor HP Telegram:
    - Ketik nomor HP Telegram kamu (Bisa ketik 0812... atau +62812...).

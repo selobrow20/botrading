@@ -137,7 +137,7 @@ def parse_signal(text: str) -> dict:
         entry_price = _clean_num(m_entry.group(1))
 
     m_tp = re.search(
-        r"(?:Take Profit(?:\s*\(TP\))?|\bTP\b)\s*[:=]?\s*\$?([\d,]+(?:\.\d+)?)",
+        r"(?:Take Profit(?:\s*(?:\(TP\)|1|2))?|\bTP\s*(?:1|2)?\b)\s*[:=]?\s*\$?([\d,]+(?:\.\d+)?)",
         clean_text,
         re.IGNORECASE,
     )
@@ -151,6 +151,15 @@ def parse_signal(text: str) -> dict:
     )
     if m_sl:
         sl_price = _clean_num(m_sl.group(1))
+
+    # Proteksi sanitasi harga emas: jika angka di bawah $100, berarti salah tangkap label (misal TP 1:)
+    if is_gold:
+        if tp_price < 100.0:
+            tp_price = 0.0
+        if sl_price < 100.0:
+            sl_price = 0.0
+        if entry_price < 100.0:
+            entry_price = 0.0
 
     # Jika bukan sinyal berparameter (tidak ada entry, TP, ataupun SL), abaikan
     if entry_price <= 0 and tp_price <= 0 and sl_price <= 0:
@@ -1075,7 +1084,19 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
 
             print(f"   ✅ [ORDER MT5 SUKSES] #{res['ticket']} {sig['action']} {res['volume']} Lot @ ${res['price']:,.2f} pada {res['symbol']}\n")
         else:
-            print(f"   ❌ [ORDER GAGAL] {res.get('message')}\n")
+            err_msg = str(res.get("message", ""))
+            print(f"   ❌ [ORDER GAGAL] {err_msg}")
+            if "10027" in err_msg or "AutoTrading disabled" in err_msg:
+                print("   ┌─────────────────────────────────────────────────────────────┐")
+                print("   │ 💡 SOLUSI MUDAH (ERROR 10027 - ALGO TRADING MT5 MATI):      │")
+                print("   │ 1. Buka aplikasi MetaTrader 5 kamu sekarang juga.           │")
+                print("   │ 2. Klik tombol 'Algo Trading' di toolbar atas sampai HIJAU  │")
+                print("   │    (atau tekan tombol keyboard: Ctrl + E).                  │")
+                print("   │ 3. Menu Tools -> Options -> Expert Advisors -> centang      │")
+                print("   │    'Allow Algo Trading' lalu klik OK.                       │")
+                print("   └─────────────────────────────────────────────────────────────┘\n")
+            else:
+                print()
 
     async def local_bep_watcher():
         """
