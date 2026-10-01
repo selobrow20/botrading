@@ -6,6 +6,18 @@ Selamat datang di layanan VIP Auto-Trader 9 Buku PDF Confluence!
 Dengan modul ini, transaksi Gold (XAU/USD) di akun MetaTrader 5 milikmu
 akan dieksekusi secara otomatis setiap kali Master Bot memberikan sinyal Grade A+.
 
+✨ FITUR PENGAMAN TERBARU (UPDATE OKTOBER 2026):
+1. 🏛️ Konfirmasi H1 Sesi London & Anti-Judas Swing:
+   - Sinyal di Sesi London (14:00 - 19:00 WIB) wajib lolos konfirmasi candle H1.
+   - Terlindungi dari sapuan likuiditas pucuk/dasar Asia (Judas Swing fakeout).
+2. ⚡ Fast Impulsive Reversal & Auto-Flip 90%+:
+   - Jika pasar berbalik arah mendadak secara impulsif, posisi lama otomatis
+     di-cut loss lebih awal dan otomatis membalik posisi (Auto-Flip).
+3. 🔒 Auto-Close Reversal Guard & Trailing Stop:
+   - MT5 Member otomatis mengunci profit / menggeser SL saat pasar bergerak jauh.
+4. ⚖️ Risk:Reward Guard:
+   - TP selalu minimal seimbang atau lebih besar dari SL (R:R >= 1:1 s/d 1:2+).
+
 ----------------------------------------------------------------------
 LANGKAH 1: PERMINTAAN IZIN KE TELEGRAM ADMIN (WAJIB)
 ----------------------------------------------------------------------
@@ -39,10 +51,13 @@ LANGKAH 3: MENJALANKAN AUTO-COPIER
    "✅ [LISENSI TERVERIFIKASI RESMI DARI MASTER ADMIN]"
    Artinya copier sudah berjalan! Biarkan jendela ini tetap terbuka.
 
-
-Setiap kali Master Bot mendeteksi sinyal BUY / SELL Gold Grade A+,
-MT5 milikmu akan otomatis membuka posisi lengkap dengan Take Profit (TP)
-dan Stop Loss (SL) yang presisi.
+----------------------------------------------------------------------
+CARA UPDATE JIKA ADA FILE ZIP BARU:
+----------------------------------------------------------------------
+1. Tutup jendela copier yang sedang berjalan.
+2. Ekstrak file `member_copier.zip` baru.
+3. Timpa semua file ke folder copier kamu.
+4. Klik ganda kembali `START_COPIER.bat` (Login Telegram tetap tersimpan).
 
 ----------------------------------------------------------------------
 KENDALI LISENSI & KEAMANAN TERPUSAT:
@@ -54,4 +69,3 @@ KENDALI LISENSI & KEAMANAN TERPUSAT:
    menolak jalan (akses ditolak).
 3. Hubungi Master Admin (@selobrow) jika ingin memperpanjang masa aktif.
 ======================================================================
-
