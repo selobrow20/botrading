@@ -5,6 +5,8 @@
   "default_lot": 0.05,
   "max_positions_cent": 3,
   "max_positions_standard": 1,
+  "usd_only_high_grade": true,
+  "usd_lot": 0.01,
   "min_grid_spacing": 1.0,
   "max_price_drift": 8.0,
   "max_slippage": 20,

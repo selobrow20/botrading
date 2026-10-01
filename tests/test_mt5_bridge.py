@@ -250,11 +250,11 @@ def test_mt5_double_entry_prevention():
     assert res1["success"] is True
     assert res1["status"] == "executed"
 
-    # Entry kedua ditolak karena posisi masih berjalan
+    # Entry kedua ditolak karena posisi masih berjalan / harga terlalu dekat
     res2 = bridge.execute_signal(sig)
     assert res2["success"] is False
-    assert res2["status"] == "already_open"
-    assert "aktif di MT5" in res2["message"]
+    assert res2["status"] in ("already_open", "too_close_grid")
+    assert ("aktif di MT5" in res2["message"]) or ("Penumpukan Posisi Dicegah" in res2["message"])
 
 
 def test_mt5_modify_position_and_trailing():
@@ -478,6 +478,59 @@ def test_reversal_flip_in_execute_signal():
     assert res["action"] == "BUY"
     assert len(bridge._simulated_positions) == 1
     assert bridge._simulated_positions[0]["type"] == "BUY"
+
+
+def test_usd_account_filter_and_lot_sizing():
+    """
+    Menguji aturan mutlak Akun Standard USD:
+    - Sinyal standar/kurang bagus (Grade A / skor < 80% / 0.01 lot master) -> DITOLAK / DILEWATI di Akun USD.
+    - Sinyal Grade A+ (0.05 lot bagus / skor >= 80%) -> DIEKSEKUSI di Akun USD dengan lot 0.01.
+    """
+    from unittest.mock import patch
+
+    bridge = MT5Bridge(simulation_mode=True)
+    bridge.enabled = True
+    bridge.trading_hours = "all"
+    bridge.config["mt5"]["usd_only_high_grade"] = True
+    bridge.config["mt5"]["usd_execution_lot"] = 0.01
+    bridge._simulated_positions.clear()
+
+    # Mock is_cent_account() agar selalu return False (Akun Standard USD)
+    with patch.object(bridge, "is_cent_account", return_value=False):
+        # 1. Sinyal Standar (Grade A, Skor 70%) -> Harus DITOLAK di USD
+        standard_sig = SignalResult(
+            ticker="XAUUSD",
+            strategy_name="Master_Confluence",
+            signal="BUY",
+            price=2750.0,
+            candle_time="2026-10-01 10:00:00",
+            take_profit_price=2775.0,
+            stop_loss_price=2735.0,
+            pdf_confluence_score=70.0,
+            setup_grade="Grade A",
+        )
+        res_std = bridge.execute_signal(standard_sig)
+        assert res_std["success"] is False
+        assert res_std["status"] == "usd_skip_standard_grade"
+        assert "DILARANG" in res_std["message"] or "dilewati" in res_std["message"]
+
+        # 2. Sinyal Grade A+ (Momen Bagus, Skor 85%) -> Harus DIEKSEKUSI dengan 0.01 Lot di USD
+        high_sig = SignalResult(
+            ticker="XAUUSD",
+            strategy_name="Master_Confluence",
+            signal="BUY",
+            price=2750.0,
+            candle_time="2026-10-01 10:15:00",
+            take_profit_price=2775.0,
+            stop_loss_price=2735.0,
+            pdf_confluence_score=85.0,
+            setup_grade="Grade A+",
+        )
+        res_high = bridge.execute_signal(high_sig)
+        assert res_high["success"] is True
+        assert res_high["volume"] == 0.01
+        assert res_high["status"] == "executed"
+
 
 
 

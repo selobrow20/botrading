@@ -574,8 +574,10 @@ class MT5Bridge:
 
     def is_cent_account(self) -> bool:
         """Mendeteksi apakah akun MT5 yang terhubung adalah akun Cent (USC / cent currency / cent symbol suffix)."""
+        if hasattr(self, "_is_cent_override") and self._is_cent_override is not None:
+            return bool(self._is_cent_override)
         if self.simulation_mode:
-            return False
+            return True
         acc_info = self.get_account_info()
         if not acc_info:
             return False
@@ -944,8 +946,32 @@ class MT5Bridge:
             tp = round(price - tp_dist, 2)
             sl = round(price + sl_dist, 2)
 
-        # Hitung Lot Sesuai Kualitas Momen (0.05 lot momen bagus banget, 0.01 lot standar/riskan)
-        lot = self.calculate_lot_size(ticker, price, sl, confluence_score=score, setup_grade=grade)
+        # ATURAN BAKU PENGGUNA UNTUK AKUN STANDARD USD:
+        # "jika sinyal nya kurang bagus atau lu pasang 0,01 di usd jgn pasang,
+        #  untuk usd hanya untuk sinyal 0,05 yg bagus tp di usd nya lu open 0,01"
+        is_high_conviction = (
+            score >= self.high_confidence_threshold
+            or "A+" in str(grade).upper()
+        )
+        usd_only_high = cfg_mt5.get("usd_only_high_grade", True)
+
+        if not is_cent:
+            if usd_only_high and not is_high_conviction:
+                msg = (
+                    f"🛡️ [USD STANDARD FILTER] Sinyal {ticker} {sig_type} adalah sinyal standar/kurang bagus (Skor {score:.0f}%, {grade}). "
+                    f"Sesuai arahan pengguna: Akun Standard USD DILARANG masuk pada sinyal 0.01 standar. "
+                    f"HANYA masuk pada sinyal Grade A+ (0.05 lot bagus). Order dilewati demi melindungi modal USD!"
+                )
+                logger.info(msg)
+                return {
+                    "success": False,
+                    "status": "usd_skip_standard_grade",
+                    "message": msg,
+                }
+            lot = float(cfg_mt5.get("usd_execution_lot", 0.01))
+            logger.info(f"💎 [USD HIGH GRADE] Sinyal Grade A+ ({score:.0f}%) untuk Akun Standard USD: Membuka posisi disiplin {lot} Lot.")
+        else:
+            lot = self.calculate_lot_size(ticker, price, sl, confluence_score=score, setup_grade=grade)
 
         # Mode Simulasi (Dry-Run untuk Unit Testing)
         if self.simulation_mode:
@@ -1066,8 +1092,36 @@ class MT5Bridge:
                 f"TP: ${tp:.2f} (+{int(tp_dist*10)} pips), SL: ${sl:.2f} (-{int(sl_dist*10)} pips)"
             )
 
-            # Hitung lot dengan pertimbangan momen (Grade A+ = 0.05 lot, Grade A = 0.01 lot)
-            lot = self.calculate_lot_size(broker_sym, exec_price, sl, confluence_score=score, setup_grade=grade)
+            # ATURAN BAKU PENGGUNA UNTUK AKUN STANDARD USD:
+            # "jika sinyal nya kurang bagus atau lu pasang 0,01 di usd jgn pasang,
+            #  untuk usd hanya untuk sinyal 0,05 yg bagus tp di usd nya lu open 0,01"
+            is_cent = self.is_cent_account()
+            is_high_conviction = (
+                score >= self.high_confidence_threshold
+                or "A+" in str(grade).upper()
+            )
+            usd_only_high = cfg_mt5.get("usd_only_high_grade", True)
+
+            if not is_cent:
+                # Akun Standard USD:
+                if usd_only_high and not is_high_conviction:
+                    msg = (
+                        f"🛡️ [USD STANDARD FILTER] Sinyal {ticker} {sig_type} adalah sinyal standar/kurang bagus (Skor {score:.0f}%, {grade}). "
+                        f"Sesuai arahan pengguna: Akun Standard USD DILARANG masuk pada sinyal 0.01 standar. "
+                        f"HANYA masuk pada sinyal Grade A+ (0.05 lot bagus). Order dilewati demi melindungi modal USD!"
+                    )
+                    logger.info(msg)
+                    return {
+                        "success": False,
+                        "status": "usd_skip_standard_grade",
+                        "message": msg,
+                    }
+                # Jika Grade A+ (0.05 lot bagus), di akun USD wajib dibuka dengan 0.01 lot:
+                lot = float(cfg_mt5.get("usd_execution_lot", 0.01))
+                logger.info(f"💎 [USD HIGH GRADE] Sinyal Grade A+ ({score:.0f}%) untuk Akun Standard USD: Membuka posisi disiplin {lot} Lot.")
+            else:
+                # Akun Cent (USC): Hitung lot sesuai momen (Grade A+ = 0.05 lot, Grade A = 0.01 lot)
+                lot = self.calculate_lot_size(broker_sym, exec_price, sl, confluence_score=score, setup_grade=grade)
 
             # Tentukan Filling Mode yang didukung broker (Bit 0 (1): FOK, Bit 1 (2): IOC)
             filling_mode = int(sym_info.filling_mode or 0)

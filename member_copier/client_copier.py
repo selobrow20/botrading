@@ -171,6 +171,21 @@ def parse_signal(text: str) -> dict:
     m_score = re.search(r"Konfluensi 9 PDF.*?(\d+)%", clean_text, re.IGNORECASE)
     pdf_score = float(m_score.group(1)) if m_score else 0.0
 
+    # Ekstrak Volume / Lot Master
+    master_lot = 0.0
+    m_lot = re.search(r"(?:Volume|Lot)\s*[:=]?\s*([\d.]+)\s*(?:Lot)?", clean_text, re.IGNORECASE)
+    if m_lot:
+        master_lot = _clean_num(m_lot.group(1))
+
+    # Deteksi Sinyal Grade A+ (0.05 lot bagus) vs Standar (0.01 lot)
+    is_high_grade = False
+    if any(k in text_upper for k in ["MOMEN BAGUS BANGET", "0.05 LOT", "0,05 LOT", "GRADE A+", "GRADE: A+"]):
+        is_high_grade = True
+    elif pdf_score >= 80.0:
+        is_high_grade = True
+    elif master_lot >= 0.05:
+        is_high_grade = True
+
     return {
         "symbol": "XAUUSD",
         "action": action,
@@ -179,6 +194,8 @@ def parse_signal(text: str) -> dict:
         "sl_price": sl_price,
         "ticket": ticket_id,
         "pdf_confluence_score": pdf_score,
+        "master_lot": master_lot,
+        "is_high_grade": is_high_grade,
         "raw_text": text,
     }
 
@@ -575,12 +592,33 @@ class MT5MemberBridge:
             sl_val = round(sl_raw, digits) if sl_raw > 0 else 0.0
 
         # Money Management & Normalisasi Ukuran Lot
-        trade_lot = self.lot
+        # ATURAN BAKU PENGGUNA UNTUK AKUN STANDARD USD:
+        # "jika sinyal nya kurang bagus atau lu pasang 0,01 di usd jgn pasang,
+        #  untuk usd hanya untuk sinyal 0,05 yg bagus tp di usd nya lu open 0,01"
+        is_high_grade = sig.get("is_high_grade", False)
+        master_lot = float(sig.get("master_lot", 0.0) or 0.0)
+        usd_only_high = self.cfg.get("usd_only_high_grade", True)
+
         if not is_cent:
-            acc = self.mt5.account_info()
-            if acc and float(getattr(acc, "balance", 0.0) or 0.0) < 1000.0 and trade_lot > 0.01:
-                print(f"   ℹ️ [MONEY MANAGEMENT] Akun Standard USD (Saldo: ${acc.balance:,.2f} USD). Lot disesuaikan ke 0.01 agar modal aman.")
-                trade_lot = 0.01
+            # Akun Standard USD:
+            if usd_only_high and not is_high_grade and master_lot < 0.05:
+                skip_msg = (
+                    f"🛡️ [USD STANDARD FILTER] Sinyal ini adalah sinyal standar/kurang bagus (0.01 lot master). "
+                    f"Sesuai arahan pengguna: Akun Standard USD DILARANG masuk pada sinyal 0.01 standar. "
+                    f"HANYA masuk pada sinyal Grade A+ (0.05 lot bagus). Order dilewati demi melindungi modal USD!"
+                )
+                print(f"\n{skip_msg}\n")
+                return {
+                    "success": False,
+                    "status": "usd_skip_standard_grade",
+                    "message": skip_msg,
+                }
+            # Jika sinyal Grade A+ (0.05 lot bagus): buka 0.01 lot di akun USD!
+            trade_lot = float(self.cfg.get("usd_lot", 0.01))
+            print(f"   💎 [USD HIGH GRADE] Sinyal Grade A+ (Momen Bagus 0.05 Lot). Membuka posisi disiplin {trade_lot} Lot di Akun Standard USD.")
+        else:
+            # Akun Cent (USC): Sesuai pengaturan lot member (default 0.05 lot)
+            trade_lot = self.lot
 
         vol_step = float(getattr(s_info, "volume_step", 0.01) or 0.01)
         if vol_step > 0:

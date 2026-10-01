@@ -95,6 +95,8 @@ mt5:
   midnight_end_minute: 30
   midnight_max_loss_usc: 50.0  # Batas maksimal kerugian di jam tidur tengah malam akun Cent (-50 USC)
   min_confluence_score: 65.0  # Batas minimal skor akurasi 9 Buku PDF untuk eksekusi MT5 (Grade A)
+  usd_only_high_grade: true   # Akun USD Standard HANYA masuk sinyal Grade A+ (0.05 lot bagus). Sinyal standar/0.01 dilewati.
+  usd_execution_lot: 0.01     # Ukuran lot khusus akun USD Standard pada sinyal Grade A+: mutlak 0.01 Lot
   # Batas kerugian harian USC dihilangkan di jam normal karena dipantau langsung oleh user
   max_daily_loss_usd: 50.0  # Batas maksimal kerugian harian akun USD Standard (-$50 USD) 24/7
 indicators:
