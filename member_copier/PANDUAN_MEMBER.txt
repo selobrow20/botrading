@@ -7,16 +7,21 @@ Dengan modul ini, transaksi Gold (XAU/USD) di akun MetaTrader 5 milikmu
 akan dieksekusi secara otomatis setiap kali Master Bot memberikan sinyal Grade A+.
 
 ✨ FITUR PENGAMAN TERBARU (UPDATE OKTOBER 2026):
-1. 🏛️ Konfirmasi H1 Sesi London & Anti-Judas Swing:
+1. 🎯 Metode Retest Entry Terkonfirmasi 9 Buku (Best Price Execution):
+   - Posisi BUY dieksekusi di ayunan bawah (Diskon) saat retest Order Block / S-R Flip / EMA 20.
+   - Posisi SELL dieksekusi di ayunan atas (Premium) saat retest Resistance / Supply Block / EMA 20.
+   - Terhindar dari beli di pucuk atau jual di jurang (Anti-FOMO).
+2. 🛡️ Hard Floor Stop Loss & Take Profit Minimal 60 Pips (1:1):
+   - SL dan TP Gold terkunci minimal 60 pips ($6.00 USD) dengan rasio minimal 1:1 (R:R 1:1 s/d 1:3).
+   - Dilarang keras membuka posisi dengan SL/TP di bawah standar 60 pips.
+3. 🏛️ Konfirmasi H1 Sesi London & Anti-Judas Swing:
    - Sinyal di Sesi London (14:00 - 19:00 WIB) wajib lolos konfirmasi candle H1.
    - Terlindungi dari sapuan likuiditas pucuk/dasar Asia (Judas Swing fakeout).
-2. ⚡ Fast Impulsive Reversal & Auto-Flip 90%+:
+4. ⚡ Fast Impulsive Reversal & Auto-Flip 90%+:
    - Jika pasar berbalik arah mendadak secara impulsif, posisi lama otomatis
      di-cut loss lebih awal dan otomatis membalik posisi (Auto-Flip).
-3. 🔒 Auto-Close Reversal Guard & Trailing Stop:
+5. 🔒 Auto-Close Reversal Guard & Trailing Stop:
    - MT5 Member otomatis mengunci profit / menggeser SL saat pasar bergerak jauh.
-4. ⚖️ Risk:Reward Guard:
-   - TP selalu minimal seimbang atau lebih besar dari SL (R:R >= 1:1 s/d 1:2+).
 
 ----------------------------------------------------------------------
 LANGKAH 1: PERMINTAAN IZIN KE TELEGRAM ADMIN (WAJIB)

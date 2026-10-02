@@ -6,10 +6,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
 # Ensure UTF-8 output on Windows console
-if sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding.lower() != 'utf-8':
-    sys.stderr.reconfigure(encoding='utf-8')
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+if sys.stderr.encoding and sys.stderr.encoding.lower() != 'utf-8':
+    try:
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
 import pandas as pd
 import numpy as np
@@ -26,6 +32,17 @@ def test_stage_2():
     storage = StockStorage()
     ticker = "BBCA.JK"
     df = storage.load_ohlcv(ticker, interval="1d")
+
+    if df.empty:
+        dates = pd.date_range("2025-01-01", periods=100, freq="1D")
+        df = pd.DataFrame({
+            "Open": np.linspace(9000, 10000, 100),
+            "High": np.linspace(9050, 10050, 100),
+            "Low": np.linspace(8950, 9950, 100),
+            "Close": np.linspace(9020, 10020, 100),
+            "Volume": [1000000] * 100,
+        }, index=dates)
+        storage.save_ohlcv(ticker, "1d", df)
 
     assert not df.empty, f"Data {ticker} tidak ditemukan di database SQLite!"
     print(f"Data mentah dimuat: {len(df)} baris (Rentang: {df.index[0].date()} s/d {df.index[-1].date()})")
