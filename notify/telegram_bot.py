@@ -395,22 +395,19 @@ class TelegramNotifier:
             return {"success": False, "sent_count": 0, "recipients": [], "error": f"File {p} tidak ditemukan."}
 
         caption = custom_caption or (
-            "📦 <b>UPDATE PENTING: AUTO-COPIER MT5 MEMBER (VIP 9 BUKU PDF)</b> 🚀\n"
+            "📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Halo Trader VIP! Master Provider baru saja merilis pembaruan file Auto-Copier MT5 Anda.\n\n"
-            "✨ <b>FITUR & LOGIKA BARU DI UPDATE INI:</b>\n"
-            "1. 🎯 <b>Metode Retest Entry (Harga Diskon/Premium):</b> Entry posisi di ayunan terbaik (bawah untuk BUY, atas untuk SELL) saat retest S/R Flip, Order Block, atau Fib Golden Pocket.\n"
-            "2. ⚖️ <b>Minimal TP & SL 60 Pips (1:1):</b> Target TP dan SL Gold terkunci minimal 60 pips ($6.00 USD) dengan rasio minimal 1:1 (tidak ada TP di bawah SL).\n"
-            "3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter ganda H1 & High/Low Asia memproteksi dari manipulasi likuiditas pasar London (14:00 - 19:00 WIB).\n"
-            "4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Deteksi pembalikan arah kilat, otomatis cut loss dini dan membalik arah (flip) seketika.\n"
-            "5. 🔒 <b>Auto-Close Reversal Guard:</b> MT5 Member otomatis ikut mengamankan keuntungan saat Master Bot menutup posisi lebih awal.\n"
-            "6. 🔄 <b>Proteksi Anti-Hedging:</b> Posisi berlawanan otomatis ditutup sebelum membuka arah baru (bebas tabrakan order).\n"
-            "7. 🛡️ <b>Deteksi Akun Cent & USD:</b> Adaptif untuk akun Cent (USC) dan akun Standard.\n\n"
-            "🛠️ <b>CARA UPDATE (SANGAT MUDAH):</b>\n"
-            "1. Ekstrak isi file <code>member_copier.zip</code> ini ke folder copier Anda.\n"
-            "2. Timpa file <code>client_copier.py</code> dan <code>PANDUAN_MEMBER.txt</code> yang lama.\n"
+            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.\n\n"
+            "✨ <b>FITUR & LOGIKA BARU:</b>\n"
+            "1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.\n"
+            "2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.\n"
+            "3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.\n"
+            "4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.\n"
+            "5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).\n\n"
+            "🛠️ <b>CARA UPDATE:</b>\n"
+            "1. Ekstrak <code>member_copier.zip</code> ini ke folder copier.\n"
+            "2. Timpa file <code>client_copier.py</code> dan <code>PANDUAN_MEMBER.txt</code>.\n"
             "3. Jalankan kembali <code>START_COPIER.bat</code>!\n"
-            "<i>(Lisensi akun Telegram Anda tetap aktif dan tersambung otomatis)</i>\n"
             "━━━━━━━━━━━━━━━━━━━━━━"
         )
 
@@ -1399,8 +1396,19 @@ class TelegramBotCommands:
                         parse_mode=ParseMode.HTML,
                     )
             except Exception as e:
-                logger.error(f"Gagal kirim dokumen via callback: {e}")
-                await query.message.reply_html(f"❌ Gagal mengirim file: {e}")
+                logger.error(f"Gagal kirim dokumen via callback: {e}. Mencoba fallback...")
+                try:
+                    with open(zip_path, "rb") as doc:
+                        await query.message.reply_document(
+                            document=doc,
+                            filename="member_copier.zip",
+                            caption="📦 <b>member_copier.zip (VIP 9 Buku PDF)</b>",
+                            parse_mode=ParseMode.HTML,
+                        )
+                    await query.message.reply_html(caption_text)
+                except Exception as e2:
+                    logger.error(f"Fallback callback juga gagal: {e2}")
+                    await query.message.reply_html(f"❌ Gagal mengirim file: {e2}")
             return
 
         elif data == "sendcopier_all":
@@ -1921,35 +1929,46 @@ class TelegramBotCommands:
 
         status_msg = await update.message.reply_html("⏳ <b>Menyiapkan dan mengirim file paket Auto-Copier MT5 (VIP 9 Buku PDF)...</b>")
         caption_text = (
-            "🚀 <b>PAKET AUTO-COPIER MT5 RESMI (VIP 9 BUKU PDF)</b>\n"
+            "🚀 <b>PAKET AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Halo Trader VIP! Berikut adalah file instalasi Auto-Copier MT5 Anda.\n\n"
-            "✨ <b>KEUNGGULAN TERBARU:</b>\n"
-            "1. 🎯 <b>Entry Retest Diskon (Bawah) / Premium (Atas):</b> Posisi presisi di ujung swing dengan konfirmasi 9 Buku PDF.\n"
-            "2. ⚖️ <b>Minimal TP & SL 60 Pips (1:1):</b> Target TP dipastikan seimbang/lebih besar dari SL (R:R minimal 1:1, tidak ada TP di bawah SL).\n"
-            "3. 🏛️ <b>Konfirmasi 9 Buku PDF:</b> Smart Money Concepts, Order Block, Fib Golden Pocket, & S/R Role Reversal.\n"
-            "4. 🛡️ <b>Anti-Hedging & Auto-Flip:</b> Proteksi tabrakan order & eksekusi cepat saat market berbalik arah.\n"
-            "5. ⚡ <b>Auto-Detect Filling Mode:</b> Kompatibel FOK / IOC / RETURN (Bebas Error 10030).\n\n"
-            "🛠️ <b>PETUNJUK MENJALANKAN (SANGAT MUDAH):</b>\n"
-            "1. Unduh dan <b>Ekstrak</b> file ZIP ini di PC/Laptop/VPS Anda.\n"
-            "2. Buka aplikasi <b>MetaTrader 5</b> dan pastikan sudah login.\n"
-            "3. Klik 2x <b>START_COPIER.bat</b>.\n"
-            "4. Masukkan nomor HP Telegram Anda (awalan +62) & kode OTP (hanya 1x di awal).\n\n"
-            "<i>Copier otomatis aktif dan menduplikasi sinyal resmi ke akun MT5 Anda!</i>\n"
-            "━━━━━━━━━━━━━━━━━━━━━━"
+            "✨ <b>FITUR & LOGIKA TERBARU:</b>\n"
+            "• 🎯 <b>Retest Entry Diskon/Premium:</b> Posisi presisi di ayunan terbaik S/R & Order Block.\n"
+            "• ⚖️ <b>Min SL/TP 60 Pips (1:1):</b> Target proporsional Kaidah 9 Buku (TP >= SL).\n"
+            "• 🛡️ <b>Anti-Hedging & Auto-Flip:</b> Proteksi tabrakan order & eksekusi cepat.\n"
+            "• ⚡ <b>Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (Bebas Error 10030).\n\n"
+            "🛠️ <b>PETUNJUK CEPAT:</b>\n"
+            "1. Ekstrak ZIP ini di PC/Laptop/VPS Anda.\n"
+            "2. Buka MetaTrader 5 (pastikan Algo Trading aktif).\n"
+            "3. Jalankan <b>START_COPIER.bat</b>.\n"
+            "4. Masukkan no HP Telegram & kode OTP (hanya 1x di awal).\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "<i>Copier otomatis menduplikasi sinyal resmi ke MT5!</i>"
         )
+        safe_caption = caption_text if len(caption_text) <= 950 else caption_text[:950] + "..."
         try:
             with open(zip_path, "rb") as doc:
                 await update.message.reply_document(
                     document=doc,
                     filename="member_copier.zip",
-                    caption=caption_text,
+                    caption=safe_caption,
                     parse_mode=ParseMode.HTML,
                 )
             await status_msg.delete()
         except Exception as e:
-            logger.error(f"Gagal mengirim dokumen copier via /copier: {e}")
-            await status_msg.edit_text(f"❌ Terjadi kesalahan saat mengirim file: {e}")
+            logger.error(f"Percobaan kirim dokumen dengan caption gagal: {e}. Mencoba fallback...")
+            try:
+                with open(zip_path, "rb") as doc:
+                    await update.message.reply_document(
+                        document=doc,
+                        filename="member_copier.zip",
+                        caption="📦 <b>member_copier.zip (VIP 9 Buku PDF)</b>",
+                        parse_mode=ParseMode.HTML,
+                    )
+                await update.message.reply_html(caption_text)
+                await status_msg.delete()
+            except Exception as e2:
+                logger.error(f"Fallback juga gagal: {e2}")
+                await status_msg.edit_text(f"❌ Terjadi kesalahan saat mengirim file: {e2}")
 
 
     def _build_users_list_view(self) -> Tuple[str, InlineKeyboardMarkup]:
