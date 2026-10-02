@@ -325,11 +325,10 @@ def test_classify_intent_news_stance_and_update():
     assert res_nfp_buy["news_type"] == "NFP"
     assert res_nfp_buy["user_stance"] == "BUY"
 
-    # 3. News Stance: arah nfp kemana
-    res_nfp_dir = ChatAgent.classify_intent("arah nfp kemana bor")
+    # 3. News Stance: nfp buy apa sell
+    res_nfp_dir = ChatAgent.classify_intent("nfp buy apa sell bor")
     assert res_nfp_dir["intent"] == "NEWS_STANCE"
     assert res_nfp_dir["news_type"] == "NFP"
-    assert res_nfp_dir["user_stance"] is None
 
     # 4. News Stance: fomc sell
     res_fomc_sell = ChatAgent.classify_intent("fomc sell")

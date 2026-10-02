@@ -130,6 +130,7 @@ def test_mt5_dynamic_lot_sizing_by_confluence():
     bridge = MT5Bridge(simulation_mode=True)
     bridge.enabled = True
     bridge.trading_hours = "all"
+    bridge.is_us_session_window = lambda: False
 
     # 1. Momen Super Bagus (Grade A+ >= 80%) -> 0.05 lot
     super_sig = SignalResult(
@@ -164,6 +165,13 @@ def test_mt5_dynamic_lot_sizing_by_confluence():
     res_standard = bridge.execute_signal(standard_sig)
     assert res_standard["success"] is True
     assert res_standard["volume"] == 0.01
+
+    # 3. Khusus Sesi US (19:00 - 24:00 WIB) Akun Cent -> 0.08 lot
+    bridge.is_us_session_window = lambda: True
+    bridge._simulated_positions.clear()
+    res_us = bridge.execute_signal(super_sig)
+    assert res_us["success"] is True
+    assert res_us["volume"] == 0.08
 
 
 def test_mt5_trading_hours_restriction():

@@ -28,6 +28,37 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
         pass
 
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
+DASHBOARD_STATE_PATH = Path(__file__).resolve().parent / "copier_live_state.json"
+
+def sync_event_to_dashboard(sig: dict, res: dict = None):
+    """Kirim pembaruan sinyal & eksekusi ke Dashboard 3D tanpa memblokir copier."""
+    try:
+        now_str = datetime.now().strftime("%H:%M:%S")
+        payload = {
+            "time": now_str,
+            "last_signal": sig,
+            "execution": res,
+            "timestamp": time.time()
+        }
+        with open(DASHBOARD_STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+
+        def _bg_post():
+            try:
+                import urllib.request
+                req = urllib.request.Request(
+                    "http://127.0.0.1:8080/api/event",
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}
+                )
+                urllib.request.urlopen(req, timeout=0.2)
+            except Exception:
+                pass
+        import threading
+        threading.Thread(target=_bg_post, daemon=True).start()
+    except Exception:
+        pass
+
 
 def load_config() -> dict:
     cfg = {
@@ -1133,6 +1164,8 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
 
         # Eksekusi ke terminal MT5 member
         res = bridge.execute_order(sig)
+        sync_event_to_dashboard(sig, res)
+
         if res.get("success"):
             # Catat ke riwayat deduplikasi agar kartu duplikat diabaikan
             if sig_ticket:

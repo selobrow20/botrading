@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 
 from data.fetcher import DataFetcher
+from indicators.technical import TechnicalIndicators
 from strategy.pdf_learner import PDFTradingLearner, learn_from_pdf
 from notify.telegram_bot import format_currency, TelegramNotifier
 from strategy.signal_engine import SignalEngine, SignalResult
@@ -358,10 +359,10 @@ def test_adaptive_dynamic_tp_sl_modes():
     assert "Sideways" in sig_side.market_regime or "Berguncang" in sig_side.market_regime or "Cepat" in sig_side.market_regime
     tp_dist_side = abs(sig_side.take_profit_price - sig_side.price)
     sl_dist_side = abs(sig_side.price - sig_side.stop_loss_price)
-    # TP Cepat ATR-Adaptive: minimal 45 pips, maksimal 80 pips (ATR-adaptive, lebih lebar dari flat 50 pips)
-    assert 4.5 <= tp_dist_side <= 12.0  # ATR-adaptive: 45 - 120 pips (cap naik ke 12.0 untuk HIGH-VOL hari news)
-    # SL: minimal 42 pips, maksimal 65 pips (ATR-adaptive, di luar jangkauan fakeout)
-    assert 4.0 <= sl_dist_side <= 9.5  # ATR-adaptive: 42 - 95 pips (HIGH-VOL mode support)
+    # TP Cepat ATR-Adaptive: minimal 60 pips ($6.00 USD), maksimal 120 pips ($12.00 USD)
+    assert 6.0 <= tp_dist_side <= 12.0  # Minimal 60 pips ($6.00 USD) mutlak!
+    # SL: minimal 60 pips ($6.00 USD), maksimal 120 pips
+    assert 6.0 <= sl_dist_side <= 12.0  # Minimal 60 pips ($6.00 USD) mutlak!
     # Kaidah 9 PDF: Risk to Reward wajib minimal 1:1 (TP >= SL)
     assert sig_side.risk_reward_ratio >= 1.0
 
@@ -379,9 +380,9 @@ def test_adaptive_dynamic_tp_sl_modes():
     tp_dist_trend = abs(sig_trend.take_profit_price - sig_trend.price)
     sl_dist_trend = abs(sig_trend.price - sig_trend.stop_loss_price)
     # Sesuai arahan pengguna: "kalo tp jauh si gpp 3:1 tpnya 3 sl nya 1"
-    # ATR-adaptive: SL 1.3x ATR -> TP = 3x SL -> HIGH-VOL: ATR 8.0 -> SL 9.0 -> TP 27.0
-    assert 12.0 <= tp_dist_trend <= 30.0  # 120 - 300 pips (ATR-adaptive 3:1, HIGH-VOL support)
-    assert 4.0 <= sl_dist_trend <= 9.5    # 40 - 95 pips (1.3x ATR, HIGH-VOL max 9.0)
+    # SL minimal 6.00 USD (60 pips) -> TP = 3x SL (minimal 18.00 USD / 180 pips)
+    assert 18.0 <= tp_dist_trend <= 36.0  # 180 - 360 pips (ATR-adaptive 3:1)
+    assert 6.0 <= sl_dist_trend <= 12.0   # Minimal 60 pips ($6.00 USD)
     assert sig_trend.risk_reward_ratio == 3.0  # Rasio mutlak 3:1!
 
 
@@ -665,8 +666,8 @@ def test_risk_reward_rules_never_tp1_sl2_and_long_3_to_1():
     tp_quick = abs(sig_quick.take_profit_price - sig_quick.price)
     sl_quick = abs(sig_quick.price - sig_quick.stop_loss_price)
 
-    assert 4.5 <= tp_quick <= 12.0  # ATR-adaptive: 45 - 120 pips (HIGH-VOL mode support)
-    assert 4.0 <= sl_quick <= 9.5  # ATR-adaptive: 42 - 95 pips (HIGH-VOL mode support)
+    assert 6.0 <= tp_quick <= 12.0  # Minimal 60 pips ($6.00 USD mutlak!)
+    assert 6.0 <= sl_quick <= 12.0  # Minimal 60 pips ($6.00 USD mutlak!)
     assert tp_quick >= sl_quick    # Wajib TP >= SL (Dilarang TP 1 SL 2!)
     assert sig_quick.risk_reward_ratio >= 1.0
 
@@ -683,9 +684,146 @@ def test_risk_reward_rules_never_tp1_sl2_and_long_3_to_1():
     tp_long = abs(sig_long.take_profit_price - sig_long.price)
     sl_long = abs(sig_long.price - sig_long.stop_loss_price)
 
-    assert 12.0 <= tp_long <= 30.0  # ATR-adaptive 3:1: 120 - 300 pips (HIGH-VOL max 8.0 ATR * 1.3 * 3)
-    assert 4.0 <= sl_long <= 9.5    # ATR 1.3x: 40 - 95 pips (HIGH-VOL mode: max clamp naik ke 9.0)
+    assert 18.0 <= tp_long <= 36.0  # 180 - 360 pips (3:1 of minimal 60 pips)
+    assert 6.0 <= sl_long <= 12.0   # Minimal 60 pips ($6.00 USD mutlak!)
     assert sig_long.risk_reward_ratio == 3.0  # Rasio persis 3:1 (TP 3, SL 1)
+
+
+def test_gold_hard_floor_60_pips_rule():
+    """Menguji aturan mutlak: SL dan TP Gold XAUUSD minimal 60 pips (6.00 USD) 1:1 dilarang di bawah itu."""
+    engine = SignalEngine()
+
+    # Data flat dengan ATR sangat kecil (misal ATR = 0.5)
+    df_low_vol = pd.DataFrame({
+        "Open": [2700.0] * 25,
+        "High": [2700.5] * 25,
+        "Low": [2699.5] * 25,
+        "Close": [2700.0] * 25,
+        "Volume": [1000] * 25,
+    }, index=pd.date_range("2026-10-02 08:00", periods=25, freq="15min"))
+
+    sig = engine.evaluate_bar(df_low_vol, "XAUUSD", apply_pdf_filter=False)
+    assert sig.take_profit_price is not None
+    assert sig.stop_loss_price is not None
+
+    tp_dist = round(abs(sig.take_profit_price - sig.price), 2)
+    sl_dist = round(abs(sig.price - sig.stop_loss_price), 2)
+
+    # Verifikasi keras: SL >= 6.00 USD (60 pips), TP >= 6.00 USD (60 pips), TP >= SL (R:R >= 1.0)
+    assert sl_dist >= 6.00, f"SL Gold ({sl_dist} USD) di bawah batas lantai 60 pips (6.00 USD)!"
+    assert tp_dist >= 6.00, f"TP Gold ({tp_dist} USD) di bawah batas lantai 60 pips (6.00 USD)!"
+    assert tp_dist >= sl_dist, f"TP ({tp_dist}) lebih kecil dari SL ({sl_dist}) - melanggar R:R minimal 1:1!"
+    assert sig.risk_reward_ratio >= 1.0
+
+
+def test_3layer_architecture_lapis1_otak_utama_h4():
+    """Menguji Lapis 1 (Otak Utama H4): Bullish, Bearish, dan Netral permission gate."""
+    engine = SignalEngine()
+
+    # 1. H4 Bullish: Close > EMA50, di atas Kumo, RSI >= 40
+    df_h4_bull = pd.DataFrame({
+        "Close": [2710.0, 2720.0],
+        "ema_50": [2700.0, 2700.0],
+        "ema_200": [2680.0, 2680.0],
+        "rsi": [55.0, 58.0],
+        "ichimoku_above_cloud": [1, 1],
+    })
+    bias_bull, reason_bull = engine.evaluate_macro_bias_h4(df_h4=df_h4_bull, curr_price=2720.0)
+    assert bias_bull == "BULLISH"
+
+    # 2. H4 Bearish: Close < EMA50, di bawah Kumo, RSI <= 60
+    df_h4_bear = pd.DataFrame({
+        "Close": [2690.0, 2680.0],
+        "ema_50": [2700.0, 2700.0],
+        "ema_200": [2720.0, 2720.0],
+        "rsi": [45.0, 42.0],
+        "ichimoku_above_cloud": [0, 0],
+    })
+    bias_bear, reason_bear = engine.evaluate_macro_bias_h4(df_h4=df_h4_bear, curr_price=2680.0)
+    assert bias_bear == "BEARISH"
+
+    # 3. H4 Netral/Chop: RSI jenuh / bertentangan
+    df_h4_neutral = pd.DataFrame({
+        "Close": [2700.0, 2700.0],
+        "ema_50": [2700.0, 2700.0],
+        "ema_200": [2700.0, 2700.0],
+        "rsi": [35.0, 38.0],  # Terlalu rendah untuk bullish kumo
+        "ichimoku_above_cloud": [1, 1],
+    })
+    bias_neutral, reason_neutral = engine.evaluate_macro_bias_h4(df_h4=df_h4_neutral, curr_price=2700.0)
+    assert bias_neutral == "NETRAL"
+
+
+def test_3layer_architecture_lapis2_dual_pathway_jalur_a_and_b():
+    """Menguji Lapis 2: Dual Pathways (Jalur A Konfluensi vs Jalur B Solo Sniper)."""
+    # 1. Jalur B (Solo Sniper): Modul Trading Alchemist (SMC) memberi sinyal Grade A+ (BOS + OB >= 80%)
+    solo_bar = pd.Series({
+        "Close": 2705.0,
+        "High": 2708.0,
+        "Low": 2700.0,
+        "Open": 2702.0,
+        "ema_20": 2704.0,
+        "ema_50": 2695.0,
+        "ema_200": 2680.0,
+        "rsi": 52.0,
+        "volume_ratio": 1.0,
+        "structure_bos_bullish": 1,
+        "order_block_bullish": 1,
+        "volman_pullback": 0,
+        "volman_buildup": 0,
+        "fib_in_golden_zone": 0,
+        "ichimoku_above_cloud": 0,
+    })
+
+    res_solo = SignalEngine.validate_pdf_entry_confluence(solo_bar, signal_type="BUY")
+    assert res_solo.is_approved is True
+    assert "Solo Sniper" in res_solo.entry_pathway or "Jalur B" in res_solo.entry_pathway
+    assert res_solo.module_scores["Trading Alchemist"] >= 80.0
+
+    # 2. Jalur A (Konfluensi): 3 modul setuju (Volman + Pring + Murphy)
+    confluence_bar = pd.Series({
+        "Close": 2710.0,
+        "High": 2715.0,
+        "Low": 2705.0,
+        "Open": 2708.0,
+        "ema_20": 2709.0,
+        "ema_50": 2690.0,
+        "ema_200": 2670.0,
+        "rsi": 54.0,
+        "volume_ratio": 1.25,
+        "volman_pullback": 1,
+        "volman_buildup": 1,
+        "fib_in_golden_zone": 1,
+        "ichimoku_above_cloud": 1,
+    })
+
+    res_conf = SignalEngine.validate_pdf_entry_confluence(confluence_bar, signal_type="BUY")
+    assert res_conf.is_approved is True
+    assert "Jalur A" in res_conf.entry_pathway or res_conf.num_agreeing_modules >= 3
+
+
+def test_3layer_architecture_lapis3_risk_guard_veto():
+    """Menguji Lapis 3 (Hak Veto Mutlak): Sinyal ditolak jika terkena anti-pucuk, overextended, atau chop."""
+    engine = SignalEngine()
+
+    # Bar dengan RSI Overbought ekstrem (RSI 72 >= 68) -> HARAM BUY
+    df_overbought = pd.DataFrame({
+        "Open": [2700.0] * 20,
+        "High": [2705.0] * 20,
+        "Low": [2698.0] * 20,
+        "Close": [2704.0] * 20,
+        "Volume": [1000] * 20,
+    }, index=pd.date_range("2026-10-02 08:00", periods=20, freq="15min"))
+
+    # Injeksi rsi 75 ke candle terakhir
+    df_with_ind = TechnicalIndicators.add_all_indicators(df_overbought)
+    df_with_ind.loc[df_with_ind.index[-1], "rsi"] = 75.0
+
+    # Strategi dasar menghasilkan sinyal BUY, namun Lapis 3 (Anti-Pucuk) wajib melakukan VETO mutlak
+    strat_buy = Strategy(name="test_buy_trigger", description="Test buy trigger", buy_rules=[RuleCondition("Close", ">", 0)], buy_combine="AND")
+    sig = engine.evaluate_bar(df_with_ind, "XAUUSD", strategy=strat_buy, apply_pdf_filter=True)
+    assert sig.signal == "HOLD"
+    assert any("ANTI-PUCUK" in r or "Overbought" in r for r in sig.reasons)
 
 
 

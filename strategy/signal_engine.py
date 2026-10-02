@@ -30,6 +30,10 @@ class SignalResult:
     pdf_confluence_details: List[str] = field(default_factory=list)
     market_direction_prediction: str = ""
     market_regime: str = ""
+    # Arsitektur 3 Lapis
+    macro_bias_h4: str = ""       # 'BULLISH', 'BEARISH', 'NETRAL'
+    entry_pathway: str = ""       # 'Jalur A (Konfluensi)' atau 'Jalur B (Solo Sniper: <Modul>)'
+    module_scores: Dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -48,7 +52,55 @@ class SignalResult:
             "pdf_confluence_details": self.pdf_confluence_details,
             "market_direction_prediction": self.market_direction_prediction,
             "market_regime": self.market_regime,
+            "macro_bias_h4": self.macro_bias_h4,
+            "entry_pathway": self.entry_pathway,
+            "module_scores": self.module_scores,
         }
+
+
+class ConfluenceResult(tuple):
+    """
+    Subclass tuple (is_approved, score, setup_grade, checks, prediction)
+    yang mempertahankan kompatibilitas 5-item unpacking untuk kode lama,
+    sekaligus menyediakan atribut Arsitektur 3 Lapis:
+    - entry_pathway
+    - module_scores
+    - num_agreeing_modules
+    - solo_sniper_module
+    """
+    is_approved: bool
+    score: float
+    setup_grade: str
+    checks: List[str]
+    prediction: str
+    entry_pathway: str
+    module_scores: Dict[str, float]
+    num_agreeing_modules: int
+    solo_sniper_module: Optional[str]
+
+    def __new__(
+        cls,
+        is_approved: bool,
+        score: float,
+        setup_grade: str,
+        checks: List[str],
+        prediction: str,
+        entry_pathway: str = "",
+        module_scores: Optional[Dict[str, float]] = None,
+        num_agreeing_modules: int = 0,
+        solo_sniper_module: Optional[str] = None,
+    ):
+        instance = super().__new__(cls, (is_approved, score, setup_grade, checks, prediction))
+        instance.is_approved = is_approved
+        instance.score = score
+        instance.setup_grade = setup_grade
+        instance.checks = checks
+        instance.prediction = prediction
+        instance.entry_pathway = entry_pathway
+        instance.module_scores = module_scores or {}
+        instance.num_agreeing_modules = num_agreeing_modules
+        instance.solo_sniper_module = solo_sniper_module
+        return instance
 
 
 def get_trading_session(dt: Optional[Any] = None) -> Tuple[str, str]:
@@ -113,6 +165,61 @@ class SignalEngine:
             loaded_strategies = [DEFAULT_STRATEGY]
 
         return loaded_strategies
+
+    @staticmethod
+    def evaluate_macro_bias_h4(
+        df_h4: Optional[pd.DataFrame] = None,
+        curr_row: Optional[pd.Series] = None,
+        curr_price: float = 0.0,
+    ) -> Tuple[str, str]:
+        """
+        Lapis 1: Otak Utama (H4 Bias & Izin)
+        Diisi oleh John Murphy, Ichimoku, dan Martin Pring.
+        - Tren H4: EMA 50/200 dan posisi harga terhadap awan Ichimoku
+        - Regime momentum: RSI di zona tren naik (di atas 40) atau tren turun (di bawah 60)
+        Output: (bias, reason) -> 'BULLISH', 'BEARISH', atau 'NETRAL'.
+        """
+        if df_h4 is not None and not df_h4.empty and len(df_h4) >= 2:
+            row_h4 = df_h4.iloc[-1]
+            close_h4 = float(row_h4.get("Close", curr_price))
+            ema50_h4 = float(row_h4.get("ema_50", 0.0))
+            ema200_h4 = float(row_h4.get("ema_200", 0.0))
+            rsi_h4 = float(row_h4.get("rsi", 50.0))
+            kumo_above = bool(row_h4.get("ichimoku_above_cloud", 0))
+
+            is_bull_trend = (close_h4 >= ema50_h4) if ema50_h4 > 0 else True
+            is_bull_kumo = kumo_above
+            is_bull_rsi = rsi_h4 >= 40.0
+            is_bear_trend = (close_h4 <= ema50_h4) if ema50_h4 > 0 else True
+            is_bear_kumo = not kumo_above
+            is_bear_rsi = rsi_h4 <= 60.0
+
+            if is_bull_trend and is_bull_kumo and is_bull_rsi:
+                return "BULLISH", f"H4 Bullish (Close ${close_h4:.2f} > EMA50 ${ema50_h4:.2f}, di atas Awan Kumo, RSI {rsi_h4:.1f} >= 40)"
+            elif is_bear_trend and is_bear_kumo and is_bear_rsi:
+                return "BEARISH", f"H4 Bearish (Close ${close_h4:.2f} < EMA50 ${ema50_h4:.2f}, di bawah Awan Kumo, RSI {rsi_h4:.1f} <= 60)"
+            else:
+                return "NETRAL", f"H4 Netral/Konsolidasi (RSI {rsi_h4:.1f}, EMA50 ${ema50_h4:.2f})"
+
+        # Fallback menggunakan bar berjalan jika df_h4 tidak disediakan (misal unit test M15 atau data offline)
+        if curr_row is not None:
+            close = float(curr_row.get("Close", curr_price))
+            ema50 = float(curr_row.get("ema_50", close))
+            ema200 = float(curr_row.get("ema_200", close))
+            rsi = float(curr_row.get("rsi", 50.0))
+            kumo_above = bool(curr_row.get("ichimoku_above_cloud", 0))
+
+            is_bull = (close >= ema50) and rsi >= 40.0 and (close >= ema200 or kumo_above or abs(close - ema50) <= 2.0)
+            is_bear = (close <= ema50) and rsi <= 60.0 and (close <= ema200 or not kumo_above or abs(close - ema50) <= 2.0)
+
+            if is_bull and not is_bear:
+                return "BULLISH", f"Struktur Tren Bullish (Close >= EMA50 ${ema50:.2f}, RSI {rsi:.1f} >= 40)"
+            elif is_bear and not is_bull:
+                return "BEARISH", f"Struktur Tren Bearish (Close <= EMA50 ${ema50:.2f}, RSI {rsi:.1f} <= 60)"
+            else:
+                return "NETRAL", f"Struktur Tren Netral/Chop (RSI {rsi:.1f}, EMA50 ${ema50:.2f})"
+
+        return "NETRAL", "Data tren belum memadai."
 
     @staticmethod
     def validate_pdf_entry_confluence(
@@ -437,38 +544,267 @@ class SignalEngine:
 
         score = max(0.0, min(100.0, score))
 
-        # Penentuan Grade dan Keputusan Masuk Pasar (Gatekeeper Akurasi Tinggi)
+        # ═══════════════════════════════════════════════════════════════════════
+        # LAPIS 2: SEMBILAN MODUL PEMICU & DUA JALUR ENTRY (JALUR A & JALUR B)
+        # ═══════════════════════════════════════════════════════════════════════
+        module_scores: Dict[str, float] = {}
         is_buy = (signal_type == "BUY")
         direction_name = "Bullish" if is_buy else "Bearish"
-
-        # Filter Reversal Melawan Tren Mayor (Martin Pring & Trading Alchemist):
-        # Sinyal pembalikan melawan EMA 50 wajib memiliki konfluensi Grade A+ (>= 75%)
         is_counter_trend = (is_buy and close < ema50) or (not is_buy and close > ema50)
+
+        if is_buy:
+            # 1. Volman (Bob Volman - Price Action)
+            if volman_pb and volman_buildup:
+                module_scores["Volman"] = 95.0
+            elif volman_pb or dist_ema20_pct <= 1.5:
+                module_scores["Volman"] = 85.0
+            elif dist_ema20_pct <= 2.0:
+                module_scores["Volman"] = 70.0
+            else:
+                module_scores["Volman"] = max(20.0, 60.0 - dist_ema20_pct * 10)
+
+            # 2. Pring (Martin J. Pring)
+            if close >= ema50 and close >= ema200 and 40.0 <= rsi <= 65.0:
+                module_scores["Pring"] = 95.0
+            elif close >= ema50 and 40.0 <= rsi <= 68.0:
+                module_scores["Pring"] = 85.0
+            elif close >= ema50:
+                module_scores["Pring"] = 70.0
+            else:
+                module_scores["Pring"] = 30.0
+
+            # 3. Murphy (John J. Murphy)
+            if vol_ratio >= 1.20 and close >= ema50:
+                module_scores["Murphy"] = 90.0
+            elif vol_ratio >= 1.10:
+                module_scores["Murphy"] = 80.0
+            elif vol_ratio >= 0.95:
+                module_scores["Murphy"] = 65.0
+            else:
+                module_scores["Murphy"] = 35.0
+
+            # 4. Trading Alchemist (Rizki Aditama - SMC)
+            if bos_bull and ob_bull:
+                module_scores["Trading Alchemist"] = 95.0
+            elif bos_bull:
+                module_scores["Trading Alchemist"] = 85.0
+            elif ob_bull:
+                module_scores["Trading Alchemist"] = 80.0
+            elif struct_bull:
+                module_scores["Trading Alchemist"] = 70.0
+            elif fvg_bull:
+                module_scores["Trading Alchemist"] = 65.0
+            else:
+                module_scores["Trading Alchemist"] = 35.0
+
+            # 5. Ichimoku (Ichimoku Kinko Hyo)
+            if ichi_cloud and ichi_tk and ichi_green:
+                module_scores["Ichimoku"] = 95.0
+            elif ichi_cloud and ichi_tk:
+                module_scores["Ichimoku"] = 85.0
+            elif ichi_cloud:
+                module_scores["Ichimoku"] = 70.0
+            else:
+                module_scores["Ichimoku"] = 30.0
+
+            # 6. Fibonacci (Golden Pocket)
+            if fib_gz or (close >= min(fib_500, fib_618) * 0.998 and close <= max(fib_500, fib_618) * 1.008):
+                module_scores["Fibonacci"] = 90.0
+            elif close >= max(fib_500, fib_618):
+                module_scores["Fibonacci"] = 70.0
+            else:
+                module_scores["Fibonacci"] = 35.0
+
+            # 7. Chart Pattern
+            if pat_db or pat_ihs:
+                module_scores["Chart Pattern"] = 90.0
+            elif pat_fwedge:
+                module_scores["Chart Pattern"] = 80.0
+            else:
+                module_scores["Chart Pattern"] = 45.0
+
+            # 8. Wave Principle
+            if 40.0 <= rsi <= 62.0:
+                module_scores["Wave Principle"] = 85.0
+            elif rsi < 40.0:
+                module_scores["Wave Principle"] = 65.0
+            elif rsi > 70.0:
+                module_scores["Wave Principle"] = 25.0
+            else:
+                module_scores["Wave Principle"] = 50.0
+
+            # 9. VPA (Volume Price Analysis)
+            if (pinbar or engulfing) and vol_ratio >= 1.10:
+                module_scores["VPA"] = 95.0
+            elif pinbar or engulfing:
+                module_scores["VPA"] = 85.0
+            elif wick_ratio >= 0.40 and vol_ratio >= 1.0:
+                module_scores["VPA"] = 80.0
+            elif wick_ratio >= 0.40:
+                module_scores["VPA"] = 70.0
+            else:
+                module_scores["VPA"] = 45.0
+
+        else:  # SELL
+            # 1. Volman (Bob Volman - Price Action)
+            if close <= ema20 * 1.005 and dist_ema20_pct <= 1.5:
+                module_scores["Volman"] = 85.0
+            elif close <= ema20 * 1.005 and dist_ema20_pct <= 2.0:
+                module_scores["Volman"] = 70.0
+            else:
+                module_scores["Volman"] = max(20.0, 50.0 - dist_ema20_pct * 10)
+
+            # 2. Pring (Martin J. Pring)
+            if close <= ema50 and close <= ema200 and 35.0 <= rsi <= 60.0:
+                module_scores["Pring"] = 95.0
+            elif close <= ema50 and 32.0 <= rsi <= 60.0:
+                module_scores["Pring"] = 85.0
+            elif close <= ema50:
+                module_scores["Pring"] = 70.0
+            else:
+                module_scores["Pring"] = 30.0
+
+            # 3. Murphy (John J. Murphy)
+            if vol_ratio >= 1.15 and close <= ema50:
+                module_scores["Murphy"] = 90.0
+            elif vol_ratio >= 1.05:
+                module_scores["Murphy"] = 80.0
+            elif vol_ratio >= 0.95:
+                module_scores["Murphy"] = 65.0
+            else:
+                module_scores["Murphy"] = 35.0
+
+            # 4. Trading Alchemist (Rizki Aditama - SMC)
+            if bos_bear and ob_bear:
+                module_scores["Trading Alchemist"] = 95.0
+            elif bos_bear:
+                module_scores["Trading Alchemist"] = 85.0
+            elif ob_bear:
+                module_scores["Trading Alchemist"] = 80.0
+            elif struct_bear:
+                module_scores["Trading Alchemist"] = 70.0
+            elif fvg_bear:
+                module_scores["Trading Alchemist"] = 65.0
+            else:
+                module_scores["Trading Alchemist"] = 35.0
+
+            # 5. Ichimoku (Ichimoku Kinko Hyo)
+            if not ichi_cloud and ichi_tk:
+                module_scores["Ichimoku"] = 90.0
+            elif not ichi_cloud:
+                module_scores["Ichimoku"] = 70.0
+            else:
+                module_scores["Ichimoku"] = 30.0
+
+            # 6. Fibonacci (Golden Pocket)
+            if close < min(fib_500, fib_618):
+                module_scores["Fibonacci"] = 85.0
+            else:
+                module_scores["Fibonacci"] = 35.0
+
+            # 7. Chart Pattern
+            if pat_dt or pat_hs:
+                module_scores["Chart Pattern"] = 90.0
+            elif pat_rwedge:
+                module_scores["Chart Pattern"] = 80.0
+            else:
+                module_scores["Chart Pattern"] = 45.0
+
+            # 8. Wave Principle
+            if rsi >= 65.0 or (35.0 <= rsi <= 55.0):
+                module_scores["Wave Principle"] = 85.0
+            elif rsi <= 30.0:
+                module_scores["Wave Principle"] = 25.0
+            else:
+                module_scores["Wave Principle"] = 50.0
+
+            # 9. VPA (Volume Price Analysis)
+            if shooting_star and vol_ratio >= 1.05:
+                module_scores["VPA"] = 95.0
+            elif shooting_star:
+                module_scores["VPA"] = 85.0
+            elif upper_wick_ratio >= 0.40:
+                module_scores["VPA"] = 75.0
+            else:
+                module_scores["VPA"] = 45.0
+
+        # Hitung jumlah modul yang setuju (skor >= 60%)
+        num_agreeing = sum(1 for m, s in module_scores.items() if s >= 60.0)
+
+        # Cek hak eksekusi Jalur B (Solo Sniper - Modul Objektif Nilai A+ >= 80%)
+        SOLO_MODULES = ["Trading Alchemist", "Volman", "Murphy", "Fibonacci", "Ichimoku"]
+        solo_candidate = None
+        max_solo_score = 0.0
+        for mod in SOLO_MODULES:
+            s = module_scores.get(mod, 0.0)
+            if s >= 80.0 and s > max_solo_score:
+                max_solo_score = s
+                solo_candidate = mod
+
+        is_solo_sniper = (not is_counter_trend) and (solo_candidate is not None) and (max_solo_score >= 80.0)
         min_score = 75.0 if (session == "LONDON" or is_counter_trend) else 65.0
 
-        if score >= 80.0:
+        # Penentuan Hak Veto Lapis 3 (Risk Guard Mutlak):
+        is_chop_veto = (is_flat_chop and not pinbar and not engulfing and not (bos_bull if is_buy else bos_bear))
+        is_london_veto = (session == "LONDON" and 65.0 <= score < 75.0)
+        is_reversal_veto = (is_counter_trend and 65.0 <= score < 75.0)
+
+        if is_chop_veto:
+            entry_pathway = "Tertahan (Veto Lapis 3: Flat Chop / Kompresi Datar)"
+            setup_grade = "Grade C (Chop / Sideways Berbahaya ⚠️)"
+            prediction = f"Arah market datar/chop (ADX < 20 & EMA menyempit). Veto Lapis 3 menahan entry demi keamanan modal."
+            checks.append("⚠️ Veto Lapis 3: Kompresi Datar / Chop tanpa candlestick pinbar/BOS.")
+            is_approved = False
+        elif is_london_veto:
+            entry_pathway = "Tertahan (Veto Lapis 3: Filter Manipulasi Sesi London)"
+            setup_grade = "Grade A (Tertahan Sesi London < 75%)"
+            prediction = f"Arah market rentan manipulasi likuiditas Sesi London. Setup {score:.0f}% < 75% ditahan demi keamanan modal."
+            checks.append(f"🛡️ Sesi London: Sesi London sering terjadi manipulasi likuiditas / Judas swing, hanya sinyal Grade A+ kuat (>=75%) yang diizinkan (Skor: {score:.0f}%).")
+            is_approved = False
+        elif is_reversal_veto:
+            entry_pathway = "Tertahan (Veto Lapis 3: Reversal Melawan Tren Mayor)"
+            setup_grade = "Grade A (Tertahan Reversal Melawan Tren < 75%)"
+            prediction = f"Sinyal pembalikan melawan tren mayor tertahan. Setup {score:.0f}% < 75% ditahan demi mencegah false reversal / kena SL konyol."
+            checks.append(f"🛡️ Reversal Guard: Melawan tren mayor EMA 50 wajib skor Grade A+ (>= 75%), saat ini {score:.0f}%. Sinyal ditahan demi mengamankan modal.")
+            is_approved = False
+        elif is_solo_sniper and score < min_score:
+            # Jalur B Promosi: Satu modul objektif sangat bagus A+ boleh langsung buka posisi
+            score = max(score, max_solo_score)
+            entry_pathway = f"Jalur B (Solo Sniper: {solo_candidate} {max_solo_score:.0f}%)"
+            setup_grade = f"Grade A+ (Solo Sniper: {solo_candidate} ⭐⭐⭐⭐⭐)"
+            prediction = f"Arah market diprediksi {direction_name} kuat via Solo Sniper {solo_candidate} (Akurasi A+)."
+            checks.append(f"🎯 Lapis 2 Jalur B (Solo Sniper): Modul {solo_candidate} mencapai nilai A+ ({max_solo_score:.0f}%) searah tren utama!")
+            is_approved = True
+        elif score >= 80.0:
+            if is_solo_sniper:
+                entry_pathway = f"Jalur B (Solo Sniper: {solo_candidate} {max_solo_score:.0f}%) & Jalur A"
+            else:
+                entry_pathway = f"Jalur A (Konfluensi {num_agreeing}/9 Modul)"
             setup_grade = "Grade A+ (Setup Sempurna ⭐⭐⭐⭐⭐)"
             prediction = f"Arah market diprediksi {direction_name} kuat melanjutkan tren (Probabilitas Akurasi Sangat Tinggi)."
             is_approved = True
-        elif score >= min_score:
+        elif score >= min_score or (num_agreeing >= 3 and not is_counter_trend and session != "LONDON"):
+            entry_pathway = f"Jalur A (Konfluensi {num_agreeing}/9 Modul)"
             setup_grade = "Grade A (Setup Kuat ⭐⭐⭐⭐)"
             prediction = f"Arah market diprediksi {direction_name} bergerak searah dengan konfluensi 9 buku trading."
             is_approved = True
         else:
-            if session == "LONDON" and score >= 65.0:
-                setup_grade = "Grade A (Tertahan Sesi London < 75%)"
-                prediction = f"Arah market rentan manipulasi likuiditas Sesi London. Setup {score:.0f}% < 75% ditahan demi keamanan modal."
-                checks.append(f"🛡️ Sesi London: Sesi London sering terjadi manipulasi likuiditas / Judas swing, hanya sinyal Grade A+ kuat (>=75%) yang diizinkan (Skor: {score:.0f}%).")
-            elif is_counter_trend and score >= 65.0:
-                setup_grade = "Grade A (Tertahan Reversal Melawan Tren < 75%)"
-                prediction = f"Sinyal pembalikan melawan tren mayor tertahan. Setup {score:.0f}% < 75% ditahan demi mencegah false reversal / kena SL konyol."
-                checks.append(f"🛡️ Reversal Guard: Melawan tren mayor EMA 50 wajib skor Grade A+ (>= 75%), saat ini {score:.0f}%. Sinyal ditahan demi mengamankan modal.")
-            else:
-                setup_grade = "Grade B / C (Konfluensi Belum Matang ⭐⭐)"
-                prediction = f"Arah market masih konsolidasi / belum memenuhi syarat konfluensi ketat ({direction_name} tertahan)."
+            entry_pathway = "Tertahan (Belum Memenuhi Syarat Jalur A maupun Jalur B)"
+            setup_grade = "Grade B / C (Konfluensi Belum Matang ⭐⭐)"
+            prediction = f"Arah market masih konsolidasi / belum memenuhi syarat konfluensi ketat ({direction_name} tertahan)."
             is_approved = False
 
-        return is_approved, score, setup_grade, checks, prediction
+        return ConfluenceResult(
+            is_approved=is_approved,
+            score=score,
+            setup_grade=setup_grade,
+            checks=checks,
+            prediction=prediction,
+            entry_pathway=entry_pathway,
+            module_scores=module_scores,
+            num_agreeing_modules=num_agreeing,
+            solo_sniper_module=solo_candidate if is_solo_sniper else None,
+        )
 
     def check_london_judas_swing(
         self,
@@ -649,6 +985,7 @@ class SignalEngine:
         bar_idx: int = -1,
         apply_pdf_filter: bool = True,
         df_h1: Optional[pd.DataFrame] = None,
+        df_h4: Optional[pd.DataFrame] = None,
     ) -> SignalResult:
         """
         Mengevaluasi bar/candle tertentu (default candle terkini -1) terhadap strategi.
@@ -752,19 +1089,25 @@ class SignalEngine:
         bar_dt = curr_row.name if isinstance(curr_row.name, (pd.Timestamp, datetime)) else None
         session_code, session_name = get_trading_session(bar_dt)
 
-        pdf_approved, pdf_score, setup_grade, pdf_checks, direction_pred = self.validate_pdf_entry_confluence(
+        # ─── LAPIS 1: OTAK UTAMA (H4 BIAS & IZIN) ───────────────────────────
+        macro_bias, macro_reason = self.evaluate_macro_bias_h4(df_h4=df_h4, curr_row=curr_row, curr_price=curr_price)
+
+        pdf_res = self.validate_pdf_entry_confluence(
             curr_row, prev_row, snapshot, signal_type=target_sig_type, session=session_code if is_gold else None
         )
+        pdf_approved, pdf_score, setup_grade, pdf_checks, direction_pred = pdf_res
+        entry_pathway = getattr(pdf_res, "entry_pathway", "Jalur A (Konfluensi)")
+        module_scores = getattr(pdf_res, "module_scores", {})
 
         # 5. Hitung Manajemen Risiko Trading Harian (TP / SL / RRR)
         # Sesuai Arahan Mutlak Pengguna:
-        # "semua sama kan saja kalo misal lgi panjang bagus, gapapa entry panjang tp kalo moment nya short, shortt aja untuk semua jam"
-        # - Semua jam (Pagi/Asia, London, US) disamakan aturannya.
-        # - Momen Tren Panjang Bagus (Grade A+ Strong Trend Confluence): TP jauh 3:1 (TP 3, SL 1).
-        # - Momen Short / Scalping / Sideways / Normal: TP cepat ATR-adaptive R:R >= 1.5:1.
+        # "sl tp minimal 1:1 60 pips, di mix aja kalo yang bagus di sebelumnya gpp dipakai tapi sl tp minimal 60 pips 1:1 dilarang dibawah itu"
         market_regime = ""
 
         if is_gold:
+            MIN_GOLD_SL_USD = 6.00  # 60 pips mutlak ($6.00 USD)
+            MIN_GOLD_TP_USD = 6.00  # 60 pips mutlak ($6.00 USD)
+
             ema20_val = float(snapshot.get("ema_20", curr_price))
             ema50_val = float(snapshot.get("ema_50", curr_price))
             ema_diff = abs(ema20_val - ema50_val)
@@ -773,61 +1116,31 @@ class SignalEngine:
             rsi_val = float(curr_row.get("rsi", 50.0))
 
             mt5_cfg = self.config.get("mt5", {})
-            short_tp_usd = float(mt5_cfg.get("gold_short_tp_pips", 48.0)) / 10.0  # 4.80 USD (48 pips)
-            short_sl_usd = float(mt5_cfg.get("gold_short_sl_pips", 42.0)) / 10.0  # 4.20 USD (42 pips)
-            long_tp_usd = float(mt5_cfg.get("gold_long_tp_pips", 135.0)) / 10.0   # 13.50 USD (135 pips)
-            long_sl_usd = float(mt5_cfg.get("gold_long_sl_pips", 45.0)) / 10.0    # 4.50 USD (45 pips)
+            short_tp_usd = max(MIN_GOLD_TP_USD, float(mt5_cfg.get("gold_short_tp_pips", 60.0)) / 10.0)
+            short_sl_usd = max(MIN_GOLD_SL_USD, float(mt5_cfg.get("gold_short_sl_pips", 60.0)) / 10.0)
+            long_tp_usd = max(18.00, float(mt5_cfg.get("gold_long_tp_pips", 180.0)) / 10.0)
+            long_sl_usd = max(MIN_GOLD_SL_USD, float(mt5_cfg.get("gold_long_sl_pips", 60.0)) / 10.0)
 
             # ============================================================
             # SISTEM ATR-ADAPTIVE TP/SL ANTI-FAKEOUT (9 BUKU PDF TRADING)
             # ============================================================
-            # Filosofi: SL flat mati = mudah disweep institusi (fakeout).
-            # ATR (Average True Range) mengukur volatilitas NYATA candle hari ini,
-            # sehingga SL ditempatkan DI LUAR jangkauan normal ayunan pasar.
-            #
-            # Buku 3 (Bob Volman - Price Action): SL harus di luar bar terakhir + buffer ATR
-            # Buku 5 (Martin J. Pring): TP harus sesuai momentum tren nyata, bukan angka mati
-            # Buku 6 (John Murphy + Anna Coulling VPA): Volume rendah -> SL lebih lebar
-            # Buku 9 (Trading Alchemist): SL di balik swing low/high & Order Block terakhir
-            #
-            # ATR 14-periode pada Gold M15 normal: 2.5 - 5.5 USD (25 - 55 pips)
-            # Hari berita/news/volatile: ATR bisa mencapai 7.0 - 9.0 USD (70 - 90 pips)
-            # FIX (2 Okt 2026): Naikkan clamp max ATR dari 5.5 → 8.0 agar SL tidak lebih kecil
-            # dari ATR nyata dan mudah disapu candle berita.
-            # SL = 1.2x - 1.6x ATR -> di LUAR jangkauan fakeout institusi & spike berita
-            # TP cepat = 1.8x ATR (R:R minimal 1.5:1 -- jauh lebih aman dari 1:1 flat)
-            # TP tren panjang = 3.0x SL (R:R tepat 3:1 sesuai kaidah pengguna)
-
             atr_safe = max(atr_val, 2.5)  # Minimal 25 pips agar SL tidak kena sweep tipis
-            atr_safe = min(atr_safe, 8.0)  # Maksimal 80 pips (dinaikkan dari 55 → 80 untuk hari news/volatile)
-
-            # Deteksi Mode Volatilitas Tinggi (High-Vol Mode):
-            # ATR > 5.5 = sinyal pasar sedang dalam kondisi news/event/impulsif.
-            # SL harus lebih lebar agar tidak tersapu candle panjang.
+            atr_safe = min(atr_safe, 8.0)  # Maksimal 80 pips
             is_high_vol = atr_val > 5.5
 
             # Multiplier SL berdasarkan kondisi pasar + volatilitas (anti-fakeout & anti-sweep):
             vol_ratio_now = float(curr_row.get("volume_ratio", 1.0))
             if is_high_vol and (vol_ratio_now < 0.80 or session_code == "LONDON"):
-                # High-Vol + Volume tipis/London = paling berbahaya → SL paling lebar
                 sl_atr_mult = 1.6
             elif vol_ratio_now < 0.80 or session_code == "LONDON":
-                # Volume tipis ATAU Sesi London (rawan Judas Swing) → sweep lebih dalam
                 sl_atr_mult = 1.5
             elif is_high_vol:
-                # High-Vol mode biasa (berita/news) → SL lebih lebar dari normal
                 sl_atr_mult = 1.5
             elif adx_val >= 22.0:
-                # Tren kuat (ADX >= 22) → SL ketat 1.2x ATR karena arah sudah jelas
                 sl_atr_mult = 1.2
             else:
-                # Sideways / normal → SL 1.4x ATR
                 sl_atr_mult = 1.4
 
-            # Deteksi Kualitas Momen Tren Panjang Bagus (Kaidah 9 Buku PDF Trading):
-            # 1. EMA 20 dan EMA 50 menyebar tegas (ema_diff >= 3.5)
-            # 2. ADX bertenaga (>= 22.0) ATAU konfluensi 9 Buku PDF Grade A+ (>= 80.0%)
-            # 3. Penataan harga selaras dengan arah tren (BUY di atas EMA 50, SELL di bawah EMA 50)
             is_good_long_momentum = (ema_diff >= 3.5) and (adx_val >= 22.0 or pdf_score >= 80.0)
             if target_sig_type == "BUY" and not (curr_price >= ema50_val):
                 is_good_long_momentum = False
@@ -835,40 +1148,36 @@ class SignalEngine:
                 is_good_long_momentum = False
 
             if is_good_long_momentum:
-                # Sesuai arahan pengguna: "kalo tp jauh si gpp 3:1 tpnya 3 sl nya 1"
-                # SL: 1.3x ATR → ketat namun melewati fakeout
-                # Clamp: min 45 pips, max 90 pips (dinaikkan dari 60 → 90 untuk hari ATR tinggi)
+                # Mode Momentum Tren Jauh: Rasio wajib tepat 3:1 (TP 3, SL 1)
+                # SL: min 60 pips ($6.00 USD), max 120 pips ($12.00 USD)
+                # TP: TEPAT 3x SL (min 180 pips / $18.00 USD, Rasio 3:1 mutlak)
                 sl_distance_atr = round(atr_safe * 1.3, 2)
-                sl_distance = round(max(long_sl_usd, min(9.00, sl_distance_atr)), 2)
-                # TP: TEPAT 3x SL (Rasio 3:1 mutlak sesuai kaidah pengguna)
+                sl_distance = round(max(MIN_GOLD_SL_USD, max(long_sl_usd, min(12.00, sl_distance_atr))), 2)
                 tp_distance = round(sl_distance * 3.0, 2)
                 market_regime = (
                     f"{session_name} Momentum Tren Jauh (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R 3:1)"
                     + (" [HIGH-VOL]" if is_high_vol else "")
                 )
             else:
-                # Sesuai arahan pengguna: "minimal 1:1 lah jangan tp 1 sl 2"
-                # SL ATR-adaptive: di luar jangkauan fakeout
-                # Clamp: min 32 pips, max 95 pips (dinaikkan dari 65 → 95 untuk hari ATR tinggi)
+                # Mode Cepat / Normal: Minimal 1:1, SL minimal 60 pips ($6.00 USD), TP minimal 60 pips (TP >= SL)
                 sl_distance_atr = round(atr_safe * sl_atr_mult, 2)
-                sl_distance = round(max(short_sl_usd, min(9.50, sl_distance_atr)), 2)
-                # TP: target 1.8x ATR — clamp min=SL (R:R >= 1:1), max 12.0 USD = 120 pips
-                # (dinaikkan hard cap dari 8.0 → 12.0 agar TP proporsional dengan ATR besar)
+                sl_distance = round(max(MIN_GOLD_SL_USD, max(short_sl_usd, min(9.50, sl_distance_atr))), 2)
                 tp_atr = round(atr_safe * 1.8, 2)
-                tp_distance = round(min(12.00, max(short_tp_usd, sl_distance, tp_atr)), 2)
+                tp_distance = round(min(12.00, max(MIN_GOLD_TP_USD, max(short_tp_usd, sl_distance, tp_atr))), 2)
                 eff_rr = round(tp_distance / max(sl_distance, 0.01), 1)
                 market_regime = (
                     f"{session_name} Momen Cepat ATR-Adaptive (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R {eff_rr}:1)"
                     + (" [HIGH-VOL]" if is_high_vol else "")
                 )
 
-            # KAIDAH BAKU 9 BUKU PDF TRADING (Risk:Reward Ratio Guard):
-            # DILARANG KERAS SL LEBIH BESAR DARI TP!
-            # TP Wajib minimal SEIMBANG (R:R 1:1) atau LEBIH BESAR (R:R >= 1.0) demi menjaga modal tumbuh konsisten.
-            if tp_distance < sl_distance:
-                tp_distance = sl_distance
-            if sl_distance > tp_distance:
-                sl_distance = tp_distance
+            # HARD FLOOR CONSTRAINT MUTLAK PENGGUNA:
+            # DILARANG KERAS SL ATAU TP DI BAWAH 60 PIPS (6.00 USD) & R:R MINIMAL 1:1
+            sl_distance = max(MIN_GOLD_SL_USD, sl_distance)
+            if not is_good_long_momentum:
+                sl_distance = min(12.00, sl_distance)
+                tp_distance = min(12.00, max(MIN_GOLD_TP_USD, max(sl_distance, tp_distance)))
+            else:
+                tp_distance = max(MIN_GOLD_TP_USD, max(sl_distance, tp_distance))
 
             if target_sig_type == "SELL":
                 tp_price = round(curr_price - tp_distance, 2)
@@ -1001,8 +1310,36 @@ class SignalEngine:
                 curr_price=curr_price,
             )
 
+        # ═══════════════════════════════════════════════════════════════════════
+        # LAPIS 1: OTAK UTAMA (BIAS DAN IZIN H4) - Murphy, Ichimoku, Pring
+        # ═══════════════════════════════════════════════════════════════════════
+        macro_blocked = False
+        macro_block_reason = ""
+        if is_gold and apply_pdf_filter:
+            if macro_bias == "NETRAL":
+                macro_blocked = True
+                macro_block_reason = (
+                    f"🛑 [LAPIS 1: OTAK UTAMA H4] Izin Masuk Ditolak: Bias Makro NETRAL ({macro_reason}). "
+                    f"Kaidah 3 Lapis: Jika Otak Utama Netral/Chop, bot hanya memantau dan dilarang membuka posisi baru."
+                )
+            elif macro_bias == "BULLISH" and target_sig_type == "SELL":
+                macro_blocked = True
+                macro_block_reason = (
+                    f"🛑 [LAPIS 1: OTAK UTAMA H4] Sinyal SELL Ditolak: Bias Makro H4 BULLISH ({macro_reason}). "
+                    f"Kaidah 3 Lapis: Dilarang membuka posisi SELL melawan tren institusi."
+                )
+            elif macro_bias == "BEARISH" and target_sig_type == "BUY":
+                macro_blocked = True
+                macro_block_reason = (
+                    f"🛑 [LAPIS 1: OTAK UTAMA H4] Sinyal BUY Ditolak: Bias Makro H4 BEARISH ({macro_reason}). "
+                    f"Kaidah 3 Lapis: Dilarang membuka posisi BUY melawan tren institusi."
+                )
+
         if is_buy:
-            if rsi_extreme_reject:
+            if macro_blocked:
+                signal = "HOLD"
+                reasons = [macro_block_reason]
+            elif rsi_extreme_reject:
                 signal = "HOLD"
                 reasons = [rsi_extreme_reason]
             elif ema_overextended_reject:
@@ -1030,7 +1367,8 @@ class SignalEngine:
             else:
                 signal = "BUY"
                 reasons = list(buy_reasons)
-                reasons.append(f"Telaah 9 Buku: {setup_grade} ({pdf_score:.0f}%)")
+                reasons.append(f"Lapis 1 (Otak Utama H4): {macro_bias}")
+                reasons.append(f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)")
                 if is_london_session:
                     reasons.append(f"🛡️ Sesi London: Terkonfirmasi Kuat ({pdf_score:.0f}% >= 75%) Lolos Filter Anti-Manipulasi")
                     if h1_reason:
@@ -1045,6 +1383,9 @@ class SignalEngine:
                     f"Sinyal jual saham dilewati (Saham IDX khusus mode BUY/Long-Only). "
                     f"RSI={snapshot['rsi']:.1f}, EMA50={snapshot['ema_50']:.0f}"
                 ]
+            elif macro_blocked:
+                signal = "HOLD"
+                reasons = [macro_block_reason]
             elif rsi_extreme_reject:
                 signal = "HOLD"
                 reasons = [rsi_extreme_reason]
@@ -1073,7 +1414,8 @@ class SignalEngine:
             else:
                 signal = "SELL"
                 reasons = list(sell_reasons)
-                reasons.append(f"Telaah 9 Buku: {setup_grade} ({pdf_score:.0f}%)")
+                reasons.append(f"Lapis 1 (Otak Utama H4): {macro_bias}")
+                reasons.append(f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)")
                 if is_london_session:
                     reasons.append(f"🛡️ Sesi London: Terkonfirmasi Kuat ({pdf_score:.0f}% >= 75%) Lolos Filter Anti-Manipulasi")
                     if h1_reason:
@@ -1081,7 +1423,7 @@ class SignalEngine:
         else:
             # Jika sinyal dasar masih netral namun telaah 9 Buku PDF membuktikan Grade A (>=65% atau >=75% di London)
             min_promo_score = london_min_score if is_london_session else 65.0
-            if apply_pdf_filter and pdf_score >= min_promo_score and is_gold and not rsi_extreme_reject and not ema_overextended_reject:
+            if apply_pdf_filter and pdf_score >= min_promo_score and is_gold and not rsi_extreme_reject and not ema_overextended_reject and not macro_blocked:
                 if not h1_ok:
                     signal = "HOLD"
                     reasons = [h1_reason]
@@ -1091,7 +1433,8 @@ class SignalEngine:
                 elif target_sig_type == "BUY" and curr_price >= snapshot.get("ema_50", 0.0):
                     signal = "BUY"
                     reasons = [
-                        f"Konfluensi 9 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",
+                        f"Lapis 1 (Otak Utama H4): {macro_bias}",
+                        f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)",
                         f"Tren Bullish di atas EMA 50 ({snapshot.get('ema_50', 0):.2f})",
                     ]
                     if is_london_session:
@@ -1103,7 +1446,8 @@ class SignalEngine:
                 elif target_sig_type == "SELL" and curr_price <= snapshot.get("ema_50", 0.0):
                     signal = "SELL"
                     reasons = [
-                        f"Konfluensi 9 Buku PDF: {setup_grade} ({pdf_score:.0f}%)",
+                        f"Lapis 1 (Otak Utama H4): {macro_bias}",
+                        f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)",
                         f"Tren Bearish di bawah EMA 50 ({snapshot.get('ema_50', 0):.2f})",
                     ]
                     if is_london_session:
@@ -1122,9 +1466,15 @@ class SignalEngine:
             else:
                 signal = "HOLD"
                 reasons = [
-                    f"Kondisi netral / menunggu konfluensi waktu masuk. RSI={snapshot['rsi']:.1f}, "
-                    f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
-                    f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
+                    macro_block_reason if macro_blocked else (
+                        rsi_extreme_reason if rsi_extreme_reject else (
+                            ema_overextended_reason if ema_overextended_reject else (
+                                f"Kondisi netral / menunggu konfluensi waktu masuk. RSI={snapshot['rsi']:.1f}, "
+                                f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
+                                f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
+                            )
+                        )
+                    )
                 ]
 
         if signal in ["BUY", "SELL"] and market_regime:
@@ -1151,6 +1501,9 @@ class SignalEngine:
             pdf_confluence_details=pdf_checks,
             market_direction_prediction=direction_pred,
             market_regime=market_regime,
+            macro_bias_h4=macro_bias,
+            entry_pathway=entry_pathway,
+            module_scores=module_scores,
         )
 
     def evaluate_all_strategies(

@@ -971,16 +971,28 @@ class MT5Bridge:
                 }
 
         # 5. Preservasi Jarak TP & SL Terencana (Dynamic Anchoring):
-        if tp > 0 and sl > 0 and price > 0:
-            tp_dist = round(abs(tp - price), 2)
-            sl_dist = round(abs(price - sl), 2)
-        else:
-            tp_dist = round(float(cfg_mt5.get("gold_short_tp_pips", 48.0)) / 10.0, 2)
-            sl_dist = round(float(cfg_mt5.get("gold_short_sl_pips", 42.0)) / 10.0, 2)
+        is_gold_symbol = any(k in ticker.upper() for k in ["XAUUSD", "GC=F", "GOLD", "EMAS"])
+        if is_gold_symbol:
+            MIN_GOLD_USD = 6.00  # Minimal 60 pips ($6.00 USD)
+            if tp > 0 and sl > 0 and price > 0:
+                tp_dist = round(abs(tp - price), 2)
+                sl_dist = round(abs(price - sl), 2)
+            else:
+                tp_dist = round(float(cfg_mt5.get("gold_short_tp_pips", 60.0)) / 10.0, 2)
+                sl_dist = round(float(cfg_mt5.get("gold_short_sl_pips", 60.0)) / 10.0, 2)
 
-        # KAIDAH BAKU RISK:REWARD GUARD (DILARANG KERAS TP 1 SL 2):
-        if sl_dist > tp_dist:
-            sl_dist = tp_dist
+            sl_dist = max(MIN_GOLD_USD, sl_dist)
+            tp_dist = max(MIN_GOLD_USD, max(sl_dist, tp_dist))
+        else:
+            if tp > 0 and sl > 0 and price > 0:
+                tp_dist = round(abs(tp - price), 2)
+                sl_dist = round(abs(price - sl), 2)
+            else:
+                tp_dist = round(float(cfg_mt5.get("gold_short_tp_pips", 60.0)) / 10.0, 2)
+                sl_dist = round(float(cfg_mt5.get("gold_short_sl_pips", 60.0)) / 10.0, 2)
+
+            if sl_dist > tp_dist:
+                sl_dist = tp_dist
 
         if sig_type == "BUY":
             tp = round(price + tp_dist, 2)
@@ -1100,19 +1112,28 @@ class MT5Bridge:
 
             is_gold_symbol = any(k in ticker.upper() for k in ["XAUUSD", "GC=F", "GOLD", "EMAS"])
             if is_gold_symbol:
-                cfg_short_tp = float(cfg_mt5.get("gold_short_tp_pips", 48.0)) / 10.0
-                cfg_short_sl = float(cfg_mt5.get("gold_short_sl_pips", 42.0)) / 10.0
-                cfg_long_tp = float(cfg_mt5.get("gold_long_tp_pips", 135.0)) / 10.0
-                cfg_long_sl = float(cfg_mt5.get("gold_long_sl_pips", 45.0)) / 10.0
+                MIN_GOLD_USD = 6.00  # Minimal 60 pips ($6.00 USD)
+                cfg_short_tp = float(cfg_mt5.get("gold_short_tp_pips", 60.0)) / 10.0
+                cfg_short_sl = float(cfg_mt5.get("gold_short_sl_pips", 60.0)) / 10.0
+                cfg_long_tp = float(cfg_mt5.get("gold_long_tp_pips", 180.0)) / 10.0
+                cfg_long_sl = float(cfg_mt5.get("gold_long_sl_pips", 60.0)) / 10.0
 
-                if rrr >= 2.8 or "3:1" in regime or "Jauh" in regime or "Momentum" in regime:
-                    # Momen TP Jauh: Rasio wajib tepat 3:1 (TP 3, SL 1)
-                    sl_dist = round(min(4.50, max(4.00, cfg_long_sl)), 2)
+                if sig_tp > 0 and sig_sl > 0 and sig_price > 0:
+                    tp_dist = round(abs(sig_tp - sig_price), 2)
+                    sl_dist = round(abs(sig_price - sig_sl), 2)
+                elif rrr >= 2.8 or "3:1" in regime or "Jauh" in regime or "Momentum" in regime:
+                    sl_dist = round(max(MIN_GOLD_USD, cfg_long_sl), 2)
                     tp_dist = round(sl_dist * 3.0, 2)
                 else:
-                    # Momen Cepat / Normal: Minimal 1:1, TP 45 - 50 pips, SL 40 - 45 pips (TP >= SL)
-                    tp_dist = round(min(5.00, max(4.50, cfg_short_tp)), 2)
-                    sl_dist = round(min(tp_dist, max(3.50, cfg_short_sl)), 2)
+                    sl_dist = round(max(MIN_GOLD_USD, cfg_short_sl), 2)
+                    tp_dist = round(max(MIN_GOLD_USD, max(sl_dist, cfg_short_tp)), 2)
+
+                # Hard clamp minimal 60 pips 1:1 (TP >= SL, keduanya >= 6.00 USD)
+                sl_dist = max(MIN_GOLD_USD, sl_dist)
+                tp_dist = max(MIN_GOLD_USD, max(sl_dist, tp_dist))
+
+                if rrr >= 2.8 or "3:1" in regime or "Jauh" in regime or "Momentum" in regime:
+                    tp_dist = max(tp_dist, round(sl_dist * 3.0, 2))
             else:
                 # Saham Reguler
                 tp_dist = round(abs(sig_tp - sig_price), 2) if (sig_tp > 0 and sig_price > 0) else 0.0

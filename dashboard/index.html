@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Botrading - 3D Isometric Trading Office & Copier Dashboard</title>
+  
+  <!-- Font & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Three.js & OrbitControls (Local fallback with CDN) -->
+  <script src="assets/js/three.min.js"></script>
+  <script src="assets/js/OrbitControls.js"></script>
+  <script>
+    // Fallback if local script failed to load
+    if (typeof THREE === 'undefined') {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>');
+      document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>');
+    }
+  </script>
+</head>
+<body class="theme-night">
+
+  <!-- TOP HEADER BAR (Seperti UI Referensi) -->
+  <header id="top-navbar">
+    <div class="nav-left">
+      <div class="brand-pill">
+        <div class="brand-logo">⚡</div>
+        <div class="brand-text">
+          <span class="brand-title">BOTRADING OFFICE</span>
+          <span class="brand-badge">ISOMETRIC TRADING FLOOR</span>
+        </div>
+      </div>
+      <div class="vps-status-badge" id="vps-badge">
+        <span class="pulse-dot"></span>
+        <span class="status-label">MASTER BOT VPS: <strong id="vps-status-text">LISTENING (@selo_saham_bot)</strong></span>
+      </div>
+    </div>
+
+    <!-- AGENT AVATAR LIST (Seperti UI Gambar 2) -->
+    <div class="agent-roster" id="agent-roster">
+      <div class="roster-chip active" data-agent-id="master" title="Master Bot (VPS)">
+        <span class="chip-avatar master">👑</span>
+        <span class="chip-name">Master</span>
+        <span class="chip-dot dot-purple"></span>
+      </div>
+      <div class="roster-chip active" data-agent-id="deden" title="Deden (Local MT5)">
+        <span class="chip-avatar deden">💻</span>
+        <span class="chip-name">Deden (You)</span>
+        <span class="chip-dot dot-green"></span>
+      </div>
+      <div class="roster-chip active" data-agent-id="luke" title="Luke (Gold Scalper)">
+        <span class="chip-avatar">🧑‍💼</span>
+        <span class="chip-name">Luke</span>
+        <span class="chip-dot dot-green"></span>
+      </div>
+      <div class="roster-chip active" data-agent-id="allan" title="Allan (Cent Copier)">
+        <span class="chip-avatar">👨‍💻</span>
+        <span class="chip-name">Allan</span>
+        <span class="chip-dot dot-green"></span>
+      </div>
+      <div class="roster-chip active" data-agent-id="ben" title="Ben (Cent Copier)">
+        <span class="chip-avatar">🧑‍💻</span>
+        <span class="chip-name">Ben</span>
+        <span class="chip-dot dot-green"></span>
+      </div>
+      <div class="roster-chip active" data-agent-id="cory" title="Cory (Cent Copier)">
+        <span class="chip-avatar">👨‍💼</span>
+        <span class="chip-name">Cory</span>
+        <span class="chip-dot dot-green"></span>
+      </div>
+      <div class="roster-chip active" data-agent-id="susie" title="Susie (Standard USD)">
+        <span class="chip-avatar">👩‍💻</span>
+        <span class="chip-name">Susie</span>
+        <span class="chip-dot dot-green"></span>
+      </div>
+      <div class="roster-chip active" data-agent-id="andrew" title="Andrew (VPS Copier)">
+        <span class="chip-avatar">🧑‍💼</span>
+        <span class="chip-name">Andrew</span>
+        <span class="chip-dot dot-green"></span>
+      </div>
+      <div class="roster-counter" id="roster-counter">7/7 Active</div>
+    </div>
+
+    <!-- RIGHT CONTROLS & TICKER -->
+    <div class="nav-right">
+      <div class="ticker-chip">
+        <span class="ticker-symbol">XAUUSD</span>
+        <span class="ticker-price" id="nav-gold-price">$4,175.80</span>
+        <span class="ticker-change up" id="nav-gold-change">+0.48%</span>
+      </div>
+      <div class="sync-indicator connected" id="sync-status" title="Status Sinkronisasi Backend">
+        <span class="sync-dot"></span>
+        <span class="sync-text" id="sync-text">LIVE MT5</span>
+      </div>
+      <div class="quick-tools">
+        <button class="tool-btn" id="btn-theme-toggle" title="Ganti Tema (Night / Day)">🌙</button>
+        <button class="tool-btn" id="btn-sound-toggle" title="Mute/Unmute Audio FX">🔊</button>
+        <button class="tool-btn" id="btn-reset-cam" title="Reset Kamera Isometric">🎥</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 3D CANVAS VIEWPORT CONTAINER -->
+  <main id="viewport-container">
+    <canvas id="office-canvas"></canvas>
+
+    <!-- FLOATING 2D OVERLAYS ON TOP OF 3D SCENE -->
+    <div id="labels-container"></div>
+    <div id="speech-bubbles-container"></div>
+
+    <!-- QUICK STATUS HUD (Kiri Atas) -->
+    <div class="hud-panel left-hud">
+      <div class="hud-item">
+        <span class="hud-label">AKUN MT5 LOKAL</span>
+        <span class="hud-val highlight" id="hud-mt5-login">HFMarkets #114201000</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">BALANCE / EQUITY</span>
+        <span class="hud-val" id="hud-mt5-balance">$475.26 USC / <strong class="equity-up" id="hud-mt5-equity">$476.31</strong></span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">OPEN POSISI</span>
+        <span class="hud-val" id="hud-open-positions"><span class="badge-buy">BUY</span> 0.05 Lot @ 4,175.77 (+1.05 USC)</span>
+      </div>
+    </div>
+
+    <!-- LAST SIGNAL HUD (Kanan Atas) -->
+    <div class="hud-panel right-hud">
+      <div class="hud-title">⚡ SINYAL TERAKHIR DARI MASTER</div>
+      <div class="signal-card" id="hud-last-signal">
+        <div class="sig-header">
+          <span class="sig-badge buy" id="hud-sig-action">BUY XAUUSD</span>
+          <span class="sig-time" id="hud-sig-time">22:42:51</span>
+        </div>
+        <div class="sig-grid">
+          <div><small>Entry</small><strong id="hud-sig-entry">$4,168.92</strong></div>
+          <div><small>TP</small><strong class="green" id="hud-sig-tp">$4,173.49</strong></div>
+          <div><small>SL</small><strong class="red" id="hud-sig-sl">$4,164.49</strong></div>
+        </div>
+        <div class="sig-status" id="hud-sig-status">
+          ✅ Dieksekusi ke MT5 (#15247953082)
+        </div>
+      </div>
+    </div>
+
+    <!-- CAMERA VIEW MODES (Floating Di Kanan Bawah) -->
+    <div class="cam-modes-bar">
+      <button class="cam-btn active" data-cam="iso" title="Pandangan Isometric Utama">Isometric</button>
+      <button class="cam-btn" data-cam="deden" title="Fokus ke Meja Deden">Meja Deden</button>
+      <button class="cam-btn" data-cam="server" title="Fokus ke Ruang Server VPS">Server VPS</button>
+      <button class="cam-btn" data-cam="top" title="Pandangan Atas (Top-Down)">Top-Down</button>
+    </div>
+  </main>
+
+  <!-- BOTTOM FLOATING ACTION DOCK (Mirip UI Gambar 2) -->
+  <footer id="bottom-dock">
+    <div class="dock-pill">
+      <div class="dock-indicator">
+        <span class="radar-ping"></span>
+        <span class="dock-icon">⚡</span>
+      </div>
+      <div class="dock-status-info">
+        <span class="dock-title">MAIN AGENT (MASTER VPS)</span>
+        <span class="dock-subtitle" id="dock-subtitle">Mendengarkan Sinyal Telegram • 7 Member Siap Eksekusi Otomatis</span>
+      </div>
+      <div class="dock-actions">
+        <button class="dock-btn primary" id="btn-broadcast-test">
+          <span class="btn-icon">📡</span>
+          <span>Broadcast Sinyal Uji</span>
+        </button>
+        <button class="dock-btn" id="btn-toggle-terminal">
+          <span class="btn-icon">💻</span>
+          <span>Terminal MT5 Log</span>
+          <span class="unread-badge" id="terminal-badge" style="display:none;">0</span>
+        </button>
+        <button class="dock-btn" id="btn-open-members">
+          <span class="btn-icon">👥</span>
+          <span>Kelola Member</span>
+        </button>
+        <button class="dock-btn" id="btn-open-settings">
+          <span class="btn-icon">⚙️</span>
+          <span>Config Copier</span>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- TERMINAL DRAWER (TAMPILAN PERSIS GAMBAR 1 - POWERSHELL STYLE) -->
+  <div id="terminal-drawer" class="terminal-drawer collapsed">
+    <div class="terminal-header">
+      <div class="term-tabs">
+        <div class="term-tab active">
+          <span class="tab-icon">⚡</span>
+          <span class="tab-title">Windows PowerShell - Copier Monitor</span>
+          <span class="tab-close" id="btn-close-terminal">✕</span>
+        </div>
+      </div>
+      <div class="term-actions">
+        <button class="term-action-btn" id="btn-clear-term" title="Bersihkan Layar">Bersihkan</button>
+        <button class="term-action-btn" id="btn-copy-term" title="Salin Log">Salin</button>
+        <button class="term-action-btn" id="btn-minimize-term" title="Tutup">▼</button>
+      </div>
+    </div>
+    <div class="terminal-body" id="terminal-output">
+      <!-- Isi log akan dirender persis seperti di Gambar 1 -->
+      <div class="term-line prompt">Windows PowerShell</div>
+      <div class="term-line prompt">Copyright (C) Microsoft Corporation. All rights reserved.</div>
+      <div class="term-line prompt">PS C:\Projects\botrading\member_copier&gt; python client_copier.py</div>
+      <div class="term-line info">======================================================================</div>
+      <div class="term-line info">🚀 CLIENT COPIER AKTIF - SIAP MENERIMA SINYAL DARI MASTER BOT VPS</div>
+      <div class="term-line info">Akun MT5: HFMarkets #114201000 | Tipe: CENT (USC) | Default Lot: 0.05</div>
+      <div class="term-line info">======================================================================</div>
+      <div class="term-line signal-header">⚡ [22:42:51] SINYAL DITERIMA DARI MASTER BOT:</div>
+      <div class="term-line signal-body">   Aksi  : BUY XAUUSD</div>
+      <div class="term-line signal-body">   Entry : $4,168.92</div>
+      <div class="term-line signal-body">   TP    : $4,173.49</div>
+      <div class="term-line signal-body">   SL    : $4,164.49</div>
+      <div class="term-line order-success">   ✅ [ORDER MT5 SUKSES] #15247953082 BUY 0.05 Lot @ $4,169.26 pada XAUUSDc</div>
+      <div class="term-line signal-header">⚡ [22:57:52] SINYAL DITERIMA DARI MASTER BOT:</div>
+      <div class="term-line signal-body">   Aksi  : BUY XAUUSD</div>
+      <div class="term-line signal-body">   Entry : $4,170.41</div>
+      <div class="term-line signal-body">   TP    : $4,174.90</div>
+      <div class="term-line signal-body">   SL    : $4,165.90</div>
+      <div class="term-line order-success">   ✅ [ORDER MT5 SUKSES] #15247974852 BUY 0.05 Lot @ $4,170.33 pada XAUUSDc</div>
+      <div class="term-line signal-header">⚡ [23:57:37] SINYAL DITERIMA DARI MASTER BOT:</div>
+      <div class="term-line signal-body">   Aksi  : SELL XAUUSD</div>
+      <div class="term-line signal-body">   Entry : $4,160.50</div>
+      <div class="term-line signal-body">   TP    : $4,155.70</div>
+      <div class="term-line signal-body">   SL    : $4,164.70</div>
+      <div class="term-line order-success">   ✅ [ORDER MT5 SUKSES] #15248032980 SELL 0.05 Lot @ $4,160.51 pada XAUUSDc</div>
+      <div class="term-line signal-header">⚡ [00:12:38] SINYAL DITERIMA DARI MASTER BOT:</div>
+      <div class="term-line signal-body">   Aksi  : BUY XAUUSD</div>
+      <div class="term-line signal-body">   Entry : $4,172.85</div>
+      <div class="term-line signal-body">   TP    : $4,177.67</div>
+      <div class="term-line signal-body">   SL    : $4,168.67</div>
+      <div class="term-line order-success">   ✅ [ORDER MT5 SUKSES] #15248047102 BUY 0.05 Lot @ $4,172.96 pada XAUUSDc</div>
+      <div class="term-line signal-header">⚡ [00:20:37] SINYAL DITERIMA DARI MASTER BOT:</div>
+      <div class="term-line signal-body">   Aksi  : BUY XAUUSD</div>
+      <div class="term-line signal-body">   Entry : $4,173.20</div>
+      <div class="term-line signal-body">   TP    : $1.00</div>
+      <div class="term-line signal-body">   SL    : $0.00</div>
+      <div class="term-line order-failed">   ❌ [ORDER GAGAL] RetCode: 10016 - Invalid stops</div>
+    </div>
+  </div>
+
+  <!-- MODAL: DETAIL AGENT / MEMBER PROFILE (Muncul saat klik meja / avatar 3D) -->
+  <div id="modal-agent-detail" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="agent-title-row">
+          <div class="agent-avatar-lg" id="modal-agent-avatar">💻</div>
+          <div>
+            <h3 id="modal-agent-name">Deden (You - Local MT5)</h3>
+            <span class="role-badge" id="modal-agent-role">Client Copier (Lokal Windows)</span>
+          </div>
+        </div>
+        <button class="modal-close" id="btn-close-agent-modal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="stats-grid">
+          <div class="stat-box">
+            <span class="stat-lbl">Status Koneksi</span>
+            <span class="stat-val green" id="modal-agent-status">🟢 Online / Terhubung</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-lbl">Akun MT5</span>
+            <span class="stat-val" id="modal-agent-account">114201000 (Cent)</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-lbl">Broker & Server</span>
+            <span class="stat-val" id="modal-agent-server">HFMarketsGlobal-Live7</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-lbl">Default Lot</span>
+            <span class="stat-val" id="modal-agent-lot">0.05 Lot</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-lbl">Balance</span>
+            <span class="stat-val" id="modal-agent-balance">$475.26 USC</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-lbl">Equity</span>
+            <span class="stat-val highlight" id="modal-agent-equity">$476.31 USC</span>
+          </div>
+        </div>
+
+        <div class="agent-positions-section">
+          <h4>Posisi Trading Terbuka</h4>
+          <div id="modal-agent-positions-list" class="positions-list">
+            <div class="pos-item">
+              <div class="pos-main">
+                <span class="badge-buy">BUY</span>
+                <span class="pos-sym">XAUUSDc</span>
+                <span class="pos-lot">0.05 Lot</span>
+                <span class="pos-price">@ $4,175.77</span>
+              </div>
+              <div class="pos-pnl green">+$1.05 USC</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="agent-actions-row">
+          <button class="action-btn outline" id="btn-ping-agent">⚡ Test Ping MT5</button>
+          <button class="action-btn primary" id="btn-focus-cam-agent">🎥 Pusatkan Kamera</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: BROADCAST SINYAL UJI COBA -->
+  <div id="modal-broadcast" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="agent-title-row">
+          <div class="agent-avatar-lg">📡</div>
+          <div>
+            <h3>Simulasi Broadcast Sinyal Master</h3>
+            <span class="role-badge">Kirim Sinyal Telegram & Eksekusi ke Semua Member</span>
+          </div>
+        </div>
+        <button class="modal-close" id="btn-close-broadcast">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-desc">
+          Gunakan panel ini untuk menguji bagaimana sinyal dari Master Bot (yang nantinya di VPS) 
+          diterima oleh copiers lokal & member di trading floor secara instan.
+        </p>
+
+        <form id="broadcast-form" class="form-grid">
+          <div class="form-group">
+            <label>Aksi Transaksi</label>
+            <div class="action-toggle">
+              <label class="toggle-opt buy">
+                <input type="radio" name="signal_action" value="BUY" checked>
+                <span>BUY (Beli)</span>
+              </label>
+              <label class="toggle-opt sell">
+                <input type="radio" name="signal_action" value="SELL">
+                <span>SELL (Jual)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Simbol Pair</label>
+            <input type="text" id="input-symbol" value="XAUUSD" class="form-input">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Harga Entry ($)</label>
+              <input type="number" step="0.01" id="input-entry" value="4175.00" class="form-input">
+            </div>
+            <div class="form-group">
+              <label>Take Profit (TP $)</label>
+              <input type="number" step="0.01" id="input-tp" value="4180.00" class="form-input">
+            </div>
+            <div class="form-group">
+              <label>Stop Loss (SL $)</label>
+              <input type="number" step="0.01" id="input-sl" value="4170.00" class="form-input">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Penerima Eksekusi</label>
+            <select id="select-recipients" class="form-input">
+              <option value="all">Semua Member di Trading Floor (7 Member)</option>
+              <option value="deden">Hanya Deden (Local MT5 Saja)</option>
+            </select>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="action-btn outline" id="btn-cancel-broadcast">Batal</button>
+            <button type="submit" class="action-btn primary pulse">⚡ Kirim Sinyal Sekarang</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CONFIG COPIER -->
+  <div id="modal-settings" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="agent-title-row">
+          <div class="agent-avatar-lg">⚙️</div>
+          <div>
+            <h3>Konfigurasi Client Copier</h3>
+            <span class="role-badge">Pengaturan MT5 & Parameter Risiko</span>
+          </div>
+        </div>
+        <button class="modal-close" id="btn-close-settings">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <form id="config-form" class="form-grid">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Master Bot Telegram</label>
+              <input type="text" id="cfg-bot-username" value="selo_saham_bot" class="form-input">
+            </div>
+            <div class="form-group">
+              <label>Simbol Emas Broker</label>
+              <input type="text" id="cfg-gold-symbol" value="XAUUSD" class="form-input">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Default Lot (Cent)</label>
+              <input type="number" step="0.01" id="cfg-default-lot" value="0.05" class="form-input">
+            </div>
+            <div class="form-group">
+              <label>Max Posisi Cent</label>
+              <input type="number" id="cfg-max-pos-cent" value="3" class="form-input">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Auto Break-Even (BEP)</label>
+              <select id="cfg-enable-bep" class="form-input">
+                <option value="true" selected>Aktif (+100 Pips geser ke BEP)</option>
+                <option value="false">Nonaktif</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Auto Reversal Close</label>
+              <select id="cfg-reversal-close" class="form-input">
+                <option value="true" selected>Aktif (Tutup otomatis jika sinyal balik)</option>
+                <option value="false">Nonaktif</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="action-btn outline" id="btn-cancel-settings">Batal</button>
+            <button type="submit" class="action-btn primary">💾 Simpan Konfigurasi</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION SCRIPTS -->
+  <script src="office3d.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

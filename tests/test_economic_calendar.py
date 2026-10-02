@@ -222,3 +222,63 @@ def test_chat_agent_news_intent():
     assert ChatAgent.classify_intent("efek trump spike ke emas")["intent"] == "NEWS"
     assert ChatAgent.classify_intent("harga oil naik ngaruh ke xauusd ga")["intent"] == "NEWS"
     assert ChatAgent.classify_intent("berita ekonomi emas apa aja")["intent"] == "NEWS"
+
+
+def test_comprehensive_news_analysis_algorithm():
+    # 1. Test DXY Trend
+    dxy = NewsPredictor.get_dxy_trend("5m")
+    assert dxy["trend"] in ["Uptrend", "Downtrend", "Sideways"]
+
+    # 2. Test Leading Indicators
+    mock_events = [
+        {"title": "ADP Non-Farm Employment Change", "forecast": "73K", "previous": "38K"},
+        {"title": "Unemployment Claims", "forecast": "201K", "previous": "197K"},
+        {"title": "ISM Manufacturing PMI", "forecast": "54.8", "previous": "54.6"},
+        {"title": "JOLTS Job Openings", "forecast": "7.23M", "previous": "7.27M"},
+    ]
+    lead = NewsPredictor.evaluate_leading_indicators(mock_events)
+    assert "Good for USD" in lead["adp"]
+    assert "Bad for USD" in lead["ijc"]
+    assert lead["conclusion"] in ["BULLISH", "BEARISH", "MIXED"]
+
+    # 3. Decision Matrix Tests
+    event_nfp = {
+        "title": "Non-Farm Employment Change",
+        "date_wib": "2026-10-02 19:30:00",
+        "forecast": "89K",
+        "previous": "162K",
+    }
+
+    # Case A: Bearish USD + Downtrend DXY = BUY
+    lead_bear = {"conclusion": "BEARISH", "adp": "Bad", "ijc": "Bad", "ism_jolts": "Bad"}
+    res_buy = NewsPredictor.comprehensive_news_analysis(
+        news_event=event_nfp,
+        live_gold_price=4188.40,
+        dxy_data={"trend": "Downtrend", "price": 101.8},
+    )
+    # If natural lead is mixed, let's force test the matrix
+    res_buy_matrix = NewsPredictor.comprehensive_news_analysis(
+        news_event=event_nfp,
+        live_gold_price=4188.40,
+        calendar_events=[
+            {"title": "ADP", "forecast": "30K", "previous": "70K"},
+            {"title": "Unemployment Claims", "forecast": "250K", "previous": "200K"},
+            {"title": "ISM Manufacturing PMI", "forecast": "45.0", "previous": "48.0"},
+            {"title": "JOLTS Job Openings", "forecast": "6.0M", "previous": "7.0M"},
+        ],
+        dxy_data={"trend": "Downtrend", "price": 101.8},
+    )
+    assert res_buy_matrix["recommendation_raw"] == "BUY"
+    assert res_buy_matrix["confidence"] >= 80
+
+    # Case B: Sideways DXY = WAIT & SEE
+    res_wait = NewsPredictor.comprehensive_news_analysis(
+        news_event=event_nfp,
+        live_gold_price=4188.40,
+        dxy_data={"trend": "Sideways", "price": 102.0},
+    )
+    assert res_wait["recommendation_raw"] == "WAIT"
+    assert res_wait["confidence"] < 50
+    assert "Target TP: - | SL: -" in res_wait["formatted_output"]
+    assert "Gunakan lot konsisten maksimal 0.01 lot" in res_wait["formatted_output"]
+    assert "Dilarang melakukan averaging/layering" in res_wait["formatted_output"]

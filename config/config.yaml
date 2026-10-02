@@ -81,13 +81,19 @@ mt5:
   london_h1_confirmation: true      # Khusus Sesi London: Open posisi wajib konfirmasi searah tren & candle H1 (1-Hour)
   london_h1_max_hour: 17            # Maksimal jam 17:00 WIB (setelah jam 5 sore manipulasi reda, kembali ke M15 biasa)
   # Target Take Profit & Stop Loss Gold XAUUSD
-  # Kaidah Pengguna: Sinyal sideways TP cepat 35 pips (R:R >= 1:1), sinyal momentum bagus wajib Long TP rasio 3:1
-  gold_short_tp_pips: 35.0          # Target TP cepat mode sideways/normal: 35 pips ($3.50 USD) - Cepat tersentuh & anti fakeout
-  gold_short_sl_pips: 32.0          # Stop Loss sinyal cepat: 32 pips ($3.20 USD) - R:R minimal 1:1 (Profit > Loss)
-  gold_long_tp_pips: 135.0          # Target TP jauh saat tren momentum kuat: 135 pips ($13.50 USD) - Rasio 3:1 (TP 3, SL 1)
-  gold_long_sl_pips: 45.0           # Stop Loss tren jauh: 45 pips ($4.50 USD) - Rasio mutlak 3:1
+  # HARD CONSTRAINT PENGGUNA: SL & TP MINIMAL 60 PIPS ($6.00 USD) 1:1 DILARANG DI BAWAH ITU!
+  gold_short_tp_pips: 60.0          # Target TP cepat mode sideways/normal: Minimal 60 pips ($6.00 USD) - R:R 1:1
+  gold_short_sl_pips: 60.0          # Stop Loss sinyal cepat: Minimal 60 pips ($6.00 USD) - R:R minimal 1:1
+  gold_long_tp_pips: 180.0          # Target TP jauh saat tren momentum kuat: 180 pips ($18.00 USD) - Rasio 3:1 (TP 3, SL 1)
+  gold_long_sl_pips: 60.0           # Stop Loss tren jauh: 60 pips ($6.00 USD) - Rasio mutlak 3:1
+  min_gold_sl_pips: 60.0            # Batas lantai mutlak SL Gold: 60 pips (6.00 USD)
+  min_gold_tp_pips: 60.0            # Batas lantai mutlak TP Gold: 60 pips (6.00 USD)
   min_risk_reward_ratio: 1.0        # Rasio R:R mutlak minimal 1:1 (Dilarang keras TP 1 SL 2!)
   long_risk_reward_ratio: 3.0       # Rasio R:R sinyal TP jauh: wajib 3:1 (TP 3, SL 1)
+  # ─── ARSITEKTUR 3 LAPIS (Otak Utama H4, 9 Modul Pemicu Dual Jalur A/B, Risk Guard) ───
+  enable_3layer_architecture: true  # Mengaktifkan evaluasi 3 lapis komprehensif
+  min_layer_modules_agree: 3        # Minimal 3 modul setuju untuk Jalur A (Konfluensi)
+  solo_sniper_min_score: 80.0       # Skor minimal 80% (Grade A+) untuk eksekusi mandiri Jalur B (Solo Sniper)
   max_spread_usd: 0.65              # Maksimal spread $0.65 USD (65 pips) agar tidak entry saat spread malam melebar
   enable_rollover_guard: true       # Menahan entry saat jam rollover malam broker (04:45 - 05:20 WIB)
   max_consecutive_losses: 2         # Jika 2x SL beruntun, aktifkan cooldown pengamanan 45 menit

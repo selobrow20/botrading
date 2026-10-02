@@ -136,7 +136,33 @@ class ChatAgent:
                 "is_gold": "XAU" in target_ticker or "GOLD" in target_ticker,
             }
 
-        # 3. Deteksi Pertanyaan Buy or Sell / Posisi / Arah Pasar ("lu buy or sell", "buy apa sell", "arahnya kemana")
+        # 3. Deteksi Pertanyaan Sikap / Stance News ("nfp sell", "nfp buy", "nfp buy apa sell", "fomc buy")
+        news_stance_patterns = [
+            r"\b(nfp|fomc|cpi|pce|cpe|inflasi|suku bunga)\s*(buy|sell|beli|jual|long|short)\b",
+            r"\b(buy|sell|beli|jual|long|short)\s*(nfp|fomc|cpi|pce|cpe|news)\b",
+            r"\b(nfp|fomc|cpi|pce)\s*(buy\s*(or|apa|atau)\s*sell|sell\s*(or|apa|atau)\s*buy)\b",
+            r"\b(bagusan|enakan|mending)\s*(buy|sell|beli|jual)\s*(pas|saat|jelang)?\s*(nfp|fomc|cpi|pce|news)\b",
+        ]
+        if any(re.search(pat, text_lower) for pat in news_stance_patterns):
+            ntype = "NFP"
+            for candidate in ["nfp", "fomc", "cpi", "pce", "cpe", "inflasi", "suku bunga"]:
+                if candidate in text_lower:
+                    ntype = candidate.upper()
+                    break
+            user_stance = None
+            if re.search(r"\b(sell|jual|short)\b", text_lower):
+                user_stance = "SELL"
+            elif re.search(r"\b(buy|beli|long)\b", text_lower):
+                user_stance = "BUY"
+
+            return {
+                "intent": "NEWS_STANCE",
+                "news_type": ntype,
+                "user_stance": user_stance,
+                "ticker": "XAUUSD",
+            }
+
+        # 4. Deteksi Pertanyaan Buy or Sell / Posisi / Arah Pasar ("lu buy or sell", "buy apa sell", "arahnya kemana")
         stance_patterns = [
             r"\b(lu|lo|kamu|bot)?\s*(buy\s*(or|apa|atau)\s*sell|sell\s*(or|apa|atau)\s*buy)\b",
             r"\b(lagi|mau|sedang)?\s*(buy\s*apa\s*sell|beli\s*apa\s*jual|buy\s*atau\s*sell|buy\s*or\s*sell)\b",
@@ -219,33 +245,6 @@ class ChatAgent:
             return {
                 "intent": "UPDATE",
                 "ticker": None,
-            }
-
-        # 10. Deteksi Pertanyaan Sikap / Stance News ("nfp sell", "nfp buy", "arah nfp kemana", "prediksi nfp buy apa sell", "fomc buy")
-        news_stance_patterns = [
-            r"\b(nfp|fomc|cpi|pce|cpe|inflasi|suku bunga)\s*(buy|sell|beli|jual|long|short)\b",
-            r"\b(buy|sell|beli|jual|long|short)\s*(nfp|fomc|cpi|pce|cpe|news)\b",
-            r"\b(arah|prediksi|prospek|bagusan|mending)\s*(nfp|fomc|cpi|pce|cpe|news)\b",
-            r"\b(nfp|fomc|cpi|pce|cpe|news)\s*(arahnya|prediksi|prospek|gimana|mau kemana|enaknya apa)\b",
-            r"\b(nfp|fomc|cpi|pce)\s*(buy\s*(or|apa|atau)\s*sell|sell\s*(or|apa|atau)\s*buy)\b",
-        ]
-        if any(re.search(pat, text_lower) for pat in news_stance_patterns):
-            ntype = "NFP"
-            for candidate in ["nfp", "fomc", "cpi", "pce", "cpe", "inflasi", "suku bunga"]:
-                if candidate in text_lower:
-                    ntype = candidate.upper()
-                    break
-            user_stance = None
-            if re.search(r"\b(sell|jual|short)\b", text_lower):
-                user_stance = "SELL"
-            elif re.search(r"\b(buy|beli|long)\b", text_lower):
-                user_stance = "BUY"
-
-            return {
-                "intent": "NEWS_STANCE",
-                "news_type": ntype,
-                "user_stance": user_stance,
-                "ticker": "XAUUSD",
             }
 
         # 11. Deteksi Pertanyaan High-Impact News & Kalender Ekonomi

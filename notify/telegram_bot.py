@@ -3900,6 +3900,7 @@ class TelegramBotCommands:
             live_price = float(df_gold["Close"].iloc[-1]) if not df_gold.empty else 4300.0
 
             closest_analysis = None
+            comp_analysis = None
             chart_path = None
             closest_ev = None
             if events:
@@ -3916,11 +3917,16 @@ class TelegramBotCommands:
                 ]
                 closest_ev = nfp_candidates[0] if nfp_candidates else (major_events[0] if major_events else (upcoming_events[0] if upcoming_events else events[0]))
                 closest_analysis = NewsPredictor.analyze_pre_news(closest_ev, live_gold_price=live_price, df_gold=df_gold)
+                comp_analysis = NewsPredictor.comprehensive_news_analysis(
+                    news_event=closest_ev,
+                    live_gold_price=live_price,
+                    calendar_events=events,
+                )
                 chart_path = NewsPredictor.generate_pre_news_chart(closest_analysis, df=df_gold)
 
-            return events, closest_analysis, chart_path, live_price, closest_ev
+            return events, closest_analysis, comp_analysis, chart_path, live_price, closest_ev
 
-        events, closest_analysis, chart_path, live_price, closest_ev = await asyncio.to_thread(_fetch_news)
+        events, closest_analysis, comp_analysis, chart_path, live_price, closest_ev = await asyncio.to_thread(_fetch_news)
 
         if not events:
             await update.message.reply_html(
@@ -3931,75 +3937,42 @@ class TelegramBotCommands:
             )
             return
 
+        tv_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url("XAUUSD")),
+            InlineKeyboardButton("🕯️ Pola Candlestick", callback_data="candle_XAUUSD"),
+        ]])
+
+        if comp_analysis:
+            main_text = comp_analysis["formatted_output"]
+            if chart_path and Path(chart_path).exists():
+                try:
+                    with open(chart_path, "rb") as photo:
+                        await update.message.reply_photo(
+                            photo=photo,
+                            caption=f"📈 <b>Live Pre-News Chart: {html.escape(closest_ev.get('title', 'NFP'))}</b>",
+                            parse_mode=ParseMode.HTML,
+                        )
+                except Exception as e:
+                    logger.error(f"Gagal kirim chart photo: {e}")
+            await update.message.reply_html(main_text, reply_markup=tv_markup)
+            return
+
+        # Fallback format jika analisis belum tersedia
         lines = [
             "📅 <b>JADWAL HIGH-IMPACT NEWS (FOMC / CPI / PCE / NFP / TRUMP / OIL)</b> 🌎",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"💵 <b>Harga Live XAU/USD:</b> <code>${live_price:,.2f}</code>",
             "━━━━━━━━━━━━━━━━━━━━━━",
         ]
-
         for idx, ev in enumerate(events[:5], 1):
-            ntype = ev.get("news_type", "NEWS")
-            badge = (
-                "🔴 FOMC" if ntype == "FOMC"
-                else "🟠 CPI" if ntype == "CPI"
-                else "🔵 PCE" if ntype == "PCE"
-                else "🟣 NFP" if ntype == "NFP"
-                else "🇺🇸 TRUMP" if ntype == "TRUMP"
-                else "🛢️ OIL" if ntype == "OIL"
-                else "⚪ NEWS"
-            )
             t_wib = ev.get("date_wib", "-")
             fc = ev.get("forecast") or "-"
             pv = ev.get("previous") or "-"
-            lines.append(f"<b>{idx}. {badge}</b>: <b>{html.escape(ev.get('title', ''))}</b>")
+            lines.append(f"<b>{idx}. {ev.get('news_type', 'NEWS')}</b>: <b>{html.escape(ev.get('title', ''))}</b>")
             lines.append(f"   ⏰ Waktu: <code>{t_wib} WIB</code>")
             lines.append(f"   📊 Forecast: <code>{fc}</code> | Prev: <code>{pv}</code>")
             lines.append("──────────────────────")
-
-        if closest_analysis and closest_ev:
-            rec = closest_analysis.get("primary_recommendation", "BUY")
-            conf = closest_analysis.get("confidence_pct", 75)
-            setup = closest_analysis.get("trade_setup", {})
-            fund = closest_analysis.get("fundamental_bias", {})
-            badge_rec = "🟢 BUY" if "BUY" in rec else "🔴 SELL" if "SELL" in rec else "🟡 STRADDLE"
-
-            lines.extend([
-                f"🎯 <b>SARAN UTAMA EVENT TERDEKAT ({closest_analysis['news_type']} - {html.escape(closest_ev.get('title', ''))}):</b>",
-                f"• ⏰ <b>Waktu Rilis:</b> <code>{closest_ev.get('date_wib', '-')} WIB</code>",
-                f"• 📊 <b>Konsensus Web:</b> Forecast <code>{closest_ev.get('forecast', '-')}</code> | Prev <code>{closest_ev.get('previous', '-')}</code>",
-                f"• 🏆 <b>Rekomendasi:</b> <b>{badge_rec}</b> (<b>{conf}% Confidence</b>)",
-                f"• 🎯 <b>Target TP1:</b> <code>${setup.get('tp1', 0):,.2f}</code> | 🛑 <b>SL:</b> <code>${setup.get('sl', 0):,.2f}</code>",
-                f"• 🌐 <b>Bias Web:</b> <i>{html.escape(fund.get('reason', '-'))}</i>",
-                "━━━━━━━━━━━━━━━━━━━━━━",
-                "⚡ <i>Sistem otomatis membunyikan Alert & Live Chart 10 menit sebelum rilis!</i>",
-            ])
-
-        caption = "\n".join(lines)
-        if chart_path and Path(chart_path).exists():
-            safe_cap = caption
-            overflow_text = None
-            if len(caption) > 1020:
-                cut_idx = caption.rfind("\n", 0, 950)
-                if cut_idx == -1:
-                    cut_idx = 950
-                safe_cap = caption[:cut_idx] + "\n...\n<i>(Rincian proyeksi lanjut di bawah 👇)</i>"
-                overflow_text = caption[cut_idx:].strip()
-
-            try:
-                with open(chart_path, "rb") as photo:
-                    await update.message.reply_photo(
-                        photo=photo,
-                        caption=safe_cap,
-                        parse_mode=ParseMode.HTML,
-                    )
-                if overflow_text:
-                    await update.message.reply_html(overflow_text)
-                return
-            except Exception as e:
-                logger.error(f"Gagal kirim chart news: {e}")
-
-        await update.message.reply_html(caption)
+        await update.message.reply_html("\n".join(lines), reply_markup=tv_markup)
 
 
 async def set_menu_commands(application: Application) -> None:
