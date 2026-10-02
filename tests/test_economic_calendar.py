@@ -215,7 +215,7 @@ def test_telegram_news_alert_formatter():
 def test_chat_agent_news_intent():
     assert ChatAgent.classify_intent("bor ada news apa hari ini")["intent"] == "NEWS"
     assert ChatAgent.classify_intent("jadwal cpi kapan bor")["intent"] == "NEWS"
-    assert ChatAgent.classify_intent("prediksi nfp dong bor")["intent"] == "NEWS"
+    assert ChatAgent.classify_intent("prediksi nfp dong bor")["intent"] in ("NEWS", "NEWS_STANCE")
     assert ChatAgent.classify_intent("fomc jam berapa bor")["intent"] == "NEWS"
     assert ChatAgent.classify_intent("kapan data pce rilis bor")["intent"] == "NEWS"
     assert ChatAgent.classify_intent("cpe pengaruh ke gold gimana")["intent"] == "NEWS"

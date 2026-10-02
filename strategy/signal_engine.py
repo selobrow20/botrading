@@ -790,24 +790,38 @@ class SignalEngine:
             # Buku 6 (John Murphy + Anna Coulling VPA): Volume rendah -> SL lebih lebar
             # Buku 9 (Trading Alchemist): SL di balik swing low/high & Order Block terakhir
             #
-            # ATR 14-periode pada Gold M15 biasanya 2.5 - 5.5 USD (25 - 55 pips)
-            # SL = 1.2x - 1.5x ATR -> di LUAR jangkauan fakeout institusi biasa
+            # ATR 14-periode pada Gold M15 normal: 2.5 - 5.5 USD (25 - 55 pips)
+            # Hari berita/news/volatile: ATR bisa mencapai 7.0 - 9.0 USD (70 - 90 pips)
+            # FIX (2 Okt 2026): Naikkan clamp max ATR dari 5.5 → 8.0 agar SL tidak lebih kecil
+            # dari ATR nyata dan mudah disapu candle berita.
+            # SL = 1.2x - 1.6x ATR -> di LUAR jangkauan fakeout institusi & spike berita
             # TP cepat = 1.8x ATR (R:R minimal 1.5:1 -- jauh lebih aman dari 1:1 flat)
             # TP tren panjang = 3.0x SL (R:R tepat 3:1 sesuai kaidah pengguna)
 
             atr_safe = max(atr_val, 2.5)  # Minimal 25 pips agar SL tidak kena sweep tipis
-            atr_safe = min(atr_safe, 5.5)  # Maksimal 55 pips agar tidak terlalu boros saat news
+            atr_safe = min(atr_safe, 8.0)  # Maksimal 80 pips (dinaikkan dari 55 → 80 untuk hari news/volatile)
 
-            # Multiplier SL berdasarkan kondisi pasar (anti-fakeout):
+            # Deteksi Mode Volatilitas Tinggi (High-Vol Mode):
+            # ATR > 5.5 = sinyal pasar sedang dalam kondisi news/event/impulsif.
+            # SL harus lebih lebar agar tidak tersapu candle panjang.
+            is_high_vol = atr_val > 5.5
+
+            # Multiplier SL berdasarkan kondisi pasar + volatilitas (anti-fakeout & anti-sweep):
             vol_ratio_now = float(curr_row.get("volume_ratio", 1.0))
-            if vol_ratio_now < 0.80 or session_code == "LONDON":
-                # Volume tipis ATAU Sesi London (rawan Judas Swing) -> sweep lebih dalam
+            if is_high_vol and (vol_ratio_now < 0.80 or session_code == "LONDON"):
+                # High-Vol + Volume tipis/London = paling berbahaya → SL paling lebar
+                sl_atr_mult = 1.6
+            elif vol_ratio_now < 0.80 or session_code == "LONDON":
+                # Volume tipis ATAU Sesi London (rawan Judas Swing) → sweep lebih dalam
+                sl_atr_mult = 1.5
+            elif is_high_vol:
+                # High-Vol mode biasa (berita/news) → SL lebih lebar dari normal
                 sl_atr_mult = 1.5
             elif adx_val >= 22.0:
-                # Tren kuat (ADX >= 22) -> SL ketat 1.2x ATR karena arah sudah jelas
+                # Tren kuat (ADX >= 22) → SL ketat 1.2x ATR karena arah sudah jelas
                 sl_atr_mult = 1.2
             else:
-                # Sideways / normal -> SL 1.4x ATR
+                # Sideways / normal → SL 1.4x ATR
                 sl_atr_mult = 1.4
 
             # Deteksi Kualitas Momen Tren Panjang Bagus (Kaidah 9 Buku PDF Trading):
@@ -822,23 +836,31 @@ class SignalEngine:
 
             if is_good_long_momentum:
                 # Sesuai arahan pengguna: "kalo tp jauh si gpp 3:1 tpnya 3 sl nya 1"
-                # SL: 1.3x ATR -> ketat namun melewati fakeout -> clamp min 45 pips, max 60 pips
+                # SL: 1.3x ATR → ketat namun melewati fakeout
+                # Clamp: min 45 pips, max 90 pips (dinaikkan dari 60 → 90 untuk hari ATR tinggi)
                 sl_distance_atr = round(atr_safe * 1.3, 2)
-                sl_distance = round(max(long_sl_usd, min(6.00, sl_distance_atr)), 2)
+                sl_distance = round(max(long_sl_usd, min(9.00, sl_distance_atr)), 2)
                 # TP: TEPAT 3x SL (Rasio 3:1 mutlak sesuai kaidah pengguna)
                 tp_distance = round(sl_distance * 3.0, 2)
-                market_regime = f"{session_name} Momentum Tren Jauh (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R 3:1)"
+                market_regime = (
+                    f"{session_name} Momentum Tren Jauh (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R 3:1)"
+                    + (" [HIGH-VOL]" if is_high_vol else "")
+                )
             else:
                 # Sesuai arahan pengguna: "minimal 1:1 lah jangan tp 1 sl 2"
-                # SL ATR-adaptive: di luar jangkauan fakeout -> clamp min 42 pips, max 65 pips
+                # SL ATR-adaptive: di luar jangkauan fakeout
+                # Clamp: min 32 pips, max 95 pips (dinaikkan dari 65 → 95 untuk hari ATR tinggi)
                 sl_distance_atr = round(atr_safe * sl_atr_mult, 2)
-                sl_distance = round(max(short_sl_usd, min(6.50, sl_distance_atr)), 2)
-                # TP: target 1.8x ATR (cukup jauh bypass noise, masih realistis kena dalam 1 sesi)
-                # Minimal = SL (R:R >= 1:1), Hard cap 8.0 USD = 80 pips agar TP tidak terlalu jauh
+                sl_distance = round(max(short_sl_usd, min(9.50, sl_distance_atr)), 2)
+                # TP: target 1.8x ATR — clamp min=SL (R:R >= 1:1), max 12.0 USD = 120 pips
+                # (dinaikkan hard cap dari 8.0 → 12.0 agar TP proporsional dengan ATR besar)
                 tp_atr = round(atr_safe * 1.8, 2)
-                tp_distance = round(min(8.00, max(short_tp_usd, sl_distance, tp_atr)), 2)
+                tp_distance = round(min(12.00, max(short_tp_usd, sl_distance, tp_atr)), 2)
                 eff_rr = round(tp_distance / max(sl_distance, 0.01), 1)
-                market_regime = f"{session_name} Momen Cepat ATR-Adaptive (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R {eff_rr}:1)"
+                market_regime = (
+                    f"{session_name} Momen Cepat ATR-Adaptive (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R {eff_rr}:1)"
+                    + (" [HIGH-VOL]" if is_high_vol else "")
+                )
 
             # KAIDAH BAKU 9 BUKU PDF TRADING (Risk:Reward Ratio Guard):
             # DILARANG KERAS SL LEBIH BESAR DARI TP!
@@ -918,7 +940,8 @@ class SignalEngine:
             ema20_now = float(curr_row.get("ema_20", curr_price) or curr_price)
             # Gunakan atr_safe jika sudah dihitung (is_gold branch pasti sudah), fallback atr_val
             atr_now = float(curr_row.get("atr", 3.0) or 3.0)
-            atr_clamp = max(min(atr_now, 5.5), 2.5)
+            # Sinkronkan clamp ATR dengan nilai yang sama pada kalkulasi SL/TP di atas (8.0 max)
+            atr_clamp = max(min(atr_now, 8.0), 2.5)
 
             # FILTER 1: Anti-Beli di Pucuk / Anti-Jual di Dasar Jurang (Martin Pring)
             if target_sig_type == "BUY" and rsi_now >= rsi_ob_block:

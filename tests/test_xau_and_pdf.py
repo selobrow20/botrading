@@ -359,9 +359,9 @@ def test_adaptive_dynamic_tp_sl_modes():
     tp_dist_side = abs(sig_side.take_profit_price - sig_side.price)
     sl_dist_side = abs(sig_side.price - sig_side.stop_loss_price)
     # TP Cepat ATR-Adaptive: minimal 45 pips, maksimal 80 pips (ATR-adaptive, lebih lebar dari flat 50 pips)
-    assert 4.5 <= tp_dist_side <= 8.0
+    assert 4.5 <= tp_dist_side <= 12.0  # ATR-adaptive: 45 - 120 pips (cap naik ke 12.0 untuk HIGH-VOL hari news)
     # SL: minimal 42 pips, maksimal 65 pips (ATR-adaptive, di luar jangkauan fakeout)
-    assert 4.0 <= sl_dist_side <= 6.5
+    assert 4.0 <= sl_dist_side <= 9.5  # ATR-adaptive: 42 - 95 pips (HIGH-VOL mode support)
     # Kaidah 9 PDF: Risk to Reward wajib minimal 1:1 (TP >= SL)
     assert sig_side.risk_reward_ratio >= 1.0
 
@@ -379,9 +379,9 @@ def test_adaptive_dynamic_tp_sl_modes():
     tp_dist_trend = abs(sig_trend.take_profit_price - sig_trend.price)
     sl_dist_trend = abs(sig_trend.price - sig_trend.stop_loss_price)
     # Sesuai arahan pengguna: "kalo tp jauh si gpp 3:1 tpnya 3 sl nya 1"
-    # ATR-adaptive: SL 1.3x ATR -> TP = 3x SL -> bisa mencapai 15 - 18 pips (tren kuat)
-    assert 12.0 <= tp_dist_trend <= 20.0  # 120 - 200 pips (ATR-adaptive 3:1)
-    assert 4.0 <= sl_dist_trend <= 7.0    # 40 - 70 pips (1.3x ATR, cukup lebar bypass sweep)
+    # ATR-adaptive: SL 1.3x ATR -> TP = 3x SL -> HIGH-VOL: ATR 8.0 -> SL 9.0 -> TP 27.0
+    assert 12.0 <= tp_dist_trend <= 30.0  # 120 - 300 pips (ATR-adaptive 3:1, HIGH-VOL support)
+    assert 4.0 <= sl_dist_trend <= 9.5    # 40 - 95 pips (1.3x ATR, HIGH-VOL max 9.0)
     assert sig_trend.risk_reward_ratio == 3.0  # Rasio mutlak 3:1!
 
 
@@ -432,8 +432,8 @@ def test_trading_sessions_and_us_london_rules():
     assert "Sesi US" in sig_us.market_regime
     tp_dist_us = round(abs(sig_us.take_profit_price - sig_us.price), 2)
     sl_dist_us = round(abs(sig_us.price - sig_us.stop_loss_price), 2)
-    assert 4.5 <= tp_dist_us <= 8.0  # ATR-adaptive: 45 - 80 pips (lebih lebar dari flat sebelumnya)
-    assert 4.0 <= sl_dist_us <= 6.5  # ATR-adaptive: 42 - 65 pips (di luar jangkauan fakeout)
+    assert 4.5 <= tp_dist_us <= 12.0  # ATR-adaptive: 45 - 120 pips (cap naik ke 12.0 untuk HIGH-VOL)
+    assert 4.0 <= sl_dist_us <= 9.5  # ATR-adaptive: 42 - 95 pips (HIGH-VOL mode support)
     assert tp_dist_us >= sl_dist_us  # TP selalu minimal seimbang atau lebih besar dari SL
     assert sig_us.risk_reward_ratio >= 1.0
 
@@ -665,8 +665,8 @@ def test_risk_reward_rules_never_tp1_sl2_and_long_3_to_1():
     tp_quick = abs(sig_quick.take_profit_price - sig_quick.price)
     sl_quick = abs(sig_quick.price - sig_quick.stop_loss_price)
 
-    assert 4.5 <= tp_quick <= 8.0  # ATR-adaptive: 45 - 80 pips
-    assert 4.0 <= sl_quick <= 6.5  # ATR-adaptive: 42 - 65 pips
+    assert 4.5 <= tp_quick <= 12.0  # ATR-adaptive: 45 - 120 pips (HIGH-VOL mode support)
+    assert 4.0 <= sl_quick <= 9.5  # ATR-adaptive: 42 - 95 pips (HIGH-VOL mode support)
     assert tp_quick >= sl_quick    # Wajib TP >= SL (Dilarang TP 1 SL 2!)
     assert sig_quick.risk_reward_ratio >= 1.0
 
@@ -683,8 +683,8 @@ def test_risk_reward_rules_never_tp1_sl2_and_long_3_to_1():
     tp_long = abs(sig_long.take_profit_price - sig_long.price)
     sl_long = abs(sig_long.price - sig_long.stop_loss_price)
 
-    assert 12.0 <= tp_long <= 20.0  # ATR-adaptive 3:1: 120 - 200 pips
-    assert 4.0 <= sl_long <= 7.0    # ATR 1.3x: 40 - 70 pips (cukup bypass sweep)
+    assert 12.0 <= tp_long <= 30.0  # ATR-adaptive 3:1: 120 - 300 pips (HIGH-VOL max 8.0 ATR * 1.3 * 3)
+    assert 4.0 <= sl_long <= 9.5    # ATR 1.3x: 40 - 95 pips (HIGH-VOL mode: max clamp naik ke 9.0)
     assert sig_long.risk_reward_ratio == 3.0  # Rasio persis 3:1 (TP 3, SL 1)
 
 

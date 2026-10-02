@@ -32,8 +32,8 @@ LANGKAH 2: PENGATURAN LOT & POSISI DI FILE CONFIG.JSON
 ----------------------------------------------------------------------
 1. Buka file `config.json` menggunakan Notepad.
 2. Secara default ukuran lot sudah diset `"default_lot": 0.05` (sama persis dengan akun Master).
-   - Akun Cent (USC): Maksimal 3 posisi serentak
-   - Akun Standard (USD): Maksimal 1 posisi (disiplin ketat)
+   - Akun Cent (USC): Maksimal 1 posisi (luar Sesi US) / Maksimal 2 posisi agresif (Sesi US 19:00 - 24:00 WIB, Lot 0.08)
+   - Akun Standard (USD): Maksimal 1 posisi disiplin ketat (hanya sinyal Grade A+ 0.01 lot)
    - Jika modal kamu kecil ($50 - $100) dan ingin lot lebih kecil, silakan ubah ke 0.01 Lot.
 3. Simpan (Save) file `config.json`.
 
