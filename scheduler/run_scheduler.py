@@ -759,6 +759,26 @@ class PipelineRunner:
                 # 2. Tandai deal MT5 sudah dicatat di database
                 self.storage.mark_mt5_deal_reported(deal_ticket, pos_id, outcome, pnl_pct)
 
+                # 2b. Set Directional Cooldown pada bridge jika SL — Anti-Revenge Re-entry
+                # Setelah kena SL BUY → lock arah BUY selama N menit (arah SELL tetap bebas).
+                # Setelah kena SL SELL → lock arah SELL selama N menit (arah BUY tetap bebas).
+                if reason_str == "SL" and outcome == "LOSE":
+                    try:
+                        cfg_mt5_dc = self.config.get("mt5", {}) if hasattr(self, "config") else load_config().get("mt5", {})
+                        dir_cd_mins = int(cfg_mt5_dc.get("directional_cooldown_mins", 35))
+                        if dir_cd_mins > 0 and sig_type in ("BUY", "SELL"):
+                            from datetime import timedelta
+                            tz_wib = ZoneInfo("Asia/Jakarta")
+                            lock_until = datetime.now(tz_wib) + timedelta(minutes=dir_cd_mins)
+                            bridge.directional_sl_cooldown[sig_type] = lock_until
+                            logger.info(
+                                f"🔒 [DIRECTIONAL COOLDOWN SET] Arah {sig_type} dikunci {dir_cd_mins} menit "
+                                f"setelah SL (posisi #{pos_id}). Lock berlaku sampai {lock_until.strftime('%H:%M')} WIB. "
+                                f"Anti-revenge re-entry aktif."
+                            )
+                    except Exception as dc_err:
+                        logger.debug(f"Gagal set directional cooldown: {dc_err}")
+
                 # 3. STRICT REAL-TIME GUARD: Saring notifikasi Telegram jika deal sudah lewat (> 1800s / 30 menit)
                 # Menghindari spam kartu sangat basi saat bot baru dinyalakan, namun tidak memotong laporan yang baru saja terjadi
                 if age_seconds > 1800:

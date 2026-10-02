@@ -894,6 +894,62 @@ class SignalEngine:
                 curr_row=curr_row,
             )
 
+        # ═══════════════════════════════════════════════════════════════════════
+        # FILTER ANTI-PUCUK & ANTI-DASAR JURANG (Martin Pring + Bob Volman)
+        # ═══════════════════════════════════════════════════════════════════════
+        # Sumber Teori:
+        #   Buku 5 (Martin J. Pring): BUY saat RSI jenuh beli (≥68) = BELI DI PUCUK.
+        #     Distribusi institusi sedang berlangsung. Potensi reversal tinggi.
+        #   Buku 3 (Bob Volman): Harga yang terlalu jauh dari EMA20 (overextended)
+        #     akan revert ke mean. Entry saat overextended = masuk saat momentum sudah habis.
+        # ═══════════════════════════════════════════════════════════════════════
+        rsi_extreme_reject = False
+        rsi_extreme_reason = ""
+        ema_overextended_reject = False
+        ema_overextended_reason = ""
+
+        if is_gold and apply_pdf_filter:
+            mt5_cfg_filt = self.config.get("mt5", {})
+            rsi_ob_block = float(mt5_cfg_filt.get("rsi_overbought_block", 68.0))
+            rsi_os_block = float(mt5_cfg_filt.get("rsi_oversold_block", 32.0))
+            max_ema_dist_mult = float(mt5_cfg_filt.get("max_ema_distance_atr_mult", 1.5))
+
+            rsi_now = float(curr_row.get("rsi", 50.0) or 50.0)
+            ema20_now = float(curr_row.get("ema_20", curr_price) or curr_price)
+            # Gunakan atr_safe jika sudah dihitung (is_gold branch pasti sudah), fallback atr_val
+            atr_now = float(curr_row.get("atr", 3.0) or 3.0)
+            atr_clamp = max(min(atr_now, 5.5), 2.5)
+
+            # FILTER 1: Anti-Beli di Pucuk / Anti-Jual di Dasar Jurang (Martin Pring)
+            if target_sig_type == "BUY" and rsi_now >= rsi_ob_block:
+                rsi_extreme_reject = True
+                rsi_extreme_reason = (
+                    f"🚫 [FILTER ANTI-PUCUK] BUY ditolak. RSI={rsi_now:.1f} ≥ {rsi_ob_block:.0f} "
+                    f"(Zona Overbought Jenuh Beli). Kaidah Martin Pring: Beli di pucuk saat RSI jenuh "
+                    f"= kena giliran distribusi institusi. Wajib tunggu RSI turun ke zona sehat (<65)."
+                )
+            elif target_sig_type == "SELL" and rsi_now <= rsi_os_block:
+                rsi_extreme_reject = True
+                rsi_extreme_reason = (
+                    f"🚫 [FILTER ANTI-DASAR JURANG] SELL ditolak. RSI={rsi_now:.1f} ≤ {rsi_os_block:.0f} "
+                    f"(Zona Oversold Jenuh Jual). Kaidah Martin Pring: Jual di dasar saat RSI jenuh "
+                    f"= kena giliran akumulasi/bounce institusi. Wajib tunggu RSI naik ke zona sehat (>35)."
+                )
+
+            # FILTER 2: Anti-Kejar Harga Overextended dari EMA20 (Bob Volman)
+            if not rsi_extreme_reject:
+                price_dist_ema = abs(curr_price - ema20_now)
+                max_allowed_dist = atr_clamp * max_ema_dist_mult
+                if price_dist_ema > max_allowed_dist:
+                    ema_overextended_reject = True
+                    ema_overextended_reason = (
+                        f"🚫 [FILTER ANTI-KEJAR LILIN] {target_sig_type} ditolak. "
+                        f"Harga (${curr_price:.2f}) terlalu jauh dari EMA20 (${ema20_now:.2f}): "
+                        f"jarak ${price_dist_ema:.2f} > batas ${max_allowed_dist:.2f} ({max_ema_dist_mult}x ATR). "
+                        f"Kaidah Bob Volman: Entry saat overextended = masuk saat momentum sudah habis. "
+                        f"Tunggu pullback ke EMA20."
+                    )
+
         # Filter Khusus Sesi London: Wajib konfirmasi H1 (1-Hour) searah tren (HANYA Jam 14:00 - 17:00 WIB)
         # Sesuai arahan pengguna: "ampe jam 5 aja max pake h1 sesi london, karna setelah jam segitu manipulasi udah jarang"
         h1_ok = True
@@ -923,7 +979,13 @@ class SignalEngine:
             )
 
         if is_buy:
-            if apply_pdf_filter and not pdf_approved:
+            if rsi_extreme_reject:
+                signal = "HOLD"
+                reasons = [rsi_extreme_reason]
+            elif ema_overextended_reject:
+                signal = "HOLD"
+                reasons = [ema_overextended_reason]
+            elif apply_pdf_filter and not pdf_approved:
                 # Sinyal BUY ditahan jika konfluensi 9 buku belum tembus Grade A (65%)
                 signal = "HOLD"
                 reasons = [
@@ -960,6 +1022,12 @@ class SignalEngine:
                     f"Sinyal jual saham dilewati (Saham IDX khusus mode BUY/Long-Only). "
                     f"RSI={snapshot['rsi']:.1f}, EMA50={snapshot['ema_50']:.0f}"
                 ]
+            elif rsi_extreme_reject:
+                signal = "HOLD"
+                reasons = [rsi_extreme_reason]
+            elif ema_overextended_reject:
+                signal = "HOLD"
+                reasons = [ema_overextended_reason]
             elif apply_pdf_filter and not pdf_approved and is_gold:
                 # Sinyal Short Gold ditahan jika konfluensi sell belum tembus Grade A (65%)
                 signal = "HOLD"
@@ -990,7 +1058,7 @@ class SignalEngine:
         else:
             # Jika sinyal dasar masih netral namun telaah 9 Buku PDF membuktikan Grade A (>=65% atau >=75% di London)
             min_promo_score = london_min_score if is_london_session else 65.0
-            if apply_pdf_filter and pdf_score >= min_promo_score and is_gold:
+            if apply_pdf_filter and pdf_score >= min_promo_score and is_gold and not rsi_extreme_reject and not ema_overextended_reject:
                 if not h1_ok:
                     signal = "HOLD"
                     reasons = [h1_reason]

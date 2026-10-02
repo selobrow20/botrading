@@ -81,6 +81,9 @@ class MT5Bridge:
         self._simulated_ticket: int = 100000
         self.reversal_cooldown_until: Optional[datetime] = None
         self.reversal_cooldown_reason: str = ""
+        # Directional Cooldown: {direction: datetime_until} — Anti-Revenge Re-entry setelah SL beruntun
+        # Setelah SL BUY → lock BUY selama N menit. Setelah SL SELL → lock SELL selama N menit.
+        self.directional_sl_cooldown: Dict[str, Optional[datetime]] = {"BUY": None, "SELL": None}
 
         self._initialized = True
         logger.info(f"MT5Bridge diinisialisasi. Enabled: {self.enabled}, Hours: {self.trading_hours}, Platform: {sys.platform}, Lib Available: {MT5_AVAILABLE}")
@@ -246,7 +249,7 @@ class MT5Bridge:
             ok, _ = self.connect()
             return ok
 
-    def check_overnight_safety_guards(self, broker_sym: str, score: float = 0.0) -> Tuple[bool, str, str]:
+    def check_overnight_safety_guards(self, broker_sym: str, score: float = 0.0, signal_type: str = "") -> Tuple[bool, str, str]:
         """
         Pengamanan Komprehensif Server Nyala Semalaman (Overnight & 24/7 Safety Guards):
         1. Rollover Deadzone Guard: Menahan order saat rollover broker (04:45 - 05:20 WIB).
@@ -314,46 +317,56 @@ class MT5Bridge:
         midnight_end = time(e_h, e_m)
         is_midnight_window = (midnight_start <= curr_time < midnight_end)
 
+        # 2b. Directional Cooldown Guard (Anti-Revenge Re-entry setelah SL beruntun)
+        # Setelah SL BUY → lock arah BUY selama N menit; setelah SL SELL → lock arah SELL.
+        # Arah BERLAWANAN tetap boleh entry (misal SL BUY → SELL masih boleh).
+        dir_cd = cfg_mt5.get("directional_cooldown_mins", 35)
+        if signal_type and dir_cd > 0:
+            locked_until = self.directional_sl_cooldown.get(signal_type)
+            if locked_until and now_wib < locked_until:
+                remaining_dir = int((locked_until - now_wib).total_seconds() / 60)
+                msg = (
+                    f"⏸️ [DIRECTIONAL COOLDOWN] Arah {signal_type} dikunci sementara. "
+                    f"Stop Loss {signal_type} terakhir baru saja terjadi. "
+                    f"Sisa waktu jeda: {remaining_dir} menit. "
+                    f"Kaidah Anti-Revenge (9 Buku PDF): Jangan re-entry arah sama setelah kena SL. "
+                    f"Tunggu struktur pasar reset untuk {signal_type} berikutnya."
+                )
+                return False, msg, f"directional_cooldown_{signal_type.lower()}"
+
         # 3. Consecutive Loss Circuit Breaker (Proteksi SL Beruntun)
-        # Sesuai instruksi mutlak pengguna:
-        # "kalo bisa jam tengah malem aja jam 2-4 itu yg harus di kasih daily biar ga boncos kaya semalem
-        #  kalo jam jam yg masih bisa gw pantau aman aja... sama loss harian di hilangkan aja di usc ,kecuali pake usd"
-        # 1. Akun Cent (USC) di jam pantau normal (di luar jam 02:00 - 04:30 WIB) TIDAK diblokir oleh cooldown SL beruntun.
-        # 2. Sinyal Grade A / A+ (score >= 65.0%) dari 9 Buku PDF selalu melewati cooldown (override) agar momen valid tidak terlewat.
+        # Sesuai analisa & perbaikan (2 Oct 2026):
+        # HAPUS bypass akun Cent di jam normal — justru di sinilah mesin nembak beruntun terjadi.
+        # Consecutive loss cooldown WAJIB aktif untuk SEMUA akun (Cent & USD) tanpa pengecualian.
+        # Filter RSI jenuh & EMA overextended sudah ada di signal_engine.py sebagai garis pertahanan pertama.
         max_consec = int(cfg_mt5.get("max_consecutive_losses", 2))
-        cooldown_mins = int(cfg_mt5.get("consecutive_loss_cooldown_mins", 60))
-        if is_cent and not is_midnight_window:
-            logger.debug("Akun Cent (USC) di jam pantau aktif: Consecutive loss cooldown dilewati.")
-        elif score >= 65.0:
-            logger.info(
-                f"🔥 [GRADE A OVERRIDE] Sinyal konfluensi 9 PDF ({score:.0f}%) terdeteksi! "
-                f"Consecutive loss cooldown otomatis dilewati agar momen trading berkualitas langsung dieksekusi MT5!"
-            )
-        else:
-            try:
-                from data.storage import StockStorage
-                storage = StockStorage()
-                consec_losses, last_exit_time_str = storage.get_consecutive_losses("XAUUSD")
-                if consec_losses >= max_consec and last_exit_time_str:
-                    clean_time = last_exit_time_str.replace(" WIB", "").strip()
-                    exit_dt = None
-                    for fmt in ["%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"]:
-                        try:
-                            exit_dt = datetime.strptime(clean_time, fmt).replace(tzinfo=ZoneInfo("Asia/Jakarta"))
-                            break
-                        except Exception:
-                            pass
-                    if exit_dt:
-                        diff_mins = (now_wib - exit_dt).total_seconds() / 60.0
-                        if 0 <= diff_mins < cooldown_mins:
-                            remaining = int(cooldown_mins - diff_mins)
-                            msg = (
-                                f"⏸️ [CONSECUTIVE LOSS COOLDOWN] Terdeteksi {consec_losses}x Stop Loss beruntun. "
-                                f"Masa jeda pengamanan aktif ({remaining} menit tersisa) demi mencegah overtrading di pasar berombak."
-                            )
-                            return False, msg, "consecutive_loss_cooldown"
-            except Exception as ex_cl:
-                logger.debug(f"Pengecekan consecutive loss dilewati: {ex_cl}")
+        cooldown_mins = int(cfg_mt5.get("consecutive_loss_cooldown_mins", 45))
+        try:
+            from data.storage import StockStorage
+            storage = StockStorage()
+            consec_losses, last_exit_time_str = storage.get_consecutive_losses("XAUUSD")
+            if consec_losses >= max_consec and last_exit_time_str:
+                clean_time = last_exit_time_str.replace(" WIB", "").strip()
+                exit_dt = None
+                for fmt in ["%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"]:
+                    try:
+                        exit_dt = datetime.strptime(clean_time, fmt).replace(tzinfo=ZoneInfo("Asia/Jakarta"))
+                        break
+                    except Exception:
+                        pass
+                if exit_dt:
+                    diff_mins = (now_wib - exit_dt).total_seconds() / 60.0
+                    if 0 <= diff_mins < cooldown_mins:
+                        remaining = int(cooldown_mins - diff_mins)
+                        msg = (
+                            f"⏸️ [CONSECUTIVE LOSS COOLDOWN] Terdeteksi {consec_losses}x Stop Loss beruntun. "
+                            f"Masa jeda pengamanan aktif ({remaining} menit tersisa) demi mencegah "
+                            f"overtrading / machine-gun entry di pasar berombak."
+                        )
+                        return False, msg, "consecutive_loss_cooldown"
+        except Exception as ex_cl:
+            logger.debug(f"Pengecekan consecutive loss dilewati: {ex_cl}")
+
 
         # 4. Midnight Sleep Guard (Khusus Jam 02:00 - 04:30 WIB)
         # Sesuai arahan pengguna: "kalo bisa jam tengah malem aja jam 2-4 itu yg harus di kasih daily biar ga boncos kaya semalem
@@ -1064,7 +1077,7 @@ class MT5Bridge:
                 }
 
             # Pengamanan Ekstra Server Nyala Semalaman (Rollover, Spread Guard, Cooldown 2x SL, Daily Max Loss)
-            safe_ok, safe_msg, safe_status = self.check_overnight_safety_guards(broker_sym, score=score)
+            safe_ok, safe_msg, safe_status = self.check_overnight_safety_guards(broker_sym, score=score, signal_type=sig_type)
             if not safe_ok:
                 logger.warning(safe_msg)
                 return {

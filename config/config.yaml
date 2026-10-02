@@ -90,8 +90,13 @@ mt5:
   long_risk_reward_ratio: 3.0       # Rasio R:R sinyal TP jauh: wajib 3:1 (TP 3, SL 1)
   max_spread_usd: 0.65              # Maksimal spread $0.65 USD (65 pips) agar tidak entry saat spread malam melebar
   enable_rollover_guard: true       # Menahan entry saat jam rollover malam broker (04:45 - 05:20 WIB)
-  max_consecutive_losses: 2         # Jika 2x SL beruntun, aktifkan cooldown pengamanan 60 menit
-  consecutive_loss_cooldown_mins: 60
+  max_consecutive_losses: 2         # Jika 2x SL beruntun, aktifkan cooldown pengamanan 45 menit
+  consecutive_loss_cooldown_mins: 45
+  # ─── FILTER ANTI-PUCUK & ANTI-DASAR JURANG (Martin Pring + Bob Volman) ───────
+  rsi_overbought_block: 68.0        # HARAM BUY jika RSI >= 68 (beli di pucuk = kena distribution)
+  rsi_oversold_block: 32.0          # HARAM SELL jika RSI <= 32 (jual di dasar = kena accumulation bounce)
+  max_ema_distance_atr_mult: 1.5    # Harga boleh entry MAX 1.5x ATR dari EMA20 (anti-kejar lilin Bob Volman)
+  directional_cooldown_mins: 35     # Setelah SL BUY, lock BUY 35 menit; setelah SL SELL, lock SELL 35 menit
   enable_midnight_rest: true        # Jendela istirahat & reset bot pukul 02:00 - 04:00 WIB (stop trading)
   midnight_rest_start_hour: 2       # 02:00 WIB: Stop trading / istirahat
   midnight_rest_end_hour: 4         # 04:00 WIB: Reset state, siap buka posisi lagi saat pasar pagi aktif (05:00 WIB)
