@@ -337,6 +337,7 @@ class TelegramNotifier:
                         await bot.send_document(
                             chat_id=cid,
                             document=doc_file,
+                            filename=Path(doc_path).name,
                             caption=safe_caption,
                             parse_mode=ParseMode.HTML,
                             reply_markup=reply_markup,
@@ -363,6 +364,19 @@ class TelegramNotifier:
             logger.error(f"Gagal mengirim dokumen ke Telegram ({cid}): {e}")
             return False
 
+    def send_document(
+        self,
+        doc_path: str,
+        caption: str = "",
+        target_chat_id: Optional[str] = None,
+    ) -> bool:
+        """Mengirim file dokumen (misal .zip copier) ke chat target via Telegram Bot API."""
+        try:
+            return asyncio.run(self._async_send_document(doc_path, caption=caption, target_chat_id=target_chat_id))
+        except Exception as e:
+            logger.error(f"Error saat mengeksekusi send_document: {e}")
+            return False
+
     def broadcast_copier_update(
         self,
         zip_path: str = "member_copier.zip",
@@ -385,12 +399,13 @@ class TelegramNotifier:
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "Halo Trader VIP! Master Provider baru saja merilis pembaruan file Auto-Copier MT5 Anda.\n\n"
             "✨ <b>FITUR & LOGIKA BARU DI UPDATE INI:</b>\n"
-            "1. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter ganda H1 & High/Low Asia memproteksi dari manipulasi dan jebakan likuiditas pasar London (14:00 - 19:00 WIB).\n"
-            "2. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Deteksi pembalikan arah kilat, otomatis cut loss dini dan membalik arah (flip) seketika.\n"
-            "3. ⚖️ <b>Kaidah 9 PDF Risk:Reward:</b> Target TP dipastikan selalu seimbang atau lebih besar dari SL (R:R >= 1:1 s/d 1:2+).\n"
-            "4. 🔒 <b>Auto-Close Reversal Guard:</b> MT5 Member otomatis ikut mengamankan keuntungan saat Master Bot menutup posisi lebih awal.\n"
-            "5. 🔄 <b>Proteksi Anti-Hedging:</b> Posisi berlawanan otomatis ditutup sebelum membuka arah baru (bebas tabrakan order).\n"
-            "6. 🛡️ <b>Deteksi Akun Cent & USD:</b> Adaptif untuk akun Cent (USC) dan akun Standard.\n\n"
+            "1. 🎯 <b>Metode Retest Entry (Harga Diskon/Premium):</b> Entry posisi di ayunan terbaik (bawah untuk BUY, atas untuk SELL) saat retest S/R Flip, Order Block, atau Fib Golden Pocket.\n"
+            "2. ⚖️ <b>Minimal TP & SL 60 Pips (1:1):</b> Target TP dan SL Gold terkunci minimal 60 pips ($6.00 USD) dengan rasio minimal 1:1 (tidak ada TP di bawah SL).\n"
+            "3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter ganda H1 & High/Low Asia memproteksi dari manipulasi likuiditas pasar London (14:00 - 19:00 WIB).\n"
+            "4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Deteksi pembalikan arah kilat, otomatis cut loss dini dan membalik arah (flip) seketika.\n"
+            "5. 🔒 <b>Auto-Close Reversal Guard:</b> MT5 Member otomatis ikut mengamankan keuntungan saat Master Bot menutup posisi lebih awal.\n"
+            "6. 🔄 <b>Proteksi Anti-Hedging:</b> Posisi berlawanan otomatis ditutup sebelum membuka arah baru (bebas tabrakan order).\n"
+            "7. 🛡️ <b>Deteksi Akun Cent & USD:</b> Adaptif untuk akun Cent (USC) dan akun Standard.\n\n"
             "🛠️ <b>CARA UPDATE (SANGAT MUDAH):</b>\n"
             "1. Ekstrak isi file <code>member_copier.zip</code> ini ke folder copier Anda.\n"
             "2. Timpa file <code>client_copier.py</code> dan <code>PANDUAN_MEMBER.txt</code> yang lama.\n"
@@ -411,7 +426,7 @@ class TelegramNotifier:
         except Exception:
             db_ids = []
 
-        target_ids = list(dict.fromkeys(approved_ids + db_ids))
+        target_ids = list(dict.fromkeys(approved_ids + db_ids + [self.chat_id, SUPERADMIN_CHAT_ID]))
 
         sent_recipients = []
         failed_recipients = []
@@ -1248,7 +1263,7 @@ class TelegramBotCommands:
                 return
 
         # Chart style switching, candlestick, dan copier dapat diakses oleh semua pengguna yang terdaftar
-        if not data.startswith(("chart_", "candle_", "copier_")) and not self._is_admin(update):
+        if not data.startswith(("chart_", "candle_", "copier_", "download_copier")) and not self._is_admin(update):
             await query.answer("⛔ Hanya Admin yang berhak memproses tindakan ini.", show_alert=True)
             return
 
@@ -1359,6 +1374,52 @@ class TelegramBotCommands:
                     await query.answer(f"❌ Gagal kirim file: {e}", show_alert=True)
             else:
                 await query.answer("❌ File member_copier.zip tidak ditemukan di server.", show_alert=True)
+            return
+
+        elif data in ["copier_download", "download_copier_direct"]:
+            from pathlib import Path
+            zip_path = Path(__file__).resolve().parent.parent / "member_copier.zip"
+            if not zip_path.exists():
+                await query.answer("❌ File member_copier.zip belum tersedia di server.", show_alert=True)
+                return
+            await query.answer("📦 Mengirim paket Auto-Copier MT5...")
+            caption_text = (
+                "🚀 <b>PAKET AUTO-COPIER MT5 RESMI (VIP 9 BUKU PDF)</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "✨ <b>Fitur Utama:</b> Retest Entry (Harga Diskon/Premium), SL/TP Minimal 60 Pips 1:1, Anti-Hedging, Auto-Flip.\n\n"
+                "🛠️ <b>Petunjuk Cepat:</b> Ekstrak file ZIP ini di PC/Laptop/VPS Anda, jalankan <code>START_COPIER.bat</code>, "
+                "dan pastikan MT5 sudah terbuka untuk mulai copy trading otomatis!"
+            )
+            try:
+                with open(zip_path, "rb") as doc:
+                    await query.message.reply_document(
+                        document=doc,
+                        filename="member_copier.zip",
+                        caption=caption_text,
+                        parse_mode=ParseMode.HTML,
+                    )
+            except Exception as e:
+                logger.error(f"Gagal kirim dokumen via callback: {e}")
+                await query.message.reply_html(f"❌ Gagal mengirim file: {e}")
+            return
+
+        elif data == "sendcopier_all":
+            if not self._is_admin(update):
+                await query.answer("⛔ Hanya Admin yang berhak memproses tindakan ini.", show_alert=True)
+                return
+            await query.answer("⏳ Mengirim file Auto-Copier MT5 ke seluruh member...")
+            res = self.notifier.broadcast_copier_update()
+            if res.get("success"):
+                await query.message.reply_html(
+                    f"✅ <b>File Auto-Copier MT5 Berhasil Dikirim!</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📤 <b>Terkirim ke:</b> <b>{res.get('sent_count')} Member Aktif</b>\n"
+                    f"⚠️ <b>Gagal:</b> {res.get('failed_count')}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"<i>Seluruh member aktif telah menerima file member_copier.zip terbaru beserta panduan update.</i>"
+                )
+            else:
+                await query.message.reply_html(f"❌ <b>Gagal mengirim:</b> {res.get('error', 'Terjadi kesalahan')}")
             return
 
         elif data.startswith("deleteuser_"):
@@ -1847,6 +1908,49 @@ class TelegramBotCommands:
         else:
             await status_msg.edit_text(f"❌ <b>Gagal mengirim:</b> {res.get('error', 'Terjadi kesalahan')}")
 
+    async def copier_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /copier bagi member aktif atau admin untuk mengunduh paket Auto-Copier MT5 & panduan."""
+        if not await self.check_user_access(update, context):
+            return
+
+        from pathlib import Path
+        zip_path = Path(__file__).resolve().parent.parent / "member_copier.zip"
+        if not zip_path.exists():
+            await update.message.reply_html("❌ File <code>member_copier.zip</code> belum tersedia di server. Silakan hubungi Admin (@selobrow).")
+            return
+
+        status_msg = await update.message.reply_html("⏳ <b>Menyiapkan dan mengirim file paket Auto-Copier MT5 (VIP 9 Buku PDF)...</b>")
+        caption_text = (
+            "🚀 <b>PAKET AUTO-COPIER MT5 RESMI (VIP 9 BUKU PDF)</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Halo Trader VIP! Berikut adalah file instalasi Auto-Copier MT5 Anda.\n\n"
+            "✨ <b>KEUNGGULAN TERBARU:</b>\n"
+            "1. 🎯 <b>Entry Retest Diskon (Bawah) / Premium (Atas):</b> Posisi presisi di ujung swing dengan konfirmasi 9 Buku PDF.\n"
+            "2. ⚖️ <b>Minimal TP & SL 60 Pips (1:1):</b> Target TP dipastikan seimbang/lebih besar dari SL (R:R minimal 1:1, tidak ada TP di bawah SL).\n"
+            "3. 🏛️ <b>Konfirmasi 9 Buku PDF:</b> Smart Money Concepts, Order Block, Fib Golden Pocket, & S/R Role Reversal.\n"
+            "4. 🛡️ <b>Anti-Hedging & Auto-Flip:</b> Proteksi tabrakan order & eksekusi cepat saat market berbalik arah.\n"
+            "5. ⚡ <b>Auto-Detect Filling Mode:</b> Kompatibel FOK / IOC / RETURN (Bebas Error 10030).\n\n"
+            "🛠️ <b>PETUNJUK MENJALANKAN (SANGAT MUDAH):</b>\n"
+            "1. Unduh dan <b>Ekstrak</b> file ZIP ini di PC/Laptop/VPS Anda.\n"
+            "2. Buka aplikasi <b>MetaTrader 5</b> dan pastikan sudah login.\n"
+            "3. Klik 2x <b>START_COPIER.bat</b>.\n"
+            "4. Masukkan nomor HP Telegram Anda (awalan +62) & kode OTP (hanya 1x di awal).\n\n"
+            "<i>Copier otomatis aktif dan menduplikasi sinyal resmi ke akun MT5 Anda!</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━"
+        )
+        try:
+            with open(zip_path, "rb") as doc:
+                await update.message.reply_document(
+                    document=doc,
+                    filename="member_copier.zip",
+                    caption=caption_text,
+                    parse_mode=ParseMode.HTML,
+                )
+            await status_msg.delete()
+        except Exception as e:
+            logger.error(f"Gagal mengirim dokumen copier via /copier: {e}")
+            await status_msg.edit_text(f"❌ Terjadi kesalahan saat mengirim file: {e}")
+
 
     def _build_users_list_view(self) -> Tuple[str, InlineKeyboardMarkup]:
         """Menyusun tampilan daftar pengguna terbagi rapi: VIP Aktif, Menunggu Persetujuan, dan Diblokir."""
@@ -1997,6 +2101,7 @@ class TelegramBotCommands:
             "• /watchlist - Lihat daftar saham potensial cuan & harga terkini",
             "• /status - Cek status bot & strategi aktif",
             "• /lasthistory - Tampilkan 5 riwayat sinyal terakhir",
+            "• /copier - Unduh paket zip Auto-Copier MT5 & panduan (Member VIP)",
             "• /help - Bantuan & panduan penggunaan bot",
             "",
             "💬 <b>Fitur Ngobrol Santai (AI Natural Chat):</b>",
@@ -3848,12 +3953,20 @@ class TelegramBotCommands:
 
         # 14. Intent COPIER: Pengguna menanyakan cara pasang copier / copy trade
         if intent == "COPIER":
+            user_text_low = user_text.lower()
+            direct_request_words = ["minta", "kirim", "download", "unduh", "ambil", "file", "zip", "dapatkan", "bagi"]
+            if any(w in user_text_low for w in direct_request_words):
+                await self.copier_command(update, context)
+                return
+
             is_adm = self._is_admin(update)
             reply_text = ChatAgent.generate_copier_guide_response(user_name=user_name, is_admin=is_adm)
-            kb = []
+            kb = [
+                [InlineKeyboardButton("📥 Unduh member_copier.zip Sekarang", callback_data="copier_download")]
+            ]
             if is_adm:
                 kb.append([InlineKeyboardButton("📦 Broadcast File Copier VIP", callback_data="sendcopier_all")])
-            await update.message.reply_html(reply_text, reply_markup=InlineKeyboardMarkup(kb) if kb else None)
+            await update.message.reply_html(reply_text, reply_markup=InlineKeyboardMarkup(kb))
             return
 
         # 15. Intent LICENSE: Pengguna menanyakan status lisensi / masa aktif
@@ -4000,6 +4113,7 @@ async def set_menu_commands(application: Application) -> None:
         BotCommand("status", "⚙️ Status Bot & Strategi Aktif"),
         BotCommand("lasthistory", "📜 Riwayat Sinyal & Transaksi MT5"),
         BotCommand("history", "📊 Rekap Transaksi Real MT5 & Hasil Sinyal"),
+        BotCommand("copier", "📦 Unduh Auto-Copier MT5 & Panduan Member"),
         BotCommand("update", "🔄 Auto Git Pull & Reload Kodingan Terbaru"),
         BotCommand("help", "ℹ️ Panduan Penggunaan Bot"),
     ]
@@ -4036,6 +4150,7 @@ def build_telegram_application() -> Optional[Application]:
     cmd_handler = TelegramBotCommands()
 
     app.add_handler(CommandHandler(["start", "help"], cmd_handler.start_command))
+    app.add_handler(CommandHandler(["copier", "downloadcopier", "unduhcopier", "getcopier", "zip", "filecopier", "download"], cmd_handler.copier_command))
     app.add_handler(CommandHandler(["chart", "grafik", "livechart"], cmd_handler.chart_command))
     app.add_handler(CommandHandler(["potensi", "radar", "topsetup"], cmd_handler.potensi_command))
     app.add_handler(CommandHandler(["news", "fomc", "cpi", "nfp", "kalender"], cmd_handler.news_command))

@@ -264,7 +264,9 @@ class ChatAgent:
         copier_keywords = [
             "copier", "copy trade", "copytrade", "ea copier", "client copier",
             "cara pasang copier", "script copier", "minta copier", "telegramsignalreceiver",
-            "cara copy", "panduan copier", "download copier",
+            "cara copy", "panduan copier", "download copier", "kirim zip", "minta zip",
+            "download zip", "file copier", "unduh copier", "ambil zip", "bagi copier",
+            "minta file", "member_copier", "member copier", "unduh zip",
         ]
         if any(k in text_lower for k in copier_keywords):
             return {
@@ -697,7 +699,7 @@ class ChatAgent:
             f"setiap kali bot mendeteksi sinyal Grade A+ di Telegram secara instan (hitungan milidetik)!\n\n"
             f"⚙️ <b>Cara Pasang Cepat:</b>\n"
             f"1. Pastikan Chat ID Telegram lu sudah terdaftar dan di-approve di bot.\n"
-            f"2. Buka folder <code>member_copier</code> atau minta file <code>member_copier.zip</code> ke Admin.\n"
+            f"2. Ketik <code>/copier</code> untuk download file <code>member_copier.zip</code> langsung di Telegram ini (atau klik tombol unduh di bawah).\n"
             f"3. Pasang EA <code>TelegramSignalReceiver.mq5</code> di MetaTrader 5 lu & centang <i>'Allow Algo Trading'</i>.\n"
             f"4. Buka file <code>config.json</code>, isi Chat ID lu.\n"
             f"5. Klik dua kali file <code>START_COPIER.bat</code>. Selesai! Bot akan menduplikasi sinyal otomatis ke MT5 lu.{admin_note}\n\n"

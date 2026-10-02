@@ -370,6 +370,27 @@ def cmd_learn_pdf(args: argparse.Namespace) -> None:
         print(f"❌ Error saat memproses PDF: {e}")
 
 
+def cmd_send_copier(args: argparse.Namespace) -> None:
+    """Kirim file member_copier.zip ke target chat atau broadcast ke seluruh member."""
+    notifier = TelegramNotifier()
+    zip_path = Path(args.path) if args.path else BASE_DIR / "member_copier.zip"
+    if not zip_path.exists():
+        print(f"❌ File {zip_path} tidak ditemukan!")
+        return
+
+    if args.target:
+        print(f"📤 Mengirim {zip_path.name} ke target {args.target}...")
+        ok = notifier.send_document(str(zip_path), caption=args.caption or "", target_chat_id=args.target)
+        if ok:
+            print("✅ File berhasil dikirim!")
+        else:
+            print("❌ Gagal mengirim file.")
+    else:
+        print(f"📤 Menyiarkan {zip_path.name} ke seluruh member aktif & server utama...")
+        res = notifier.broadcast_copier_update(zip_path=str(zip_path), custom_caption=args.caption)
+        print(f"Hasil broadcast: {res}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Bot Analisis & Sinyal Trading Saham Indonesia (IDX)",
@@ -417,6 +438,12 @@ def main():
     p_pdf = subparsers.add_parser("learn-pdf", help="Ekstrak aturan trading dari materi/buku PDF")
     p_pdf.add_argument("path", type=str, help="Lokasi file PDF (contoh: materials/buku_trading.pdf)")
 
+    # Command: send-copier
+    p_copier = subparsers.add_parser("send-copier", help="Kirim/broadcast file member_copier.zip via Telegram")
+    p_copier.add_argument("--target", "-t", type=str, help="Target Chat ID (opsional, jika kosong broadcast ke seluruh member & admin)")
+    p_copier.add_argument("--path", "-p", type=str, help="Lokasi file ZIP (default: member_copier.zip)")
+    p_copier.add_argument("--caption", "-c", type=str, help="Caption pesan opsional")
+
     args = parser.parse_args()
 
     if args.command == "scan":
@@ -435,6 +462,8 @@ def main():
         cmd_run_all(args)
     elif args.command == "learn-pdf":
         cmd_learn_pdf(args)
+    elif args.command == "send-copier":
+        cmd_send_copier(args)
     else:
         parser.print_help()
 

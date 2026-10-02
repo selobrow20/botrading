@@ -183,3 +183,33 @@ def test_copier_license_protocol(tmp_path):
     parts_exp = resp_exp.split("|")
     assert parts_exp[2] == "EXPIRED"
 
+
+def test_copier_broadcast_and_document_sending(tmp_path):
+    from notify.telegram_bot import TelegramNotifier
+    from notify.chat_agent import ChatAgent
+
+    db_file = tmp_path / "test_copier.db"
+    storage = StockStorage(db_path=str(db_file))
+    storage.register_or_get_user("member_vip1", "vip1", "VIP Trader 1")
+    storage.approve_user("member_vip1", "30d")
+
+    # Create dummy member_copier.zip for testing
+    dummy_zip = tmp_path / "member_copier.zip"
+    dummy_zip.write_bytes(b"PK\x05\x06" + b"\x00" * 18)  # minimal empty zip file
+
+    notifier = TelegramNotifier(token="mock_token", chat_id="8754997836", storage=storage)
+    res = notifier.broadcast_copier_update(zip_path=str(dummy_zip))
+    assert res["success"] is True
+    assert res["sent_count"] >= 1
+    assert "8754997836" in res["recipients"]
+
+    # Test send_document single
+    ok = notifier.send_document(str(dummy_zip), caption="Test", target_chat_id="member_vip1")
+    assert ok is True
+
+    # Test ChatAgent intent classification for copier
+    cls_res = ChatAgent.classify_intent("bor kirim zip copier dong")
+    assert cls_res["intent"] == "COPIER"
+    cls_res2 = ChatAgent.classify_intent("minta file copier")
+    assert cls_res2["intent"] == "COPIER"
+
