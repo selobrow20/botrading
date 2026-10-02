@@ -34,6 +34,9 @@ class SignalResult:
     macro_bias_h4: str = ""       # 'BULLISH', 'BEARISH', 'NETRAL'
     entry_pathway: str = ""       # 'Jalur A (Konfluensi)' atau 'Jalur B (Solo Sniper: <Modul>)'
     module_scores: Dict[str, float] = field(default_factory=dict)
+    # Metode Retest & Pullback Terkonfirmasi 9 Buku
+    is_retest_entry: bool = False
+    retest_details: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -55,6 +58,8 @@ class SignalResult:
             "macro_bias_h4": self.macro_bias_h4,
             "entry_pathway": self.entry_pathway,
             "module_scores": self.module_scores,
+            "is_retest_entry": self.is_retest_entry,
+            "retest_details": self.retest_details,
         }
 
 
@@ -67,6 +72,8 @@ class ConfluenceResult(tuple):
     - module_scores
     - num_agreeing_modules
     - solo_sniper_module
+    - is_retest_entry
+    - retest_details
     """
     is_approved: bool
     score: float
@@ -77,6 +84,8 @@ class ConfluenceResult(tuple):
     module_scores: Dict[str, float]
     num_agreeing_modules: int
     solo_sniper_module: Optional[str]
+    is_retest_entry: bool
+    retest_details: str
 
     def __new__(
         cls,
@@ -89,6 +98,8 @@ class ConfluenceResult(tuple):
         module_scores: Optional[Dict[str, float]] = None,
         num_agreeing_modules: int = 0,
         solo_sniper_module: Optional[str] = None,
+        is_retest_entry: bool = False,
+        retest_details: str = "",
     ):
         instance = super().__new__(cls, (is_approved, score, setup_grade, checks, prediction))
         instance.is_approved = is_approved
@@ -100,6 +111,8 @@ class ConfluenceResult(tuple):
         instance.module_scores = module_scores or {}
         instance.num_agreeing_modules = num_agreeing_modules
         instance.solo_sniper_module = solo_sniper_module
+        instance.is_retest_entry = is_retest_entry
+        instance.retest_details = retest_details
         return instance
 
 
@@ -296,6 +309,21 @@ class SignalEngine:
         has_adx = ("adx" in curr_row or "ADX_14" in curr_row)
         is_flat_chop = has_adx and (ema_diff < 1.8) and (adx_val < 20.0)
 
+        # Metode Retest & Pullback (Best Price Entry: Bawah/Diskon utk BUY, Atas/Premium utk SELL)
+        retest_sr_bull = bool(curr_row.get("retest_sr_flip_bullish", 0))
+        retest_sr_bear = bool(curr_row.get("retest_sr_flip_bearish", 0))
+        retest_ob_bull = bool(curr_row.get("retest_order_block_bullish", 0))
+        retest_ob_bear = bool(curr_row.get("retest_order_block_bearish", 0))
+        retest_ema_bull = bool(curr_row.get("retest_ema20_bullish", 0))
+        retest_ema_bear = bool(curr_row.get("retest_ema20_bearish", 0))
+        retest_fib_bull = bool(curr_row.get("retest_fib_bullish", 0))
+        is_retest_buy_ind = bool(curr_row.get("is_retest_buy", 0))
+        is_retest_sell_ind = bool(curr_row.get("is_retest_sell", 0))
+        is_retest_confirmed_buy = False
+        retest_zone_buy = ""
+        is_retest_confirmed_sell = False
+        retest_zone_sell = ""
+
         if signal_type == "BUY":
             # 1. Martin J. Pring & Trading Alchemist: Tren Mayor Bullish (Close >= EMA 50)
             if close >= ema50:
@@ -419,6 +447,31 @@ class SignalEngine:
                 score -= 10.0
                 checks.append("⚠️ Trading Alchemist: Struktur Pasar Bearish (Lower High / Lower Low) membayangi.")
 
+            # 10. METODE RETEST ENTRY TERKONFIRMASI 9 BUKU (Posisi Diskon / Bawah)
+            is_retest_buy = (
+                retest_sr_bull
+                or retest_ob_bull
+                or retest_ema_bull
+                or retest_fib_bull
+                or is_retest_buy_ind
+                or (volman_pb and wick_ratio >= 0.25)
+                or (fib_gz and wick_ratio >= 0.25)
+            )
+            is_retest_confirmed_buy = is_retest_buy and (pinbar or engulfing or wick_ratio >= 0.25 or (close >= open_p))
+            if is_retest_confirmed_buy:
+                if retest_ob_bull or ob_bull:
+                    retest_zone_buy = "Order Block Demand Zone"
+                elif retest_sr_bull:
+                    retest_zone_buy = "S/R Role Reversal (Broken Resistance -> Support)"
+                elif fib_gz or retest_fib_bull:
+                    retest_zone_buy = "Fibonacci Golden Pocket 61.8%"
+                elif volman_pb or retest_ema_bull:
+                    retest_zone_buy = "Dynamic 20 EMA Support"
+                else:
+                    retest_zone_buy = "Support Area Diskon"
+                score += 15.0
+                checks.append(f"🎯 METODE RETEST 9 BUKU: Rebound presisi di {retest_zone_buy} dengan rejection terkonfirmasi ({wick_ratio*100:.0f}% ekor bawah) -> Posisi Masuk Diskon / Bawah!")
+
             # Filter Pasar Chop / Sideways Tanpa Konfirmasi (Bob Volman & Al Brooks)
             if is_flat_chop and not pinbar and not engulfing and not bos_bull:
                 score -= 15.0
@@ -537,6 +590,27 @@ class SignalEngine:
                 score -= 10.0
                 checks.append("⚠️ Trading Alchemist: Struktur Pasar Bullish (Higher High / Higher Low) membayangi.")
 
+            # 10. METODE RETEST ENTRY TERKONFIRMASI 9 BUKU (Posisi Premium / Atas)
+            is_retest_sell = (
+                retest_sr_bear
+                or retest_ob_bear
+                or retest_ema_bear
+                or is_retest_sell_ind
+                or (shooting_star and dist_ema20_pct <= 2.0)
+            )
+            is_retest_confirmed_sell = is_retest_sell and (shooting_star or upper_wick_ratio >= 0.25 or (close <= open_p))
+            if is_retest_confirmed_sell:
+                if retest_ob_bear or ob_bear:
+                    retest_zone_sell = "Order Block Supply Zone"
+                elif retest_sr_bear:
+                    retest_zone_sell = "S/R Role Reversal (Broken Support -> Resistance)"
+                elif retest_ema_bear:
+                    retest_zone_sell = "Dynamic 20 EMA Resistance"
+                else:
+                    retest_zone_sell = "Resistance Area Premium"
+                score += 15.0
+                checks.append(f"🎯 METODE RETEST 9 BUKU: Rejection presisi di {retest_zone_sell} dengan rejection terkonfirmasi ({upper_wick_ratio*100:.0f}% ekor atas) -> Posisi Masuk Premium / Atas!")
+
             # Filter Pasar Chop / Sideways Tanpa Konfirmasi (Bob Volman & Al Brooks)
             if is_flat_chop and not shooting_star and upper_wick_ratio < 0.35 and not bos_bear:
                 score -= 15.0
@@ -551,6 +625,8 @@ class SignalEngine:
         is_buy = (signal_type == "BUY")
         direction_name = "Bullish" if is_buy else "Bearish"
         is_counter_trend = (is_buy and close < ema50) or (not is_buy and close > ema50)
+        is_retest_confirmed = is_retest_confirmed_buy if is_buy else is_retest_confirmed_sell
+        retest_details = retest_zone_buy if is_buy else retest_zone_sell
 
         if is_buy:
             # 1. Volman (Bob Volman - Price Action)
@@ -794,6 +870,11 @@ class SignalEngine:
             prediction = f"Arah market masih konsolidasi / belum memenuhi syarat konfluensi ketat ({direction_name} tertahan)."
             is_approved = False
 
+        if is_approved and is_retest_confirmed:
+            retest_tag = f"Retest Diskon ({retest_details})" if is_buy else f"Retest Premium ({retest_details})"
+            entry_pathway = f"{retest_tag} & {entry_pathway}"
+            prediction += f" Masuk presisi di ayunan {'bawah (Diskon)' if is_buy else 'atas (Premium)'}."
+
         return ConfluenceResult(
             is_approved=is_approved,
             score=score,
@@ -804,6 +885,8 @@ class SignalEngine:
             module_scores=module_scores,
             num_agreeing_modules=num_agreeing,
             solo_sniper_module=solo_candidate if is_solo_sniper else None,
+            is_retest_entry=is_retest_confirmed,
+            retest_details=retest_details,
         )
 
     def check_london_judas_swing(
@@ -1098,6 +1181,8 @@ class SignalEngine:
         pdf_approved, pdf_score, setup_grade, pdf_checks, direction_pred = pdf_res
         entry_pathway = getattr(pdf_res, "entry_pathway", "Jalur A (Konfluensi)")
         module_scores = getattr(pdf_res, "module_scores", {})
+        is_retest_sig = getattr(pdf_res, "is_retest_entry", False)
+        retest_details_sig = getattr(pdf_res, "retest_details", "")
 
         # 5. Hitung Manajemen Risiko Trading Harian (TP / SL / RRR)
         # Sesuai Arahan Mutlak Pengguna:
@@ -1170,6 +1255,17 @@ class SignalEngine:
                     + (" [HIGH-VOL]" if is_high_vol else "")
                 )
 
+            # RETEST SL ANCHORING (Presisi di bawah ekor rejection retest):
+            if is_retest_sig:
+                if target_sig_type == "BUY":
+                    retest_low = float(curr_row.get("Low", curr_price))
+                    sl_dist_retest = round(curr_price - (retest_low - 0.50), 2)
+                    sl_distance = max(sl_distance, sl_dist_retest)
+                elif target_sig_type == "SELL":
+                    retest_high = float(curr_row.get("High", curr_price))
+                    sl_dist_retest = round((retest_high + 0.50) - curr_price, 2)
+                    sl_distance = max(sl_distance, sl_dist_retest)
+
             # HARD FLOOR CONSTRAINT MUTLAK PENGGUNA:
             # DILARANG KERAS SL ATAU TP DI BAWAH 60 PIPS (6.00 USD) & R:R MINIMAL 1:1
             sl_distance = max(MIN_GOLD_SL_USD, sl_distance)
@@ -1178,6 +1274,10 @@ class SignalEngine:
                 tp_distance = min(12.00, max(MIN_GOLD_TP_USD, max(sl_distance, tp_distance)))
             else:
                 tp_distance = max(MIN_GOLD_TP_USD, max(sl_distance, tp_distance))
+
+            if is_retest_sig:
+                retest_badge = "[RETEST DISKON] " if target_sig_type == "BUY" else "[RETEST PREMIUM] "
+                market_regime = f"{retest_badge}{market_regime}"
 
             if target_sig_type == "SELL":
                 tp_price = round(curr_price - tp_distance, 2)
@@ -1504,6 +1604,8 @@ class SignalEngine:
             macro_bias_h4=macro_bias,
             entry_pathway=entry_pathway,
             module_scores=module_scores,
+            is_retest_entry=is_retest_sig,
+            retest_details=retest_details_sig,
         )
 
     def evaluate_all_strategies(

@@ -119,6 +119,9 @@ class TelegramNotifier:
 
         if sig.signal == "BUY":
             lines.append(f"🟢 <b>SINYAL ENTRY (MASUK / BUY): {display_ticker}</b>")
+            if getattr(sig, "is_retest_entry", False):
+                r_det = getattr(sig, "retest_details", "") or "Area Support"
+                lines.append(f"🎯 <b>Metode Entry:</b> 🔄 <b>Retest Diskon (Bawah)</b> - <code>{html.escape(r_det)}</code>")
             lines.append(f"📍 <b>Harga Entry:</b> <code>{price_str}</code>")
             if sig.take_profit_price and sig.stop_loss_price:
                 tp_str = format_currency(sig.take_profit_price, sig.ticker)
@@ -154,6 +157,9 @@ class TelegramNotifier:
         elif sig.signal == "SELL" and is_gold:
             # Short Gold
             lines.append(f"🔴 <b>SINYAL ENTRY SHORT (SELL): {display_ticker}</b>")
+            if getattr(sig, "is_retest_entry", False):
+                r_det = getattr(sig, "retest_details", "") or "Area Resisten"
+                lines.append(f"🎯 <b>Metode Entry:</b> 🔄 <b>Retest Premium (Atas)</b> - <code>{html.escape(r_det)}</code>")
             lines.append(f"📍 <b>Harga Entry Short:</b> <code>{price_str}</code>")
             if sig.take_profit_price and sig.stop_loss_price:
                 tp_str = format_currency(sig.take_profit_price, sig.ticker)

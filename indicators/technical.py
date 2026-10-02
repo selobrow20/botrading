@@ -429,6 +429,128 @@ class TechnicalIndicators:
             "fvg_bearish": fvg_bearish,
         }
 
+    @staticmethod
+    def retest_and_pullback_detection(
+        high_s: pd.Series,
+        low_s: pd.Series,
+        close_s: pd.Series,
+        open_s: pd.Series,
+        ema20: pd.Series,
+        ema50: pd.Series,
+        rolling_sh: pd.Series,
+        rolling_sl: pd.Series,
+        fib_500: pd.Series,
+        fib_618: pd.Series,
+        rejection_wick_ratio: pd.Series,
+        upper_wick_ratio: pd.Series,
+        ob_bullish: Optional[pd.Series] = None,
+        ob_bearish: Optional[pd.Series] = None,
+        lookback: int = 15,
+    ) -> Dict[str, pd.Series]:
+        """
+        Deteksi Metode Retest & Pullback Terkonfirmasi 9 Buku Trading:
+        Mencari momen masuk terbaik (Beli di Bawah / Diskon, Jual di Atas / Premium):
+        1. Bullish S/R Role Reversal (Broken Resistance -> Support)
+        2. Bearish S/R Role Reversal (Broken Support -> Resistance)
+        3. Bullish & Bearish Order Block Mitigation Retest
+        4. Dynamic 20 EMA Pullback Retest (Bob Volman)
+        5. Fibonacci Golden Pocket (50% - 61.8%) Retest
+        """
+        # S/R Flip Bullish: Breakout di atas swing high sebelumnya dalam 10 bar terakhir, lalu retest
+        recent_sh = rolling_sh.shift(1).fillna(high_s)
+        broke_sh_recently = (close_s.shift(1) > recent_sh.shift(1)).rolling(lookback, min_periods=1).max() > 0
+        retest_sh = (
+            broke_sh_recently
+            & (low_s <= recent_sh * 1.004)
+            & (close_s >= recent_sh * 0.996)
+            & ((rejection_wick_ratio >= 0.25) | (close_s >= open_s))
+        )
+        retest_sr_flip_bullish = retest_sh.astype(float)
+
+        # S/R Flip Bearish: Breakdown di bawah swing low sebelumnya dalam 10 bar terakhir, lalu retest
+        recent_sl = rolling_sl.shift(1).fillna(low_s)
+        broke_sl_recently = (close_s.shift(1) < recent_sl.shift(1)).rolling(lookback, min_periods=1).max() > 0
+        retest_sl = (
+            broke_sl_recently
+            & (high_s >= recent_sl * 0.996)
+            & (close_s <= recent_sl * 1.004)
+            & ((upper_wick_ratio >= 0.25) | (close_s <= open_s))
+        )
+        retest_sr_flip_bearish = retest_sl.astype(float)
+
+        # Order Block Retest (Mitigasi Demand/Supply)
+        has_ob_bull = (
+            ob_bullish.rolling(lookback, min_periods=1).max() > 0
+            if ob_bullish is not None
+            else pd.Series(False, index=close_s.index)
+        )
+        retest_ob_bull = (
+            has_ob_bull
+            & (low_s <= ema20 * 1.005)
+            & ((rejection_wick_ratio >= 0.25) | (close_s >= open_s))
+            & (close_s >= ema50 * 0.99)
+        ).astype(float)
+
+        has_ob_bear = (
+            ob_bearish.rolling(lookback, min_periods=1).max() > 0
+            if ob_bearish is not None
+            else pd.Series(False, index=close_s.index)
+        )
+        retest_ob_bear = (
+            has_ob_bear
+            & (high_s >= ema20 * 0.995)
+            & ((upper_wick_ratio >= 0.25) | (close_s <= open_s))
+            & (close_s <= ema50 * 1.01)
+        ).astype(float)
+
+        # Dynamic EMA 20 Retest
+        retest_ema20_bull = (
+            (close_s >= ema50)
+            & (low_s <= ema20 * 1.003)
+            & (close_s >= ema20 * 0.996)
+            & (rejection_wick_ratio >= 0.25)
+        ).astype(float)
+
+        retest_ema20_bear = (
+            (close_s <= ema50)
+            & (high_s >= ema20 * 0.997)
+            & (close_s <= ema20 * 1.004)
+            & (upper_wick_ratio >= 0.25)
+        ).astype(float)
+
+        # Fibonacci Golden Pocket Retest
+        retest_fib_bull = (
+            (low_s <= fib_500 * 1.003)
+            & (close_s >= fib_618 * 0.995)
+            & ((rejection_wick_ratio >= 0.25) | (close_s >= open_s))
+        ).astype(float)
+
+        # Agregat Retest
+        is_retest_buy = (
+            (retest_sr_flip_bullish > 0)
+            | (retest_ob_bull > 0)
+            | (retest_ema20_bull > 0)
+            | (retest_fib_bull > 0)
+        ).astype(float)
+
+        is_retest_sell = (
+            (retest_sr_flip_bearish > 0)
+            | (retest_ob_bear > 0)
+            | (retest_ema20_bear > 0)
+        ).astype(float)
+
+        return {
+            "retest_sr_flip_bullish": retest_sr_flip_bullish,
+            "retest_sr_flip_bearish": retest_sr_flip_bearish,
+            "retest_order_block_bullish": retest_ob_bull,
+            "retest_order_block_bearish": retest_ob_bear,
+            "retest_ema20_bullish": retest_ema20_bull,
+            "retest_ema20_bearish": retest_ema20_bear,
+            "retest_fib_bullish": retest_fib_bull,
+            "is_retest_buy": is_retest_buy,
+            "is_retest_sell": is_retest_sell,
+        }
+
     @classmethod
     def add_all_indicators(
         cls,
@@ -538,6 +660,25 @@ class TechnicalIndicators:
         # 11. Struktur Pasar & Smart Money (Buku: Trading Alchemist - Rizki Aditama)
         ms_dict = cls.market_structure(res["High"], res["Low"], res["Close"], res["Open"])
         for k, v in ms_dict.items():
+            res[k] = v
+
+        # 12. Metode Retest & Pullback Terkonfirmasi 9 Buku
+        rolling_sh = res["High"].shift(1).rolling(10, min_periods=3).max()
+        rolling_sl = res["Low"].shift(1).rolling(10, min_periods=3).min()
+        fib_500_s = res["fib_500"] if "fib_500" in res.columns else res["Close"]
+        fib_618_s = res["fib_618"] if "fib_618" in res.columns else res["Close"]
+        rejection_wick_s = res["rejection_wick_ratio"] if "rejection_wick_ratio" in res.columns else pd.Series(0.0, index=res.index)
+        upper_wick_s = res["upper_wick_ratio"] if "upper_wick_ratio" in res.columns else pd.Series(0.0, index=res.index)
+        ob_bull_s = res["order_block_bullish"] if "order_block_bullish" in res.columns else None
+        ob_bear_s = res["order_block_bearish"] if "order_block_bearish" in res.columns else None
+
+        retest_dict = cls.retest_and_pullback_detection(
+            res["High"], res["Low"], res["Close"], res["Open"],
+            ema20_col, ema50_col, rolling_sh, rolling_sl,
+            fib_500_s, fib_618_s, rejection_wick_s, upper_wick_s,
+            ob_bull_s, ob_bear_s,
+        )
+        for k, v in retest_dict.items():
             res[k] = v
 
         # Tambahkan lowercase alias untuk harga dasar

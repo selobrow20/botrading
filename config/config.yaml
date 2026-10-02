@@ -94,6 +94,11 @@ mt5:
   enable_3layer_architecture: true  # Mengaktifkan evaluasi 3 lapis komprehensif
   min_layer_modules_agree: 3        # Minimal 3 modul setuju untuk Jalur A (Konfluensi)
   solo_sniper_min_score: 80.0       # Skor minimal 80% (Grade A+) untuk eksekusi mandiri Jalur B (Solo Sniper)
+  # ─── METODE RETEST TERKONFIRMASI 9 BUKU (Best Price Entry) ──────────────────
+  enable_retest_entry: true         # Prioritas entry retest: BUY di bawah (Diskon), SELL di atas (Premium)
+  retest_tolerance_pct: 0.35        # Toleransi sentuhan area retest (0.35%)
+  retest_min_rejection_wick: 0.25   # Minimal ekor penolakan (25% dari range candle)
+  require_9books_retest_confirm: true # Wajib ada konfirmasi rejection + momentum/volume 9 buku
   max_spread_usd: 0.65              # Maksimal spread $0.65 USD (65 pips) agar tidak entry saat spread malam melebar
   enable_rollover_guard: true       # Menahan entry saat jam rollover malam broker (04:45 - 05:20 WIB)
   max_consecutive_losses: 2         # Jika 2x SL beruntun, aktifkan cooldown pengamanan 45 menit

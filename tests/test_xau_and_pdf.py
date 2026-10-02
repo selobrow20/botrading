@@ -826,6 +826,112 @@ def test_3layer_architecture_lapis3_risk_guard_veto():
     assert any("ANTI-PUCUK" in r or "Overbought" in r for r in sig.reasons)
 
 
+def test_retest_and_pullback_detection_indicator():
+    """Menguji deteksi retest support/resistance, order block, dan EMA dinamis pada indikator."""
+    # Data sintetis: Breakout lalu retest ke broken resistance
+    highs = [2700.0, 2702.0, 2705.0, 2715.0, 2718.0, 2712.0, 2705.5, 2706.0]
+    lows =  [2695.0, 2698.0, 2700.0, 2708.0, 2710.0, 2705.0, 2704.5, 2705.0]
+    closes = [2698.0, 2701.0, 2705.0, 2714.0, 2716.0, 2707.0, 2705.8, 2708.0]
+    opens =  [2696.0, 2699.0, 2702.0, 2709.0, 2714.0, 2715.0, 2706.5, 2705.5]
+    idx = pd.date_range("2026-10-02 10:00", periods=8, freq="15min")
+
+    df = pd.DataFrame({"Open": opens, "High": highs, "Low": lows, "Close": closes, "Volume": [1000]*8}, index=idx)
+    df_ind = TechnicalIndicators.add_all_indicators(df)
+
+    assert "retest_sr_flip_bullish" in df_ind.columns
+    assert "is_retest_buy" in df_ind.columns
+    assert "is_retest_sell" in df_ind.columns
+
+
+def test_retest_entry_buy_at_discount_with_9books_confirmation():
+    """
+    Menguji Metode Retest BUY di area diskon / bawah:
+    Harga menguji Bullish Order Block / S-R Flip dengan konfirmasi rejection candle 9 buku.
+    """
+    retest_buy_bar = pd.Series({
+        "Close": 2705.0,
+        "High": 2708.0,
+        "Low": 2700.0,   # Ayunan bawah retest
+        "Open": 2702.0,
+        "ema_20": 2703.0,
+        "ema_50": 2695.0,
+        "ema_200": 2680.0,
+        "rsi": 48.0,     # Memantul di zona sehat
+        "volume_ratio": 1.15,
+        "rejection_wick_ratio": 0.45,  # Ekor bawah panjang (Mega Profit / Pinbar)
+        "pattern_pinbar": 1,
+        "volman_pullback": 1,
+        "retest_sr_flip_bullish": 1.0,
+        "retest_order_block_bullish": 1.0,
+        "is_retest_buy": 1.0,
+    })
+
+    res = SignalEngine.validate_pdf_entry_confluence(retest_buy_bar, signal_type="BUY")
+    assert res.is_approved is True
+    assert res.is_retest_entry is True
+    assert "Retest Diskon" in res.entry_pathway
+    assert any("METODE RETEST 9 BUKU" in c for c in res.checks)
+    assert any("Diskon / Bawah" in c for c in res.checks)
+
+
+def test_retest_entry_sell_at_premium_with_9books_confirmation():
+    """
+    Menguji Metode Retest SELL di area premium / atas:
+    Harga menguji Bearish Order Block / Resistance Flip dengan konfirmasi rejection candle 9 buku.
+    """
+    retest_sell_bar = pd.Series({
+        "Close": 2695.0,
+        "High": 2702.0,   # Ayunan atas retest
+        "Low": 2692.0,
+        "Open": 2698.0,
+        "ema_20": 2697.0,
+        "ema_50": 2710.0,
+        "ema_200": 2730.0,
+        "rsi": 52.0,
+        "volume_ratio": 1.10,
+        "upper_wick_ratio": 0.40,  # Ekor atas panjang (Shooting Star)
+        "pattern_shooting_star": 1,
+        "retest_sr_flip_bearish": 1.0,
+        "retest_order_block_bearish": 1.0,
+        "is_retest_sell": 1.0,
+    })
+
+    res = SignalEngine.validate_pdf_entry_confluence(retest_sell_bar, signal_type="SELL")
+    assert res.is_approved is True
+    assert res.is_retest_entry is True
+    assert "Retest Premium" in res.entry_pathway
+    assert any("METODE RETEST 9 BUKU" in c for c in res.checks)
+    assert any("Premium / Atas" in c for c in res.checks)
+
+
+def test_retest_badge_in_telegram_format():
+    """Menguji tampilan badge retest (Diskon/Bawah) di format pesan Telegram."""
+    sig = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="Master_Confluence",
+        signal="BUY",
+        price=2705.0,
+        candle_time="2026-10-02 20:00:00",
+        take_profit_price=2715.0,
+        stop_loss_price=2699.0,
+        risk_reward_ratio=1.67,
+        pdf_confluence_score=85.0,
+        setup_grade="Grade A+",
+        pdf_confluence_details=["METODE RETEST 9 BUKU"],
+        market_direction_prediction="Bullish Kuat dari Area Diskon",
+        is_retest_entry=True,
+        retest_details="Order Block Demand Zone",
+    )
+
+    notifier = TelegramNotifier()
+    msg = notifier.format_signal_message(sig)
+    assert "Metode Entry:" in msg
+    assert "Retest Diskon (Bawah)" in msg
+    assert "Order Block Demand Zone" in msg
+    assert "$2,705.00" in msg
+
+
+
 
 
 
