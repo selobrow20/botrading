@@ -147,12 +147,46 @@ class GitAutoUpdater:
         try:
             python_bin = sys.executable
             args = [python_bin] + sys.argv
+            creationflags = 0
+            if sys.platform == "win32":
+                creationflags = subprocess.CREATE_NEW_CONSOLE
             # Spawn proses baru yang independen
-            subprocess.Popen(args, cwd=str(self.base_dir))
+            subprocess.Popen(args, cwd=str(self.base_dir), creationflags=creationflags)
             time.sleep(1.0)
             os._exit(0)
         except Exception as e:
             logger.error(f"Gagal me-restart proses bot: {e}")
+
+    def manual_update(self, force: bool = False) -> Tuple[bool, str, bool]:
+        """
+        Melakukan git pull manual berdasarkan perintah pengguna (/update atau /gitpull).
+        Returns:
+            (success, message_or_commit_info, restarted)
+        """
+        try:
+            has_update, local_h, remote_h = self.check_for_updates()
+            if not has_update and not force:
+                log_proc = subprocess.run(
+                    ["git", "log", "-1", "--pretty=format:%h - %s (%an)"],
+                    cwd=str(self.base_dir),
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                commit_info = log_proc.stdout.strip() or "Repository sudah sinkron dengan origin/main."
+                return True, commit_info, False
+
+            success, commit_info = self.apply_pull()
+            if success:
+                if self.auto_restart:
+                    import threading
+                    threading.Timer(2.0, self.restart_process).start()
+                return True, commit_info, True
+            else:
+                return False, commit_info, False
+        except Exception as e:
+            logger.error(f"Error saat manual update Git: {e}")
+            return False, str(e), False
 
     def check_and_pull(self) -> bool:
         """

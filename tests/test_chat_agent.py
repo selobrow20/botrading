@@ -310,3 +310,68 @@ def test_generate_stance_and_entry_advice_response():
     )
     assert "aman dan layak masuk" in resp_advice
     assert "Stop Loss" in resp_advice
+
+
+def test_classify_intent_news_stance_and_update():
+    # 1. News Stance: Nfp sell
+    res_nfp_sell = ChatAgent.classify_intent("Nfp sell")
+    assert res_nfp_sell["intent"] == "NEWS_STANCE"
+    assert res_nfp_sell["news_type"] == "NFP"
+    assert res_nfp_sell["user_stance"] == "SELL"
+
+    # 2. News Stance: nfp buy
+    res_nfp_buy = ChatAgent.classify_intent("nfp buy")
+    assert res_nfp_buy["intent"] == "NEWS_STANCE"
+    assert res_nfp_buy["news_type"] == "NFP"
+    assert res_nfp_buy["user_stance"] == "BUY"
+
+    # 3. News Stance: arah nfp kemana
+    res_nfp_dir = ChatAgent.classify_intent("arah nfp kemana bor")
+    assert res_nfp_dir["intent"] == "NEWS_STANCE"
+    assert res_nfp_dir["news_type"] == "NFP"
+    assert res_nfp_dir["user_stance"] is None
+
+    # 4. News Stance: fomc sell
+    res_fomc_sell = ChatAgent.classify_intent("fomc sell")
+    assert res_fomc_sell["intent"] == "NEWS_STANCE"
+    assert res_fomc_sell["news_type"] == "FOMC"
+    assert res_fomc_sell["user_stance"] == "SELL"
+
+    # 5. Update Intent
+    assert ChatAgent.classify_intent("update bot")["intent"] == "UPDATE"
+    assert ChatAgent.classify_intent("git pull dong")["intent"] == "UPDATE"
+    assert ChatAgent.classify_intent("tarik update sekarang")["intent"] == "UPDATE"
+
+
+def test_generate_news_stance_response():
+    # Case: User says SELL, system says STRONG BUY
+    resp_contrary = ChatAgent.generate_news_stance_response(
+        news_type="NFP",
+        user_stance="SELL",
+        prediction="STRONG BUY",
+        confidence=86,
+        live_price=4188.40,
+        entry=4188.40,
+        tp1=4221.91,
+        sl=4175.84,
+        user_name="Bro",
+    )
+    assert "Jangan buru-buru SELL" in resp_contrary
+    assert "STRONG BUY (86% Confidence)" in resp_contrary
+    assert "$4,188.40" in resp_contrary
+    assert "$4,221.91" in resp_contrary
+
+    # Case: User says BUY, system says BUY
+    resp_aligned = ChatAgent.generate_news_stance_response(
+        news_type="NFP",
+        user_stance="BUY",
+        prediction="STRONG BUY",
+        confidence=86,
+        live_price=4188.40,
+        entry=4188.40,
+        tp1=4221.91,
+        sl=4175.84,
+        user_name="Bro",
+    )
+    assert "Klop banget" in resp_aligned
+    assert "STRONG BUY" in resp_aligned

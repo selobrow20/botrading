@@ -7,14 +7,18 @@ echo ======================================================================
 echo    MEMULAI BOT TRADING AUTO-TRADER (MT5 HFM + TELEGRAM NOTIFIER)
 echo ======================================================================
 echo.
-echo [1/2] Memeriksa virtual environment...
+echo [1/3] Memeriksa virtual environment...
 if not exist ".\.venv\Scripts\python.exe" (
     echo [ERROR] Virtual environment .venv tidak ditemukan!
     pause
     exit /b
 )
 
-echo [2/2] Menjalankan Bot Sinyal 9 PDF Confluence & MT5 Auto-Trader...
+echo [2/3] Memeriksa & menarik kodingan terbaru dari GitHub (git pull)...
+git pull origin main
+
+echo.
+echo [3/3] Menjalankan Bot Sinyal 9 PDF Confluence & MT5 Auto-Trader...
 echo.
 echo Tips:
 echo - Pastikan aplikasi MetaTrader 5 HFM tetap terbuka di latar belakang.

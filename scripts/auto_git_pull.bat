@@ -1,6 +1,13 @@
 @echo off
 setlocal enabledelayedexpansion
-cd /d "d:\bot saham"
+set "REPO_DIR=%~dp0.."
+if exist "%REPO_DIR%\.git" (
+    cd /d "%REPO_DIR%"
+) else if exist "d:\bot saham\.git" (
+    cd /d "d:\bot saham"
+) else if exist "c:\Projects\botrading\.git" (
+    cd /d "c:\Projects\botrading"
+)
 
 git fetch origin main >nul 2>&1
 if errorlevel 1 (

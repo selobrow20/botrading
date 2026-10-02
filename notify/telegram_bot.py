@@ -3494,6 +3494,160 @@ class TelegramBotCommands:
         )
         await update.message.reply_html(price_text)
 
+    async def update_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /update atau /gitpull untuk menarik kodingan terbaru dari GitHub & reload otomatis."""
+        if not await self.check_user_access(update, context):
+            return
+
+        if not self._is_admin(update):
+            await update.message.reply_html("⛔ <i>Perintah /update hanya dapat dijalankan oleh Admin/Owner bot.</i>")
+            return
+
+        from scheduler.auto_updater import GitAutoUpdater
+        BASE_DIR = Path(__file__).resolve().parent.parent
+        updater = GitAutoUpdater(base_dir=BASE_DIR, branch="main", auto_restart=True, notifier=self)
+
+        is_force = bool(context.args and context.args[0].lower() in ["force", "f", "paksa"])
+        status_msg = await update.message.reply_html("🔄 <i>Memeriksa pembaruan kodingan dari GitHub origin/main...</i>")
+
+        def _do_update():
+            return updater.manual_update(force=is_force)
+
+        import asyncio
+        success, message, restarted = await asyncio.to_thread(_do_update)
+
+        if success and restarted:
+            await status_msg.edit_text(
+                f"✅ <b>Pembaruan Berhasil Ditarik!</b>\n\n"
+                f"📝 <b>Commit Terbaru:</b>\n<code>{html.escape(message)}</code>\n\n"
+                f"🚀 <i>Me-restart proses bot secara mulus sekarang... Bot akan aktif kembali dengan fitur baru dalam 2-3 detik!</i>",
+                parse_mode=ParseMode.HTML,
+            )
+        elif success and not restarted:
+            await status_msg.edit_text(
+                f"ℹ️ <b>Repository Sudah Up-to-Date!</b>\n\n"
+                f"📝 <b>Commit Terakhir:</b>\n<code>{html.escape(message)}</code>\n\n"
+                f"💡 <i>Tidak ada kodingan baru di remote. Gunakan <code>/update force</code> jika ingin memaksa git pull ulang.</i>",
+                parse_mode=ParseMode.HTML,
+            )
+        else:
+            await status_msg.edit_text(
+                f"❌ <b>Gagal Menarik Pembaruan:</b>\n\n"
+                f"<code>{html.escape(message)}</code>",
+                parse_mode=ParseMode.HTML,
+            )
+
+    async def handle_news_stance_chat(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        news_type: str,
+        user_stance: Optional[str],
+        user_name: str,
+    ) -> None:
+        """Handler pertanyaan arah / posisi news ('Nfp sell', 'nfp buy', 'arah nfp kemana')."""
+        from data.economic_calendar import EconomicCalendar
+        from strategy.news_predictor import NewsPredictor
+        from data.fetcher import DataFetcher
+        from notify.chat_agent import ChatAgent
+        import asyncio
+
+        await update.message.reply_html(f"Sebentar ya {user_name}! 🔍 Gue lagi cek data kalender, konsensus & analisa teknikal pre-news buat <b>{news_type}</b>...")
+
+        def _fetch_stance_data():
+            cal = EconomicCalendar(storage=self.storage)
+            cal.sync_calendar()
+            events = cal.get_this_week_schedule()
+
+            fetcher = DataFetcher(storage=self.storage)
+            df_gold = fetcher.get_data("XAUUSD", interval="15m", period="5d", force_fetch=True)
+            live_price = float(df_gold["Close"].iloc[-1]) if not df_gold.empty else 4300.0
+
+            target_ev = None
+            if events:
+                nt_lower = news_type.lower()
+                for ev in events:
+                    ev_title = str(ev.get("title", "")).lower()
+                    ev_type = str(ev.get("news_type", "")).lower()
+                    if nt_lower in ev_type or nt_lower in ev_title:
+                        target_ev = ev
+                        break
+                if not target_ev:
+                    target_ev = events[0]
+
+            closest_analysis = None
+            chart_path = None
+            if target_ev:
+                closest_analysis = NewsPredictor.analyze_pre_news(target_ev, live_gold_price=live_price, df_gold=df_gold)
+                chart_path = NewsPredictor.generate_pre_news_chart(closest_analysis, df=df_gold)
+
+            return target_ev, closest_analysis, chart_path, live_price
+
+        target_ev, closest_analysis, chart_path, live_price = await asyncio.to_thread(_fetch_stance_data)
+
+        if not closest_analysis:
+            await update.message.reply_html(
+                f"Waduh {user_name}, belum ada data rilis ekonomi untuk <b>{news_type}</b> dalam waktu dekat. "
+                "Untuk saat ini XAU/USD lebih dipengaruhi oleh level support/resisten teknikal murni bor!"
+            )
+            return
+
+        rec = closest_analysis.get("primary_recommendation", "BUY")
+        conf = int(closest_analysis.get("confidence_pct", 80))
+        setup = closest_analysis.get("trade_setup", {})
+        ev_title = target_ev.get("title", news_type) if target_ev else news_type
+        ev_wib = target_ev.get("date_wib", "") if target_ev else ""
+
+        stance_reply = ChatAgent.generate_news_stance_response(
+            news_type=news_type,
+            user_stance=user_stance,
+            prediction=rec,
+            confidence=conf,
+            live_price=live_price,
+            entry=setup.get("entry", live_price),
+            tp1=setup.get("tp1", live_price + 20),
+            sl=setup.get("sl", live_price - 15),
+            news_title=ev_title,
+            release_wib=ev_wib,
+            user_name=user_name,
+        )
+
+        reply_markup = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📊 Buka Live Chart", callback_data="chart_XAUUSD_candles"),
+                InlineKeyboardButton("🕯️ Pola Candlestick", callback_data="candle_XAUUSD"),
+            ],
+            [
+                InlineKeyboardButton("📈 Buka di TradingView", url=get_tradingview_url("XAUUSD")),
+            ],
+        ])
+
+        if chart_path and Path(chart_path).exists():
+            safe_cap = stance_reply
+            overflow_text = None
+            if len(stance_reply) > 1020:
+                cut_idx = stance_reply.rfind("\n", 0, 950)
+                if cut_idx == -1:
+                    cut_idx = 950
+                safe_cap = stance_reply[:cut_idx] + "\n...\n<i>(Lanjutan penjelasan di bawah 👇)</i>"
+                overflow_text = stance_reply[cut_idx:].strip()
+
+            try:
+                with open(chart_path, "rb") as photo:
+                    await update.message.reply_photo(
+                        photo=photo,
+                        caption=safe_cap,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=reply_markup,
+                    )
+                if overflow_text:
+                    await update.message.reply_html(overflow_text)
+                return
+            except Exception as e:
+                logger.error(f"Gagal kirim photo pre-news chart di chat: {e}")
+
+        await update.message.reply_html(stance_reply, reply_markup=reply_markup)
+
     async def chat_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler pesan teks percakapan natural (bahasa gaul) & interaksi seluruh fitur bot."""
         if not await self.check_user_access(update, context):
@@ -3669,7 +3823,19 @@ class TelegramBotCommands:
             await self.tutup_command(update, context)
             return
 
-        # 13. Intent NEWS: Pengguna menanyakan jadwal news atau prediksi FOMC/CPI/NFP
+        # 13. Intent NEWS_STANCE: Pengguna menanyakan arah / sikap terhadap news ("Nfp sell", "nfp buy", "arah nfp kemana")
+        if intent == "NEWS_STANCE":
+            news_type = classification.get("news_type", "NFP")
+            user_stance = classification.get("user_stance")
+            await self.handle_news_stance_chat(update, context, news_type, user_stance, user_name)
+            return
+
+        # 14. Intent UPDATE: Pengguna meminta update kodingan / git pull via chat ("update bot", "git pull", "tarik update")
+        if intent == "UPDATE":
+            await self.update_command(update, context)
+            return
+
+        # 15. Intent NEWS: Pengguna menanyakan jadwal news atau prediksi FOMC/CPI/NFP
         if intent == "NEWS":
             await self.news_command(update, context)
             return
@@ -3855,6 +4021,7 @@ async def set_menu_commands(application: Application) -> None:
         BotCommand("status", "⚙️ Status Bot & Strategi Aktif"),
         BotCommand("lasthistory", "📜 Riwayat Sinyal & Transaksi MT5"),
         BotCommand("history", "📊 Rekap Transaksi Real MT5 & Hasil Sinyal"),
+        BotCommand("update", "🔄 Auto Git Pull & Reload Kodingan Terbaru"),
         BotCommand("help", "ℹ️ Panduan Penggunaan Bot"),
     ]
     try:
@@ -3909,6 +4076,7 @@ def build_telegram_application() -> Optional[Application]:
     app.add_handler(CommandHandler(["delete", "hapus", "purge"], cmd_handler.delete_command))
     app.add_handler(CommandHandler(["users", "member", "members", "kelola"], cmd_handler.users_command))
     app.add_handler(CommandHandler(["sendcopier", "broadcastcopier", "kirimcopier"], cmd_handler.sendcopier_command))
+    app.add_handler(CommandHandler(["update", "gitpull", "pull", "sync"], cmd_handler.update_command))
 
     app.add_handler(CommandHandler(["license", "lisensi", "auth_check"], cmd_handler.license_command))
     app.add_handler(CallbackQueryHandler(cmd_handler.button_callback_handler))

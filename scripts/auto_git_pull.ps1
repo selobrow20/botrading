@@ -1,7 +1,13 @@
 # Auto Git Pull Script for Master Server
 # Digunakan untuk cron job / scheduler tiap 5 menit
-$repoPath = "d:\bot saham"
-Set-Location -Path $repoPath
+$repoDir = Join-Path $PSScriptRoot ".."
+if (Test-Path "$repoDir\.git") {
+    Set-Location -Path $repoDir
+} elseif (Test-Path "d:\bot saham\.git") {
+    Set-Location -Path "d:\bot saham"
+} elseif (Test-Path "c:\Projects\botrading\.git") {
+    Set-Location -Path "c:\Projects\botrading"
+}
 
 try {
     # 1. Fetch remote updates

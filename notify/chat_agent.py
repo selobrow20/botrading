@@ -210,7 +210,45 @@ class ChatAgent:
                 "ticker": None,
             }
 
-        # 9. Deteksi Pertanyaan High-Impact News & Kalender Ekonomi
+        # 9. Deteksi Permintaan Update Kodingan / Git Pull ("update bot", "git pull", "tarik update")
+        update_patterns = [
+            r"\b(git\s*pull|update\s*bot|update\s*kodingan|tarik\s*update|tarik\s*kodingan|sync\s*git|auto\s*update)\b",
+            r"\b(tolong|coba)?\s*(update|pull)\s*(bot|repo|kodingan|sekarang)\b",
+        ]
+        if any(re.search(pat, text_lower) for pat in update_patterns):
+            return {
+                "intent": "UPDATE",
+                "ticker": None,
+            }
+
+        # 10. Deteksi Pertanyaan Sikap / Stance News ("nfp sell", "nfp buy", "arah nfp kemana", "prediksi nfp buy apa sell", "fomc buy")
+        news_stance_patterns = [
+            r"\b(nfp|fomc|cpi|pce|cpe|inflasi|suku bunga)\s*(buy|sell|beli|jual|long|short)\b",
+            r"\b(buy|sell|beli|jual|long|short)\s*(nfp|fomc|cpi|pce|cpe|news)\b",
+            r"\b(arah|prediksi|prospek|bagusan|mending)\s*(nfp|fomc|cpi|pce|cpe|news)\b",
+            r"\b(nfp|fomc|cpi|pce|cpe|news)\s*(arahnya|prediksi|prospek|gimana|mau kemana|enaknya apa)\b",
+            r"\b(nfp|fomc|cpi|pce)\s*(buy\s*(or|apa|atau)\s*sell|sell\s*(or|apa|atau)\s*buy)\b",
+        ]
+        if any(re.search(pat, text_lower) for pat in news_stance_patterns):
+            ntype = "NFP"
+            for candidate in ["nfp", "fomc", "cpi", "pce", "cpe", "inflasi", "suku bunga"]:
+                if candidate in text_lower:
+                    ntype = candidate.upper()
+                    break
+            user_stance = None
+            if re.search(r"\b(sell|jual|short)\b", text_lower):
+                user_stance = "SELL"
+            elif re.search(r"\b(buy|beli|long)\b", text_lower):
+                user_stance = "BUY"
+
+            return {
+                "intent": "NEWS_STANCE",
+                "news_type": ntype,
+                "user_stance": user_stance,
+                "ticker": "XAUUSD",
+            }
+
+        # 11. Deteksi Pertanyaan High-Impact News & Kalender Ekonomi
         news_keywords = [
             "news", "fomc", "cpi", "pce", "cpe", "nfp", "inflasi", "suku bunga", "the fed",
             "non farm", "nonfarm", "unemployment", "kalender", "berita ekonomi",
@@ -862,6 +900,86 @@ class ChatAgent:
             f"Harga live <b>{disp_name}</b> sekarang lagi di <code>{price_fmt}</code> {chg_fmt} bor.\n"
             f"Status sinyal sistem saat ini <b>{sig_label}</b>. Ada yang mau lu cek lagi?"
         )
+
+    @classmethod
+    def generate_news_stance_response(
+        cls,
+        news_type: str,
+        user_stance: Optional[str],
+        prediction: str,
+        confidence: int,
+        live_price: float,
+        entry: float,
+        tp1: float,
+        sl: float,
+        news_title: str = "",
+        release_wib: str = "",
+        user_name: str = "Bor",
+    ) -> str:
+        """
+        Menjawab pertanyaan spesifik pengguna mengenai sikap / arah news (misal: 'Nfp sell', 'nfp buy', 'arah nfp kemana').
+        """
+        ntype = news_type.upper() if news_type else "NEWS"
+        pred_upper = prediction.upper()
+        is_pred_buy = "BUY" in pred_upper
+        is_pred_sell = "SELL" in pred_upper
+        user_upper = user_stance.upper() if user_stance else None
+
+        if user_upper == "SELL" and is_pred_buy:
+            head = f"Eits, tunggu dulu {user_name}! ✋ Jangan buru-buru SELL buat <b>{ntype}</b>!"
+            desc = (
+                f"Berdasarkan kalkulasi data & momentum XAU/USD jelang rilis {ntype}, "
+                f"sistem AI kita justru memproyeksikan <b>🟢 {prediction} ({confidence}% Confidence)</b>, bukan SELL.\n\n"
+                f"💡 <b>Catatan Penting:</b>\n"
+                f"Kondisi teknikal dan konsensus saat ini menunjukkan bias akumulasi/rebound. "
+                f"Melakukan SELL sekarang berisiko tinggi terkena <i>bullish spike</i> saat berita rilis."
+            )
+        elif user_upper == "BUY" and is_pred_sell:
+            head = f"Hati-hati {user_name}! ✋ Jangan paksain BUY buat <b>{ntype}</b>!"
+            desc = (
+                f"Berdasarkan kalkulasi data & sentimen ekonomi jelang rilis {ntype}, "
+                f"sistem AI kita justru condong ke <b>🔴 {prediction} ({confidence}% Confidence)</b>, bukan BUY.\n\n"
+                f"💡 <b>Catatan Penting:</b>\n"
+                f"Tekanan jual dan proyeksi rilis data mengarah ke penguatan USD yang bisa menekan Gold ke bawah support. "
+                f"Hindari buy dini sebelum ada konfirmasi pantulan yang valid."
+            )
+        elif user_upper == "BUY" and is_pred_buy:
+            head = f"Klop banget {user_name}! 🚀 Proyeksi lu selaras sama kalkulasi sistem kita!"
+            desc = (
+                f"Untuk rilis <b>{ntype}</b> ini, setup AI kita memang menghasilkan sinyal <b>🟢 {prediction} ({confidence}% Confidence)</b>.\n\n"
+                f"Momentum beli dan konsensus mendukung kenaikan harga Gold, tapi tetap wajib pasang Stop Loss ya bor!"
+            )
+        elif user_upper == "SELL" and is_pred_sell:
+            head = f"Sefrekuensi {user_name}! 🎯 Proyeksi SELL lu pas dengan sinyal sistem kita!"
+            desc = (
+                f"Untuk rilis <b>{ntype}</b> ini, kalkulasi AI kita merekomendasikan <b>🔴 {prediction} ({confidence}% Confidence)</b>.\n\n"
+                f"Bias pelemahan cukup kuat, namun pastikan tetap disiplin lot agar tidak tersapu volatilitas spread awal news."
+            )
+        else:
+            badge = "🟢" if is_pred_buy else ("🔴" if is_pred_sell else "🟡")
+            head = f"Untuk rilis <b>{ntype}</b> terdekat, arah proyeksi sistem kita ke <b>{badge} {prediction} ({confidence}% Confidence)</b> bor!"
+            desc = (
+                f"Jelang rilis data {ntype}, sistem memetakan volatilitas tinggi dengan dominasi arah {prediction}. "
+                f"Berikut rencana trading yang udah disiapkan:"
+            )
+
+        lines = [
+            head,
+            "",
+            desc,
+            "",
+            "🎯 <b>RENCANA SETUP PRE-NEWS XAU/USD:</b>",
+            f"• 💵 <b>Harga Live:</b> <code>${live_price:,.2f}</code>",
+            f"• 📍 <b>Entry Ideal:</b> <code>${entry:,.2f}</code>",
+            f"• 🎯 <b>Target TP1:</b> <code>${tp1:,.2f}</code>",
+            f"• 🛑 <b>Batas Stop Loss:</b> <code>${sl:,.2f}</code>",
+        ]
+        if release_wib:
+            lines.append(f"• ⏰ <b>Jadwal Rilis:</b> <code>{release_wib} WIB</code>")
+        lines.append("")
+        lines.append("<i>Visual chart skenario straddle & Fibonacci pre-news terlampir di bawah ya bor! 👇</i>")
+
+        return "\n".join(lines)
 
     @classmethod
     def generate_chat_response(cls, intent: str, user_name: str = "Bor", extra: Optional[Dict[str, Any]] = None) -> str:
