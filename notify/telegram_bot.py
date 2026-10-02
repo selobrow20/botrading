@@ -1064,6 +1064,105 @@ class TelegramNotifier:
                 success = False
         return success
 
+    def format_chart_confirmation_message(self, info: Dict[str, Any]) -> str:
+        """
+        Menyusun pesan Sinyal Konfirmasi Chart A+ (Win Rate Tinggi / 100% Confluence 9 Buku PDF).
+        Dilengkapi rincian entry, TP, SL minimal 60 pips 1:1, skor konfluensi, dan tombol interaktif eksekusi MT5.
+        """
+        ticker = info.get("ticker", "XAUUSD")
+        action = info.get("action", "SELL").upper()
+        price = float(info.get("price", 0.0))
+        tp = float(info.get("tp", 0.0))
+        sl = float(info.get("sl", 0.0))
+        score = float(info.get("score", 100.0))
+        grade = str(info.get("grade", "Grade A+ (Setup Sempurna ⭐⭐⭐⭐⭐)"))
+        pred = str(info.get("prediction", ""))
+        reasons = info.get("reasons", [])
+
+        action_icon = "🟢" if action == "BUY" else "🔴"
+        action_label = "BUY / LONG 🚀" if action == "BUY" else "SELL / SHORT 📉"
+        action_badge = f"{action_icon} <b>{action_label}</b>"
+
+        is_gold = any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        display_ticker = "XAU/USD (Gold Spot)" if is_gold else ticker.replace(".JK", "")
+
+        try:
+            tz = ZoneInfo("Asia/Jakarta")
+            time_wib = datetime.now(tz).strftime("%H:%M WIB")
+        except Exception:
+            time_wib = "WIB"
+
+        lines = [
+            f"⚡ <b>SINYAL KONFIRMASI CHART {action} (GRADE A+ ⭐⭐⭐⭐⭐)</b> ⚡",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"📊 <b>Instrumen:</b> <code>{display_ticker}</code>",
+            f"⏰ <b>Waktu Deteksi:</b> <code>{time_wib}</code>",
+            f"💵 <b>Harga Live Saat Ini:</b> <code>${price:,.2f}</code>" if is_gold else f"💵 <b>Harga:</b> <code>Rp {price:,.0f}</code>",
+            f"🎯 <b>Arah Prediksi Chart:</b> {action_badge}",
+            f"🔥 <b>Win Rate / Skor Konfluensi:</b> <b>{score:.0f}%</b> (<code>{grade}</code>)",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "📍 <b>Rencana Setup Posisi:</b>",
+            f"• 🎯 <b>Take Profit (TP):</b> <code>${tp:,.2f}</code> (Minimal 60 Pips / 1:1)" if is_gold else f"• 🎯 <b>Take Profit:</b> <code>Rp {tp:,.0f}</code>",
+            f"• 🛑 <b>Stop Loss (SL):</b> <code>${sl:,.2f}</code> (Minimal 60 Pips / 1:1)" if is_gold else f"• 🛑 <b>Stop Loss:</b> <code>Rp {sl:,.0f}</code>",
+            f"• ⚖️ <b>Risk to Reward:</b> <code>1 : 1.0</code>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "🧠 <b>Telaah Analisis 9 Buku PDF:</b>",
+        ]
+        if pred:
+            lines.append(f"• <i>{html.escape(pred)}</i>")
+        if reasons:
+            for r in reasons[:3]:
+                lines.append(f"• <i>{html.escape(str(r))}</i>")
+        else:
+            lines.append("• <i>Konfluensi multi-timeframe 9 Buku PDF selaras sempurna.</i>")
+
+        lines.extend([
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "💬 <i>Mau open posisi sekarang bor? Klik tombol di bawah buat langsung eksekusi di MT5!</i>",
+        ])
+        return "\n".join(lines)
+
+    def send_chart_confirmation_alert(self, info: Dict[str, Any], photo_path: Optional[str] = None) -> bool:
+        """
+        Mengirimkan sinyal konfirmasi Chart A+ ke Telegram dengan inline keyboard eksekusi MT5.
+        """
+        msg = self.format_chart_confirmation_message(info)
+        ticker = info.get("ticker", "XAUUSD")
+        action = info.get("action", "SELL").upper()
+        price = float(info.get("price", 0.0))
+        tp = float(info.get("tp", 0.0))
+        sl = float(info.get("sl", 0.0))
+
+        # Inline Keyboard: Tombol Eksekusi MT5 + Tombol Buka TradingView
+        btn_action = "BUY" if action == "BUY" else "SELL"
+        exec_cb = f"exec_chart_{btn_action}_{ticker}_{price:.2f}_{tp:.2f}_{sl:.2f}"
+        reply_markup = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(f"⚡ Eksekusi {btn_action} di MT5 Sekarang", callback_data=exec_cb),
+            ],
+            [
+                InlineKeyboardButton("📊 Buka Live Chart TradingView", url=get_tradingview_url(ticker)),
+            ]
+        ])
+
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        success = True
+        for cid in approved_ids:
+            try:
+                if photo_path and Path(photo_path).exists():
+                    res = asyncio.run(self._async_send_photo(photo_path, msg, target_chat_id=cid, reply_markup=reply_markup))
+                else:
+                    res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=reply_markup))
+                if not res:
+                    success = False
+            except Exception as e:
+                logger.error(f"Error kirim chart confirmation alert ke {cid}: {e}")
+                success = False
+        return success
+
     def send_message(self, text: str) -> bool:
         """Mengirim pesan teks biasa ke Telegram."""
         try:
@@ -1259,8 +1358,8 @@ class TelegramBotCommands:
                 await query.answer("🚫 Akses Anda telah diblokir total oleh Admin.", show_alert=True)
                 return
 
-        # Chart style switching, candlestick, dan copier dapat diakses oleh semua pengguna yang terdaftar
-        if not data.startswith(("chart_", "candle_", "copier_", "download_copier")) and not self._is_admin(update):
+        # Chart style switching, candlestick, copier, dan eksekusi chart dapat diakses oleh semua pengguna yang terdaftar
+        if not data.startswith(("chart_", "candle_", "copier_", "download_copier", "exec_chart_")) and not self._is_admin(update):
             await query.answer("⛔ Hanya Admin yang berhak memproses tindakan ini.", show_alert=True)
             return
 
@@ -1681,6 +1780,13 @@ class TelegramBotCommands:
             return
 
         elif data.startswith("exec_chart_"):
+            if not self._is_admin(update):
+                await query.answer(
+                    "⚡ Eksekusi sinyal dikendalikan oleh Master Admin. Begitu Admin klik eksekusi di MT5 Master, posisi otomatis tersalin ke akun MT5 Anda!",
+                    show_alert=True
+                )
+                return
+
             parts = data.split("_")
             if len(parts) >= 7:
                 c_action = parts[2].upper()
@@ -1700,6 +1806,10 @@ class TelegramBotCommands:
                     await query.answer("⚠️ Sudah ada posisi XAU/USD aktif di MT5! Tidak membuka order duplikat.", show_alert=True)
                     return
 
+                # Pastikan auto-trade aktif untuk eksekusi manual ini
+                if not bridge.enabled:
+                    bridge.set_enabled(True)
+
                 sig_payload = {
                     "ticker": c_ticker,
                     "signal": c_action,
@@ -1712,18 +1822,36 @@ class TelegramBotCommands:
                 res = bridge.execute_signal(sig_payload)
                 if res.get("success"):
                     ticket_id = res.get("ticket", "-")
+                    exec_vol = float(res.get("volume", bridge.default_lot))
+                    exec_p = float(res.get("price", c_price))
+                    exec_tp = float(res.get("tp", c_tp))
+                    exec_sl = float(res.get("sl", c_sl))
                     await query.answer(f"⚡ Sukses! Order #{ticket_id} {c_action} berhasil dibuka di MT5!", show_alert=True)
                     await query.message.reply_html(
                         f"🤖 <b>EKSEKUSI MT5 INSTAN BERHASIL!</b> 🚀\n"
                         f"━━━━━━━━━━━━━━━━━━━━━━\n"
                         f"🎫 <b>Ticket ID:</b> <code>#{ticket_id}</code>\n"
-                        f"📦 <b>Posisi:</b> <b>{c_action} {bridge.default_lot:.2f} Lot</b> {bridge.gold_symbol}\n"
-                        f"💵 <b>Harga Masuk:</b> <code>${c_price:,.2f}</code>\n"
-                        f"🎯 <b>Take Profit:</b> <code>${c_tp:,.2f}</code>\n"
-                        f"🛑 <b>Stop Loss:</b> <code>${c_sl:,.2f}</code>\n"
+                        f"📦 <b>Posisi:</b> <b>{c_action} {exec_vol:.2f} Lot</b> {bridge.gold_symbol}\n"
+                        f"💵 <b>Harga Masuk:</b> <code>${exec_p:,.2f}</code>\n"
+                        f"🎯 <b>Take Profit:</b> <code>${exec_tp:,.2f}</code>\n"
+                        f"🛑 <b>Stop Loss:</b> <code>${exec_sl:,.2f}</code>\n"
                         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                        f"🛡️ <i>Posisi aktif dipantau oleh Reversal Guard 9 Buku PDF.</i>"
+                        f"📡 <i>Order berhasil terpasang di Master MT5 dan tersalin otomatis ke seluruh member VIP via Copier!</i>"
                     )
+                    try:
+                        self.notifier.send_mt5_execution_report({
+                            "ticket": ticket_id,
+                            "action": c_action,
+                            "symbol": bridge.gold_symbol,
+                            "volume": exec_vol,
+                            "price": exec_p,
+                            "tp": exec_tp,
+                            "sl": exec_sl,
+                            "score": 100.0,
+                            "grade": "Grade A+ (Setup Sempurna ⭐⭐⭐⭐⭐)",
+                        })
+                    except Exception as ex_rep:
+                        logger.warning(f"Gagal broadcast laporan eksekusi manual: {ex_rep}")
                 else:
                     err_msg = res.get("message", "Gagal eksekusi order.")
                     await query.answer(f"❌ Gagal: {err_msg}", show_alert=True)

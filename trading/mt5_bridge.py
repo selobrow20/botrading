@@ -54,6 +54,8 @@ class MT5Bridge:
 
     def __init__(self, simulation_mode: bool = False):
         if self._initialized:
+            if simulation_mode:
+                self.simulation_mode = True
             return
 
         cfg = load_config()

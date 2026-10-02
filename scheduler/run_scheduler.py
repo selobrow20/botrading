@@ -154,6 +154,7 @@ class PipelineRunner:
         self.signal_engine = SignalEngine()
         self._reported_early_warnings: set = set()
         self._startup_baseline_candles: dict = {}
+        self._last_chart_alert_time: dict = {}
 
     def run_pipeline(
         self,
@@ -441,6 +442,86 @@ class PipelineRunner:
                     logger.info(f"Sinyal {sig_result.signal} untuk {ticker} tidak dinotifikasikan ({fresh_reason}).")
                 elif is_duplicate:
                     logger.debug(f"Sinyal {sig_result.signal} untuk {ticker} dilewati (Duplikat: {dup_reason}).")
+
+                # JALUR 2: SINYAL KONFIRMASI CHART A+ (Grade A+ / Win Rate Tinggi ≥ 80% / 100% Confluence 9 Buku PDF)
+                # Jika Auto-Open belum menembus kriteria eksekusi ketat 9 buku (misal HOLD di dasar jurang RSI),
+                # tetapi chart mendeteksi setup Grade A+ (≥80% winrate / arah Bearish atau Bullish kuat),
+                # kirim Sinyal Konfirmasi Chart A+ ke Telegram dengan tombol konfirmasi [⚡ Eksekusi di MT5 Sekarang]!
+                if not should_notify and is_gold and not is_startup_warmup:
+                    try:
+                        c_grade = str(getattr(sig_result, "setup_grade", "") or "")
+                        c_score = float(getattr(sig_result, "pdf_confluence_score", 0.0) or 0.0)
+                        c_pred = str(getattr(sig_result, "market_direction_prediction", "") or "")
+
+                        if not c_grade and hasattr(sig_result, "meta"):
+                            c_grade = str(sig_result.meta.get("setup_grade", ""))
+                        if c_score <= 0.0 and hasattr(sig_result, "meta"):
+                            c_score = float(sig_result.meta.get("setup_confluence_score", 0.0) or 0.0)
+                        if not c_pred and hasattr(sig_result, "meta"):
+                            c_pred = str(sig_result.meta.get("prediction_summary", ""))
+
+                        is_a_plus = ("Grade A+" in c_grade or c_score >= 80.0)
+                        if is_a_plus and ("Bearish" in c_pred or "Bullish" in c_pred):
+                            c_action = "SELL" if "Bearish" in c_pred else "BUY"
+                            c_time_key = f"{ticker}_{sig_result.candle_time}_{c_action}"
+
+                            # Deduplikasi agar tidak spam setiap siklus pada candle yang sama
+                            if self._last_chart_alert_time.get(ticker) != c_time_key:
+                                # Hitung TP & SL dengan batas lantai minimal 60 pips ($6.00 USD) 1:1
+                                entry_p = float(sig_result.price)
+                                MIN_GOLD_USD = 6.00  # Minimal 60 pips ($6.00 USD)
+                                if getattr(sig_result, "take_profit_price", 0.0) and getattr(sig_result, "stop_loss_price", 0.0):
+                                    tp_dist = abs(float(sig_result.take_profit_price) - entry_p)
+                                    sl_dist = abs(entry_p - float(sig_result.stop_loss_price))
+                                    sl_dist = max(MIN_GOLD_USD, sl_dist)
+                                    tp_dist = max(MIN_GOLD_USD, max(sl_dist, tp_dist))
+                                else:
+                                    tp_dist = MIN_GOLD_USD
+                                    sl_dist = MIN_GOLD_USD
+
+                                if c_action == "BUY":
+                                    c_tp = round(entry_p + tp_dist, 2)
+                                    c_sl = round(entry_p - sl_dist, 2)
+                                else:
+                                    c_tp = round(entry_p - tp_dist, 2)
+                                    c_sl = round(entry_p + sl_dist, 2)
+
+                                # Buat visual grafik chart konfirmasi
+                                chart_img = None
+                                try:
+                                    from notify.chart_generator import ChartGenerator
+                                    chart_img = ChartGenerator.generate_chart(
+                                        df=df_ind,
+                                        ticker_symbol=sig_result.ticker,
+                                        interval=item_interval,
+                                        signal_type=c_action,
+                                        entry_price=entry_p,
+                                        tp_price=c_tp,
+                                        sl_price=c_sl,
+                                        setup_grade=c_grade,
+                                        pdf_confluence_score=c_score,
+                                    )
+                                except Exception as ex_cg:
+                                    logger.warning(f"Gagal generate chart konfirmasi: {ex_cg}")
+
+                                alert_info = {
+                                    "ticker": ticker,
+                                    "action": c_action,
+                                    "price": entry_p,
+                                    "tp": c_tp,
+                                    "sl": c_sl,
+                                    "score": c_score,
+                                    "grade": c_grade,
+                                    "prediction": c_pred,
+                                    "reasons": sig_result.reasons or getattr(sig_result, "pdf_confluence_details", []),
+                                    "candle_time": sig_result.candle_time,
+                                }
+                                sent_ok = self.notifier.send_chart_confirmation_alert(alert_info, photo_path=chart_img)
+                                if sent_ok:
+                                    self._last_chart_alert_time[ticker] = c_time_key
+                                    logger.info(f"⚡ Sinyal Konfirmasi Chart A+ ({c_action}) terkirim ke Telegram untuk {ticker}!")
+                    except Exception as ex_chart_alert:
+                        logger.error(f"Error memproses sinyal konfirmasi chart A+: {ex_chart_alert}")
 
                 results["details"].append({
                     "ticker": ticker,
