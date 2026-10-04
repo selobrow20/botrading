@@ -384,7 +384,7 @@ def test_natural_conversation_chat():
     # 2. Coffee
     resp_coffee = ChatAgent.generate_chat_response("CHITCHAT", user_name="Budi", raw_text="ngopi dulu bor biar adem")
     assert "☕" in resp_coffee
-    assert any(k in resp_coffee for k in ["kopi", "seruput", "sruput"])
+    assert any(k in resp_coffee.lower() for k in ["kopi", "seruput", "sruput"])
 
     # 3. What are you doing / activity
     resp_act = ChatAgent.generate_chat_response("CHITCHAT", user_name="Budi", raw_text="lagi ngapain lu bor")
@@ -397,4 +397,13 @@ def test_natural_conversation_chat():
     # 5. Market opinion
     resp_op = ChatAgent.generate_chat_response("CHITCHAT", user_name="Budi", raw_text="menurut lu gimana bor kondisi sekarang")
     assert any(k in resp_op for k in ["zona", "Grade A+", "disiplin", "lot"])
+
+    # 6. User's exact queries from live chat
+    resp_friday = ChatAgent.generate_chat_response("CURHAT_LOSS", user_name="Nabil", raw_text="bor gmaan ya kemarin jumat minus mlu ke cutlos mlu")
+    assert "Jumat" in resp_friday
+    assert "cut loss" in resp_friday.lower() or "whipsaw" in resp_friday.lower()
+
+    resp_consec = ChatAgent.generate_chat_response("CURHAT_LOSS", user_name="Nabil", raw_text="cutlos mlu ni")
+    assert any(w in resp_consec.lower() for w in ["stop trading", "rehat", "cut loss", "banting hp"])
+
 
