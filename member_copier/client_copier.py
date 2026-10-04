@@ -169,11 +169,17 @@ def sync_event_to_dashboard(sig: dict, res: dict = None):
 def load_config() -> dict:
     cfg = {
         "bot_username": "selo_saham_bot",
+        "account_type": "auto",       # Pilihan: "auto" (deteksi otomatis), "usd" (Standard USD), "usc" (Cent)
+        "usd_lot": 0.01,              # Lot khusus Akun Standard USD (Kaidah disiplin: 0.01 lot)
+        "cent_lot": 0.05,             # Lot khusus Akun Cent USC (0.05 lot luar Sesi US)
+        "us_session_cent_lot": 0.08,  # Lot Akun Cent USC di Sesi US (19:00 - 24:00 WIB)
+        "default_lot": 0.01,          # Fallback
+        "usd_only_high_grade": True,  # Filter Akun USD hanya masuk pada Sinyal Grade A+
+        "max_positions_cent": 1,      # Maks 1 posisi cent di luar US
+        "us_session_max_positions": 2,# Maks 2 posisi cent di Sesi US
+        "max_positions_standard": 1,  # Maks 1 posisi USD Standard
         "gold_symbol": "XAUUSD",
         "symbol_suffix": "",
-        "default_lot": 0.05,
-        "max_positions_cent": 3,
-        "max_positions_standard": 1,
         "min_grid_spacing": 1.0,
         "max_price_drift": 8.0,
         "max_slippage": 20,
@@ -342,13 +348,90 @@ class MT5MemberBridge:
 
     def __init__(self, cfg: dict):
         self.cfg = cfg
-        self.lot = float(cfg.get("default_lot", 0.05))
         self.magic = int(cfg.get("magic_number", 888888))
         self.slippage = int(cfg.get("max_slippage", 20))
         self.symbol_override = cfg.get("gold_symbol", "XAUUSD")
         self.suffix = cfg.get("symbol_suffix", "")
         self.mt5 = None
         self._detect_mt5()
+
+    def calculate_lot_size(self, sig: dict, is_cent: bool) -> tuple[float, str]:
+        """
+        Menghitung ukuran lot trading dengan kaidah baku pemisahan Akun USD Standard vs Akun Cent USC:
+        - Akun Standard USD:
+          * Strictly 0.01 lot (usd_lot) untuk melindungi modal USD.
+        - Akun Cent (USC):
+          * Sesi US (19:00 - 24:00 WIB): 0.08 lot (us_session_cent_lot)
+          * Di luar Sesi US: 0.05 lot (cent_lot / default_lot)
+        """
+        if not is_cent:
+            lot = float(self.cfg.get("usd_lot", 0.01))
+            return lot, "USD Standard Disiplin"
+
+        # Cek Sesi US untuk Akun Cent
+        is_us = False
+        try:
+            from zoneinfo import ZoneInfo
+            from datetime import datetime, time
+            now_wib = datetime.now(ZoneInfo("Asia/Jakarta")).time()
+            is_us = time(19, 0) <= now_wib <= time(23, 59, 59)
+        except Exception:
+            pass
+
+        if is_us:
+            lot = float(self.cfg.get("us_session_cent_lot", 0.08))
+            return lot, "Cent USC Sesi US"
+        else:
+            lot = float(self.cfg.get("cent_lot", self.cfg.get("default_lot", 0.05)))
+            return lot, "Cent USC Standar"
+
+    def is_cent_account(self) -> bool:
+        """
+        Mendeteksi dengan akurat 100% apakah akun MT5 adalah akun Cent (USC) atau Standard (USD).
+        Mencegah akun Standard USD salah terdeteksi sebagai Cent pada broker seperti HFMarkets,
+        Exness, RoboForex, FBS, XM, IC Markets, dll.
+        """
+        # 1. Cek konfigurasi manual override jika disetel user (auto / usd / usc)
+        cfg_acc = str(self.cfg.get("account_type", "auto")).lower().strip()
+        if cfg_acc in ["usd", "standard", "std"]:
+            return False
+        if cfg_acc in ["usc", "cent", "micro"]:
+            return True
+
+        if not self.mt5:
+            return False
+        try:
+            acc = self.mt5.account_info()
+            if not acc:
+                return False
+
+            curr = str(getattr(acc, "currency", "") or "").upper().strip()
+            server = str(getattr(acc, "server", "") or "").lower()
+            company = str(getattr(acc, "company", "") or "").lower()
+
+            # 2. Cek mata uang akun secara eksplisit
+            # Jika mata uang adalah USC, CENT, EUX, GBX, USCENT -> pasti Cent!
+            if curr in ["USC", "CENT", "EUX", "GBX", "USCENT"]:
+                return True
+            if curr.endswith("C") and curr not in ["USDC", "TUSD", "BUSD", "USDT"]:
+                return True
+
+            # 3. Jika mata uang adalah mata uang fiat standar (USD, EUR, GBP, dll)
+            # Sangat krusial: Jika mata uang 'USD', hanya anggap Cent jika server/company secara
+            # eksplisit bertuliskan "cent", "procent", atau "micro".
+            if curr in ["USD", "EUR", "GBP", "AUD", "CAD", "JPY", "CHF", "NZD", "SGD", "IDR"]:
+                if any(k in server for k in ["cent", "procent", "micro"]) or any(k in company for k in ["cent", "procent", "micro"]):
+                    return True
+                return False  # Pasti Standard (USD)!
+
+            # 4. Cek petunjuk nama server / company untuk broker yang mata uangnya tidak standar
+            if any(k in server for k in ["cent", "procent", "micro"]) or any(k in company for k in ["cent", "procent", "micro"]):
+                return True
+
+            # Default aman: perlakukan sebagai Standard USD (0.01 lot) agar modal member terjaga
+            return False
+        except Exception:
+            return False
 
     def _detect_mt5(self):
         try:
@@ -361,10 +444,11 @@ class MT5MemberBridge:
                 if acc:
                     is_cent = self.is_cent_account()
                     sym = self.find_broker_symbol()
-                    curr_name = "USC" if is_cent else str(acc.currency or "USD").upper()
+                    curr_name = "USC" if is_cent else str(getattr(acc, "currency", "USD") or "USD").upper()
                     equiv_usd = f" (~ ${acc.balance/100.0:,.2f} USD)" if is_cent else ""
                     type_lbl = "Cent (USC)" if is_cent else "Standard (USD)"
-                    max_pos = int(self.cfg.get("max_positions_cent", 3)) if is_cent else int(self.cfg.get("max_positions_standard", 1))
+                    max_pos = int(self.cfg.get("max_positions_cent", 1)) if is_cent else int(self.cfg.get("max_positions_standard", 1))
+                    def_lot, lot_lbl = self.calculate_lot_size({}, is_cent)
 
                     print("\n" + "=" * 65)
                     print(f"✅ [MT5 TERHUBUNG] Akun #{acc.login} ({acc.server})")
@@ -372,7 +456,7 @@ class MT5MemberBridge:
                     print(f"   💰 Saldo MT5    : {acc.balance:,.2f} {curr_name}{equiv_usd}")
                     print(f"   🏷️ Simbol Gold  : {sym}")
                     print(f"   📦 Maks Posisi  : {max_pos} Posisi Serentak")
-                    print(f"   🎯 Lot Eksekusi : {self.lot} Lot")
+                    print(f"   🎯 Lot Eksekusi : {def_lot} Lot ({lot_lbl})")
 
                     # Peringatan Algo Trading
                     t_info = self.mt5.terminal_info()
@@ -393,17 +477,8 @@ class MT5MemberBridge:
         if not self.mt5:
             return self.symbol_override or "XAUUSD"
 
-        # Cek petunjuk apakah akun Cent
-        is_cent = False
-        try:
-            acc = self.mt5.account_info()
-            if acc:
-                curr = str(getattr(acc, "currency", "") or "").upper().strip()
-                server = str(getattr(acc, "server", "") or "").lower()
-                if any(c in curr for c in ["USC", "CENT", "EUX", "GBX"]) or curr.endswith("C") or any(k in server for k in ["cent", "procent", "micro"]):
-                    is_cent = True
-        except Exception:
-            pass
+        # Cek apakah akun Cent (tanpa loop rekursif)
+        is_cent = self.is_cent_account()
 
         # Daftar kandidat simbol berdasarkan tipe akun
         if is_cent:
@@ -415,8 +490,7 @@ class MT5MemberBridge:
         else:
             candidates = [
                 f"{self.symbol_override}{self.suffix}" if self.suffix else None,
-                "XAUUSD", "GOLD", "XAUUSD.raw", "XAUUSD.m", "XAUUSDm",
-                "XAUUSDc", "GOLDc"
+                "XAUUSD", "GOLD", "XAUUSD.raw", "XAUUSD.pro", "XAUUSD.m", "XAUUSDm"
             ]
 
         # Filter candidate yang None / kosong
@@ -448,54 +522,14 @@ class MT5MemberBridge:
                 for s in all_symbols:
                     s_up = s.name.upper()
                     if ("XAU" in s_up or "GOLD" in s_up) and getattr(s, "trade_mode", 4) != 0:
+                        if not is_cent and (s.name.endswith("c") or ".c" in s.name.lower()):
+                            continue
                         self.mt5.symbol_select(s.name, True)
                         return s.name
         except Exception:
             pass
 
         return "XAUUSDc" if is_cent else "XAUUSD"
-
-    def is_cent_account(self) -> bool:
-        """
-        Mendeteksi dengan akurat 100% apakah akun MT5 adalah akun Cent (USC) atau Standard (USD).
-        Mendukung berbagai broker: HFMarkets, Exness, RoboForex, FBS, XM, Octa, IC Markets, dll.
-        """
-        if not self.mt5:
-            return False
-        try:
-            acc = self.mt5.account_info()
-            if not acc:
-                return False
-
-            # 1. Cek mata uang akun (USC, EUX, GBX, CENT, USDCent, dll)
-            curr = str(getattr(acc, "currency", "") or "").upper().strip()
-            if any(c in curr for c in ["USC", "CENT", "EUX", "GBX"]) or curr.endswith("C"):
-                return True
-
-            # 2. Cek nama server broker (misal: HFMarketsGlobal-Cent, RoboForex-ProCent, Exness-Cent, FBS-Cent)
-            server = str(getattr(acc, "server", "") or "").lower()
-            if any(k in server for k in ["cent", "procent", "micro"]):
-                return True
-
-            # 3. Cek company / group
-            company = str(getattr(acc, "company", "") or "").lower()
-            if "cent" in company:
-                return True
-
-            # 4. Cek apakah ada simbol emas cent di broker MT5 yang aktif & tradeable
-            for sym_cand in ["XAUUSDc", "XAUUSD.c", "GOLDc"]:
-                s_inf = self.mt5.symbol_info(sym_cand)
-                if s_inf is not None and getattr(s_inf, "trade_mode", 4) > 0:
-                    return True
-
-            # 5. Cek simbol broker yang aktif saat ini
-            broker_sym = self.find_broker_symbol()
-            if broker_sym.lower().endswith("c") or ".c" in broker_sym.lower():
-                return True
-
-            return False
-        except Exception:
-            return False
 
     def ensure_connected(self) -> bool:
         """Memastikan koneksi MT5 member aktif dan auto-reconnect jika idle atau terputus."""
@@ -770,12 +804,12 @@ class MT5MemberBridge:
                     "status": "usd_skip_standard_grade",
                     "message": skip_msg,
                 }
-            # Jika sinyal Grade A+ (0.05 lot bagus): buka 0.01 lot di akun USD!
-            trade_lot = float(self.cfg.get("usd_lot", 0.01))
-            print(f"   💎 [USD HIGH GRADE] Sinyal Grade A+ (Momen Bagus 0.05 Lot). Membuka posisi disiplin {trade_lot} Lot di Akun Standard USD.")
+            trade_lot, lot_lbl = self.calculate_lot_size(sig, is_cent=False)
+            print(f"   💎 [USD HIGH GRADE] Sinyal Grade A+ (Momen Bagus 0.05 Lot). Membuka posisi disiplin {trade_lot} Lot di Akun Standard USD ({lot_lbl}).")
         else:
-            # Akun Cent (USC): Sesuai pengaturan lot member (default 0.05 lot)
-            trade_lot = self.lot
+            # Akun Cent (USC): Sesuai sesi pasar & pengaturan lot member (0.05 lot / 0.08 lot Sesi US)
+            trade_lot, lot_lbl = self.calculate_lot_size(sig, is_cent=True)
+            print(f"   🎯 [CENT USC ORDER] Membuka posisi {trade_lot} Lot ({lot_lbl}).")
 
         vol_step = float(getattr(s_info, "volume_step", 0.01) or 0.01)
         if vol_step > 0:

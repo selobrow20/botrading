@@ -78,3 +78,42 @@ def test_apply_zip_update_preserves_user_config(tmp_path, monkeypatch):
     assert result_cfg["magic_number"] == 999999  # Preserved!
     assert result_cfg["custom_user_setting"] == "preserve_me"  # Preserved!
     assert result_cfg["new_feature_key"] is True  # Merged!
+
+
+def test_usd_vs_cent_account_detection():
+    from unittest.mock import MagicMock
+    from member_copier.client_copier import MT5MemberBridge
+
+    # Test 1: USD Standard Account (broker currency is USD, server standard)
+    cfg = {"account_type": "auto", "usd_lot": 0.01, "cent_lot": 0.05, "us_session_cent_lot": 0.08}
+    bridge = MT5MemberBridge.__new__(MT5MemberBridge)
+    bridge.cfg = cfg
+    mock_mt5 = MagicMock()
+    mock_acc_usd = MagicMock()
+    mock_acc_usd.currency = "USD"
+    mock_acc_usd.server = "HFMarkets-Live"
+    mock_acc_usd.company = "HF Markets Ltd"
+    mock_mt5.account_info.return_value = mock_acc_usd
+    bridge.mt5 = mock_mt5
+
+    assert bridge.is_cent_account() is False
+    lot, desc = bridge.calculate_lot_size({}, is_cent=False)
+    assert lot == 0.01
+    assert "USD Standard" in desc
+
+    # Test 2: Cent Account (currency USC)
+    mock_acc_cent = MagicMock()
+    mock_acc_cent.currency = "USC"
+    mock_acc_cent.server = "HFMarkets-LiveCent"
+    mock_acc_cent.company = "HF Markets Ltd"
+    mock_mt5.account_info.return_value = mock_acc_cent
+
+    assert bridge.is_cent_account() is True
+    # Test 3: Manual override to USD even if currency says USC
+    bridge.cfg = {"account_type": "usd", "usd_lot": 0.01}
+    assert bridge.is_cent_account() is False
+
+    # Test 4: Manual override to USC
+    bridge.cfg = {"account_type": "usc", "cent_lot": 0.05}
+    assert bridge.is_cent_account() is True
+
