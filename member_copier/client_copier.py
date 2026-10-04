@@ -27,6 +27,112 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
+CLIENT_COPIER_VERSION = "2.3.0"
+OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
+OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
+
+def restart_copier():
+    """Me-restart copier secara mulus menggunakan interpreter Python saat ini."""
+    try:
+        import subprocess
+        script_file = str(Path(__file__).resolve())
+        args = [sys.executable, script_file]
+        subprocess.Popen(args, cwd=str(Path(__file__).resolve().parent))
+        time.sleep(1.0)
+        os._exit(0)
+    except Exception as e:
+        print(f"⚠️ Gagal restart otomatis: {e}. Silakan buka kembali START_COPIER.bat.")
+
+def apply_zip_update(zip_path_or_bytes, preserve_config: bool = True):
+    """
+    Mengekstrak file update zip tanpa menimpa pengaturan kustom user (lot, server, suffix, dll).
+    """
+    import zipfile
+    import io
+    target_dir = Path(__file__).resolve().parent
+    old_cfg = {}
+    cfg_file = target_dir / "config.json"
+    if preserve_config and cfg_file.exists():
+        try:
+            with open(cfg_file, "r", encoding="utf-8") as f:
+                old_cfg = json.load(f)
+        except Exception:
+            pass
+
+    if isinstance(zip_path_or_bytes, (str, Path)):
+        z = zipfile.ZipFile(zip_path_or_bytes, "r")
+    else:
+        z = zipfile.ZipFile(io.BytesIO(zip_path_or_bytes), "r")
+
+    with z:
+        for member in z.infolist():
+            filename = Path(member.filename).name
+            if not filename or filename.startswith("__MACOSX") or filename.endswith(".pyc"):
+                continue
+            dest_file = target_dir / filename
+            if filename.lower() == "config.json" and old_cfg:
+                try:
+                    new_cfg_data = json.loads(z.read(member).decode("utf-8", errors="ignore"))
+                    new_cfg_data.update(old_cfg)
+                    with open(dest_file, "w", encoding="utf-8") as f:
+                        json.dump(new_cfg_data, f, indent=2)
+                    continue
+                except Exception:
+                    continue
+            with open(dest_file, "wb") as f_out:
+                f_out.write(z.read(member))
+
+def check_and_apply_ota_update(silent: bool = False) -> bool:
+    """
+    Memeriksa pembaruan Over-The-Air (OTA) langsung dari GitHub Cloud.
+    Jika ada versi baru, unduh otomatis dan restart tanpa perlu download/timpa zip manual!
+    """
+    import urllib.request
+    try:
+        req = urllib.request.Request(
+            OTA_VERSION_URL,
+            headers={"User-Agent": "MT5-VIP-Copier-AutoUpdater"}
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            remote_ver = data.get("version", "").strip()
+            changelog = data.get("changelog", "Peningkatan stabilitas dan akurasi.")
+
+        if remote_ver and remote_ver > CLIENT_COPIER_VERSION:
+            print("\n" + "=" * 70)
+            print(f"🔔 [NOTIFIKASI UPDATE OTOMATIS] Versi Baru v{remote_ver} Tersedia!")
+            print(f"📝 Info: {changelog}")
+            print(f"📥 Mengunduh pembaruan otomatis langsung dari Cloud (Tanpa Timpa ZIP)...")
+            req_script = urllib.request.Request(
+                OTA_SCRIPT_URL,
+                headers={"User-Agent": "MT5-VIP-Copier-AutoUpdater"}
+            )
+            with urllib.request.urlopen(req_script, timeout=15) as s_resp:
+                new_code = s_resp.read().decode("utf-8")
+
+            if len(new_code) > 1000 and "CLIENT MT5 AUTO-COPIER" in new_code:
+                cur_file = Path(__file__).resolve()
+                backup_file = cur_file.with_suffix(".py.bak")
+                try:
+                    cur_file.replace(backup_file)
+                except Exception:
+                    pass
+                with open(cur_file, "w", encoding="utf-8") as f:
+                    f.write(new_code)
+                print("✅ [PEMBARUAN BERHASIL DITERAPKAN OTOMATIS]")
+                print("🛡️ Pengaturan Akun & Lot Anda tetap aman.")
+                print("🔄 Me-restart copier ke versi terbaru dalam 3 detik...")
+                print("=" * 70 + "\n")
+                time.sleep(3)
+                restart_copier()
+                return True
+        elif not silent:
+            print(f"ℹ️ [VERSI SISTEM] v{CLIENT_COPIER_VERSION} (Terbaru & Tersinkronisasi)")
+    except Exception:
+        pass
+    return False
+
+
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 DASHBOARD_STATE_PATH = Path(__file__).resolve().parent / "copier_live_state.json"
 
@@ -1016,6 +1122,37 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
         if not is_valid_bot:
             return
 
+        # 0. DETEKSI DOKUMEN / ZIP PEMBARUAN OTOMATIS DARI MASTER BOT (IN-APP AUTO-UPDATE)
+        # Member tidak perlu lagi unduh atau timpa ZIP manual!
+        if getattr(event.message, "file", None) is not None:
+            doc_name = (getattr(event.message.file, "name", "") or "").lower()
+            caption_text = (event.raw_text or "").lower()
+            if "copier" in doc_name or "member_copier" in caption_text or "update auto-copier" in caption_text or "update resmi" in caption_text:
+                print("\n" + "=" * 70)
+                print("🔔 [NOTIFIKASI RESMI MASTER BOT] PEMBARUAN AUTO-COPIER TERBARU DITERIMA!")
+                print("📥 Mengunduh file pembaruan otomatis langsung dari Telegram (Tanpa Timpa ZIP)...")
+                try:
+                    temp_zip = Path(__file__).resolve().parent / "_update_temp.zip"
+                    await event.message.download_media(file=str(temp_zip))
+                    if temp_zip.exists() and temp_zip.stat().st_size > 500:
+                        print("📦 Menerapkan pembaruan sistem (Pengaturan Akun & Lot Anda Tetap Aman)...")
+                        apply_zip_update(temp_zip, preserve_config=True)
+                        try:
+                            temp_zip.unlink()
+                        except Exception:
+                            pass
+                        print("✅ [PEMBARUAN BERHASIL DITERAPKAN OTOMATIS]")
+                        print("🔄 Me-restart copier ke versi terbaru dalam 2 detik...")
+                        print("=" * 70 + "\n")
+                        await client.disconnect()
+                        time.sleep(2)
+                        restart_copier()
+                        return
+                    else:
+                        print("⚠️ File unduhan update tidak valid, melewati update.")
+                except Exception as ex_dl:
+                    print(f"⚠️ Gagal auto-update dari Telegram: {ex_dl}")
+
         msg_text = event.raw_text or ""
         msg_date = getattr(getattr(event, "message", None), "date", None)
         now_utc = datetime.now(timezone.utc)
@@ -1268,6 +1405,18 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
     # Jalankan background watcher otomatis untuk Break-Even Protection (BEP) di MT5 Member
     asyncio.create_task(local_bep_watcher())
 
+    # Jalankan background task pemeriksaan pembaruan OTA Cloud berkala (tiap 30 menit)
+    async def periodic_ota_checker():
+        while True:
+            await asyncio.sleep(1800)
+            try:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, lambda: check_and_apply_ota_update(silent=True))
+            except Exception:
+                pass
+
+    asyncio.create_task(periodic_ota_checker())
+
     # Loop pemulihan koneksi Telegram (Anti-Crash & Auto-Reconnect)
     while True:
         try:
@@ -1288,6 +1437,11 @@ def main():
     print("=" * 65)
     print("    AUTO-COPIER MT5 MEMBER (VIP 9 BUKU PDF CONFLUENCE)")
     print("=" * 65)
+
+    # Cek pembaruan Over-The-Air (OTA) saat startup (Tanpa Perlu Timpa ZIP Manual!)
+    if "--no-update" not in sys.argv and "--test" not in sys.argv:
+        check_and_apply_ota_update(silent=False)
+
     cfg = load_config()
     bridge = MT5MemberBridge(cfg)
 

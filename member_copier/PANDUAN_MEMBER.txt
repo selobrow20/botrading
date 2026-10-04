@@ -65,12 +65,19 @@ LANGKAH 3: MENJALANKAN AUTO-COPIER
    Artinya copier sudah berjalan! Biarkan jendela ini tetap terbuka.
 
 ----------------------------------------------------------------------
-CARA UPDATE JIKA ADA FILE ZIP BARU:
+✨ FITUR AUTO-UPDATE OTOMATIS (TIDAK PERLU TIMPA ZIP LAGI!):
 ----------------------------------------------------------------------
-1. Tutup jendela copier yang sedang berjalan.
-2. Ekstrak file `member_copier.zip` baru.
-3. Timpa semua file ke folder copier kamu.
-4. Klik ganda kembali `START_COPIER.bat` (Login Telegram tetap tersimpan).
+Mulai versi 2.3.0, Copier Anda telah dilengkapi fitur In-App Auto-Update & Cloud OTA!
+1. KETIKA MASTER MERILIS PEMBARUAN:
+   - Jendela Copier Anda akan otomatis menampilkan:
+     "🔔 [NOTIFIKASI RESMI MASTER BOT] PEMBARUAN AUTO-COPIER TERBARU DITERIMA!"
+   - Copier akan mengunduh pembaruan dan me-restart dirinya sendiri secara otomatis!
+   - Pengaturan akun, lot, dan login Telegram Anda 100% AMAN & TIDAK AKAN HILANG.
+2. SAAT MEMBUKA APLIKASI (START_COPIER.bat):
+   - Copier otomatis memeriksa ke Cloud apakah ada versi baru.
+   - Jika ada, copier otomatis memperbarui file dan langsung siap digunakan.
+3. ANDA TIDAK PERLU download file ZIP atau ekstrak/timpa file manual lagi!
+   Cukup biarkan jendela copier tetap berjalan seperti biasa.
 
 ----------------------------------------------------------------------
 KENDALI LISENSI & KEAMANAN TERPUSAT:

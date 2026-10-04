@@ -404,10 +404,8 @@ class TelegramNotifier:
             "3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.\n"
             "4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.\n"
             "5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).\n\n"
-            "🛠️ <b>CARA UPDATE:</b>\n"
-            "1. Ekstrak <code>member_copier.zip</code> ini ke folder copier.\n"
-            "2. Timpa file <code>client_copier.py</code> dan <code>PANDUAN_MEMBER.txt</code>.\n"
-            "3. Jalankan kembali <code>START_COPIER.bat</code>!\n"
+            "🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>\n"
+            "Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!\n"
             "━━━━━━━━━━━━━━━━━━━━━━"
         )
 

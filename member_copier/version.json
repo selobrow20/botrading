@@ -1,0 +1,13 @@
+{
+  "version": "2.3.0",
+  "name": "MT5 VIP Auto-Copier (9 Buku PDF Confluence)",
+  "released_at": "2026-10-04",
+  "min_python": "3.10",
+  "changelog": "Fitur In-App Auto-Update & Cloud OTA: Update otomatis langsung dari Telegram & Cloud tanpa perlu download / timpa ZIP manual, pengaturan akun & lot aman terjaga.",
+  "features": [
+    "In-App Telegram Stream Auto-Update (auto-download & reload saat Master broadcast)",
+    "Cloud OTA Background Checker (update otomatis saat aplikasi dibuka)",
+    "Preserve Local Config (pengaturan lot & akun member tidak tertimpa)",
+    "Penyelarasan sinyal & chart dengan Hard Floor SL/TP minimal 60 pips 1:1"
+  ]
+}
