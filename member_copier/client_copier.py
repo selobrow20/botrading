@@ -175,8 +175,8 @@ def load_config() -> dict:
         "us_session_cent_lot": 0.08,  # Lot Akun Cent USC di Sesi US (19:00 - 24:00 WIB)
         "default_lot": 0.01,          # Fallback
         "usd_only_high_grade": True,  # Filter Akun USD hanya masuk pada Sinyal Grade A+
-        "max_positions_cent": 1,      # Maks 1 posisi cent di luar US
-        "us_session_max_positions": 2,# Maks 2 posisi cent di Sesi US
+        "max_positions_cent": 3,      # Maksimal posisi akun Cent di luar US (minimal 3 posisi)
+        "us_session_max_positions": 3,# Maksimal posisi akun Cent di Sesi US (minimal 3 posisi)
         "max_positions_standard": 1,  # Maks 1 posisi USD Standard
         "gold_symbol": "XAUUSD",
         "symbol_suffix": "",
@@ -447,7 +447,7 @@ class MT5MemberBridge:
                     curr_name = "USC" if is_cent else str(getattr(acc, "currency", "USD") or "USD").upper()
                     equiv_usd = f" (~ ${acc.balance/100.0:,.2f} USD)" if is_cent else ""
                     type_lbl = "Cent (USC)" if is_cent else "Standard (USD)"
-                    max_pos = int(self.cfg.get("max_positions_cent", 1)) if is_cent else int(self.cfg.get("max_positions_standard", 1))
+                    max_pos = int(self.cfg.get("max_positions_cent", 3)) if is_cent else int(self.cfg.get("max_positions_standard", 1))
                     def_lot, lot_lbl = self.calculate_lot_size({}, is_cent)
 
                     print("\n" + "=" * 65)
@@ -700,10 +700,11 @@ class MT5MemberBridge:
         if not is_cent:
             max_positions = int(self.cfg.get("max_positions_standard", 1))
         else:
+            cent_base = int(self.cfg.get("max_positions_cent", 3))
             if is_us:
-                max_positions = int(self.cfg.get("us_session_max_positions", 2))
+                max_positions = max(cent_base, int(self.cfg.get("us_session_max_positions", 3)))
             else:
-                max_positions = int(self.cfg.get("max_positions_cent", 1))
+                max_positions = cent_base
 
         if len(open_pos) >= max_positions:
             mode_lbl = (
