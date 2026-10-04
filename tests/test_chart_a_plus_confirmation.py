@@ -118,7 +118,7 @@ def test_button_callback_exec_chart_member_vs_admin():
     asyncio.run(_run())
 
 
-def test_pipeline_runner_chart_a_plus_trigger():
+def test_pipeline_runner_chart_a_plus_direct_auto_execution():
     storage = MagicMock()
     fetcher = MagicMock()
     notifier = MagicMock()
@@ -132,10 +132,18 @@ def test_pipeline_runner_chart_a_plus_trigger():
          patch.object(runner, "check_upcoming_news_job"), \
          patch("trading.mt5_bridge.MT5Bridge") as MockBridge:
         mock_b = MockBridge.return_value
-        mock_b.enabled = False
-        mock_b.is_available.return_value = False
+        mock_b.enabled = True
+        mock_b.is_available.return_value = True
         mock_b.is_in_reversal_cooldown.return_value = (False, "")
         mock_b.get_open_positions.return_value = []
+        mock_b.execute_signal.return_value = {
+            "success": True,
+            "ticket": 998877,
+            "action": "SELL",
+            "volume": 0.05,
+            "price": 3045.50,
+            "symbol": "XAUUSD"
+        }
 
         # Create dummy df for gold with 100 bars
         dates = pd.date_range("2026-10-02 10:00", periods=100, freq="15min")
@@ -164,23 +172,23 @@ def test_pipeline_runner_chart_a_plus_trigger():
             market_direction_prediction="Arah market diprediksi Bearish kuat melanjutkan tren",
         )
         runner.signal_engine.evaluate_bar = MagicMock(return_value=sig_hold)
-        notifier.send_chart_confirmation_alert.return_value = True
 
         res = runner.run_pipeline(watchlist=["XAUUSD"])
 
-        # send_signal (Auto-Open) should NOT be called because signal is HOLD
-        assert not notifier.send_signal.called
-        # send_chart_confirmation_alert SHOULD be called!
-        assert notifier.send_chart_confirmation_alert.called
-        call_info = notifier.send_chart_confirmation_alert.call_args[0][0]
-        assert call_info["ticker"] == "XAUUSD"
-        assert call_info["action"] == "SELL"
-        assert call_info["score"] == 100.0
-        # Check min 60 pips 1:1 floor
-        assert abs(call_info["price"] - call_info["sl"]) >= 6.00
-        assert abs(call_info["tp"] - call_info["price"]) >= 6.00
+        # Direct Auto-Execution: execute_signal MUST be called directly without manual confirmation!
+        assert mock_b.execute_signal.called
+        exec_sig = mock_b.execute_signal.call_args[0][0]
+        assert exec_sig.signal == "SELL"
+        assert exec_sig.pdf_confluence_score == 100.0
+        # Check floor min 60 pips 1:1
+        assert abs(exec_sig.price - exec_sig.stop_loss_price) >= 6.00
+        assert abs(exec_sig.take_profit_price - exec_sig.price) >= 6.00
 
-        # Second run on the same candle: deduplication should prevent sending again!
-        notifier.send_chart_confirmation_alert.reset_mock()
+        # Sinyal resmi & laporan eksekusi harus terkirim ke Telegram & copier
+        assert notifier.send_mt5_execution_report.called
+        assert notifier.send_signal.called
+
+        # Second run on the same candle: deduplication prevents re-execution
+        mock_b.execute_signal.reset_mock()
         res2 = runner.run_pipeline(watchlist=["XAUUSD"])
-        assert not notifier.send_chart_confirmation_alert.called
+        assert not mock_b.execute_signal.called

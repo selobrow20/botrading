@@ -443,10 +443,11 @@ class PipelineRunner:
                 elif is_duplicate:
                     logger.debug(f"Sinyal {sig_result.signal} untuk {ticker} dilewati (Duplikat: {dup_reason}).")
 
-                # JALUR 2: SINYAL KONFIRMASI CHART A+ (Grade A+ / Win Rate Tinggi ≥ 80% / 100% Confluence 9 Buku PDF)
-                # Jika Auto-Open belum menembus kriteria eksekusi ketat 9 buku (misal HOLD di dasar jurang RSI),
-                # tetapi chart mendeteksi setup Grade A+ (≥80% winrate / arah Bearish atau Bullish kuat),
-                # kirim Sinyal Konfirmasi Chart A+ ke Telegram dengan tombol konfirmasi [⚡ Eksekusi di MT5 Sekarang]!
+                # JALUR 2: SINYAL MOMEN SANGAT BAGUS GRADE A+ (Auto-Open Langsung Tanpa Perlu Konfirmasi Manual)
+                # Sesuai arahan pengguna: "kemarin kan gw ada update buat confirm dlu, itu kalo bisa di hilangkan aja
+                # lu lgsung open posisi aja kalo memang moment nya sudah sangat bagus"
+                # Jika sinyal awal tertahan (misal HOLD di dasar jurang), tetapi telaah chart membuktikan momen
+                # Grade A+ (≥80% winrate / arah Bearish atau Bullish kuat), LANGSUNG eksekusi open posisi ke MT5!
                 if not should_notify and is_gold and not is_startup_warmup:
                     try:
                         c_grade = str(getattr(sig_result, "setup_grade", "") or "")
@@ -504,24 +505,96 @@ class PipelineRunner:
                                 except Exception as ex_cg:
                                     logger.warning(f"Gagal generate chart konfirmasi: {ex_cg}")
 
-                                alert_info = {
-                                    "ticker": ticker,
-                                    "action": c_action,
-                                    "price": entry_p,
-                                    "tp": c_tp,
-                                    "sl": c_sl,
-                                    "score": c_score,
-                                    "grade": c_grade,
-                                    "prediction": c_pred,
-                                    "reasons": sig_result.reasons or getattr(sig_result, "pdf_confluence_details", []),
-                                    "candle_time": sig_result.candle_time,
-                                }
-                                sent_ok = self.notifier.send_chart_confirmation_alert(alert_info, photo_path=chart_img)
-                                if sent_ok:
+                                # Bentuk Sinyal Eksekusi Otomatis Langsung (Tanpa Konfirmasi Manual)
+                                from strategy.signal_engine import SignalResult
+                                auto_exec_sig = SignalResult(
+                                    ticker=ticker,
+                                    strategy_name="Momen_Grade_A_Plus_Direct",
+                                    signal=c_action,
+                                    price=entry_p,
+                                    candle_time=sig_result.candle_time,
+                                    reasons=[
+                                        f"🚀 Eksekusi Otomatis Momen Sangat Bagus ({c_grade}, Skor {c_score:.0f}%)",
+                                        f"🎯 Prediksi Arah: {c_pred}",
+                                        f"⚖️ Target TP ${c_tp:.2f} & SL ${c_sl:.2f} (Floor Min 60 Pips 1:1)",
+                                    ] + (sig_result.reasons or []),
+                                    take_profit_price=c_tp,
+                                    stop_loss_price=c_sl,
+                                    risk_reward_ratio=round(tp_dist / max(sl_dist, 0.01), 2),
+                                    pdf_confluence_score=c_score,
+                                    setup_grade=c_grade,
+                                    market_direction_prediction=c_pred,
+                                )
+
+                                # Eksekusi langsung ke MT5 (Langsung gas open posisi!)
+                                from trading.mt5_bridge import MT5Bridge
+                                mt5_bridge = MT5Bridge()
+                                if mt5_bridge.enabled:
+                                    mt5_res = mt5_bridge.execute_signal(auto_exec_sig)
+                                    if mt5_res.get("success"):
+                                        order_ticket = mt5_res.get("ticket")
+                                        self._last_chart_alert_time[ticker] = c_time_key
+                                        logger.info(
+                                            f"🚀 [AUTO-EXECUTE A+] MT5 Order Sukses: #{order_ticket} "
+                                            f"{c_action} {mt5_res.get('volume')} lot @ ${entry_p:,.2f}"
+                                        )
+
+                                        # Simpan ke Database
+                                        sig_db_id = self.storage.save_signal(
+                                            ticker=ticker,
+                                            strategy_name="Momen_Grade_A_Plus_Direct",
+                                            signal_type=c_action,
+                                            price=entry_p,
+                                            reasons=auto_exec_sig.reasons,
+                                            candle_time=auto_exec_sig.candle_time,
+                                            is_notified=True,
+                                            take_profit_price=c_tp,
+                                            stop_loss_price=c_sl,
+                                        )
+                                        if sig_db_id and order_ticket:
+                                            try:
+                                                with self.storage._get_connection() as conn:
+                                                    conn.cursor().execute(
+                                                        "UPDATE signals SET mt5_ticket = ? WHERE id = ?",
+                                                        (int(order_ticket), sig_db_id),
+                                                    )
+                                                    conn.commit()
+                                            except Exception:
+                                                pass
+
+                                        # Kirim kartu laporan eksekusi MT5 ke Master
+                                        try:
+                                            self.notifier.send_mt5_execution_report({
+                                                "ticket": order_ticket,
+                                                "action": c_action,
+                                                "symbol": mt5_res.get("symbol", ticker),
+                                                "volume": mt5_res.get("volume"),
+                                                "price": mt5_res.get("price", entry_p),
+                                                "tp": c_tp,
+                                                "sl": c_sl,
+                                                "score": c_score,
+                                                "grade": c_grade,
+                                            })
+                                        except Exception as ex_rep:
+                                            logger.warning(f"Gagal kirim laporan eksekusi MT5: {ex_rep}")
+
+                                        # Kirim sinyal resmi ke Telegram & broadcast otomatis ke Auto-Copier Member
+                                        try:
+                                            self.notifier.send_signal(auto_exec_sig, photo_path=chart_img)
+                                            results["signals_notified"] += 1
+                                        except Exception as ex_ns:
+                                            logger.warning(f"Gagal kirim notifikasi sinyal A+: {ex_ns}")
+                                    else:
+                                        err_msg = mt5_res.get("message", "")
+                                        logger.info(f"ℹ️ [AUTO-EXECUTE A+ DITAHAN MT5 GUARD] {err_msg}")
+                                        self._last_chart_alert_time[ticker] = c_time_key
+                                else:
+                                    # Mode simulasi / MT5 nonaktif: langsung kirim sinyal ke Telegram
                                     self._last_chart_alert_time[ticker] = c_time_key
-                                    logger.info(f"⚡ Sinyal Konfirmasi Chart A+ ({c_action}) terkirim ke Telegram untuk {ticker}!")
+                                    self.notifier.send_signal(auto_exec_sig, photo_path=chart_img)
+                                    results["signals_notified"] += 1
                     except Exception as ex_chart_alert:
-                        logger.error(f"Error memproses sinyal konfirmasi chart A+: {ex_chart_alert}")
+                        logger.error(f"Error memproses eksekusi sinyal chart A+: {ex_chart_alert}")
 
                 results["details"].append({
                     "ticker": ticker,
