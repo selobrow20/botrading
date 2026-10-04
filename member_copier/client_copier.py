@@ -27,21 +27,27 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.3.1"
+CLIENT_COPIER_VERSION = "2.3.2"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
 def restart_copier():
-    """Me-restart copier secara mulus menggunakan interpreter Python saat ini."""
+    """Me-restart copier secara mulus tanpa perlu member menutup dan membuka ulang aplikasi."""
     try:
         import subprocess
         script_file = str(Path(__file__).resolve())
-        args = [sys.executable, script_file]
-        subprocess.Popen(args, cwd=str(Path(__file__).resolve().parent))
+        # Jika dijalankan tanpa batch runner loop, spawn proses baru agar tetap berjalan
+        if os.environ.get("COPIER_IN_LOOP") != "1":
+            try:
+                flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if sys.platform == "win32" else 0
+                subprocess.Popen([sys.executable, script_file], cwd=str(Path(__file__).resolve().parent), creationflags=flags)
+            except Exception:
+                pass
         time.sleep(1.0)
-        os._exit(0)
+        os._exit(42)
     except Exception as e:
         print(f"⚠️ Gagal restart otomatis: {e}. Silakan buka kembali START_COPIER.bat.")
+        os._exit(0)
 
 def apply_zip_update(zip_path_or_bytes, preserve_config: bool = True):
     """
@@ -1149,6 +1155,23 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
 
     asyncio.create_task(telegram_keepalive_daemon())
 
+    # Live In-App OTA Poller: Memeriksa dan menerapkan update otomatis saat aplikasi SEDANG BERJALAN AKTIF
+    async def live_ota_checker_daemon():
+        """
+        Memeriksa update sistem di Cloud setiap 45 detik saat copier aktif.
+        Jika versi baru dirilis, copier otomatis memperbarui file dan me-reload tanpa perlu ditutup manual!
+        """
+        while True:
+            await asyncio.sleep(45)
+            try:
+                updated = await asyncio.to_thread(check_and_apply_ota_update, silent=True)
+                if updated:
+                    break
+            except Exception:
+                pass
+
+    asyncio.create_task(live_ota_checker_daemon())
+
     # 4. Listener Sinyal Masuk & Kontrol Lisensi Real-Time
     recent_executed_signals = {}
 
@@ -1162,7 +1185,18 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
         if not is_valid_bot:
             return
 
-        # 0. DETEKSI DOKUMEN / ZIP PEMBARUAN OTOMATIS DARI MASTER BOT (IN-APP AUTO-UPDATE)
+        # 0a. DETEKSI PERINTAH UPDATE INSTAN DARI MASTER BOT (BROADCAST / UPDATE)
+        msg_raw_test = (event.raw_text or "").upper()
+        if any(cmd in msg_raw_test for cmd in ["[UPDATE_COPIER]", "UPDATE_COPIER", "/UPDATE_COPIER", "/UPDATE_CLIENT"]):
+            print("\n" + "=" * 70)
+            print("🔔 [PERINTAH PEMBARUAN MASTER BOT DITERIMA SECARA LANGSUNG]")
+            print("🚀 Memeriksa dan menerapkan update terbaru dari Cloud tanpa perlu menutup aplikasi...")
+            print("=" * 70 + "\n")
+            updated = await asyncio.to_thread(check_and_apply_ota_update, silent=False)
+            if updated:
+                return
+
+        # 0b. DETEKSI DOKUMEN / ZIP PEMBARUAN OTOMATIS DARI MASTER BOT (IN-APP AUTO-UPDATE)
         # Member tidak perlu lagi unduh atau timpa ZIP manual!
         if getattr(event.message, "file", None) is not None:
             doc_name = (getattr(event.message.file, "name", "") or "").lower()

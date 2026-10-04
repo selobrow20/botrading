@@ -1,14 +1,16 @@
 {
-  "version": "2.3.1",
+  "version": "2.3.2",
   "name": "MT5 VIP Auto-Copier (9 Buku PDF Confluence)",
   "released_at": "2026-10-04",
   "min_python": "3.10",
-  "changelog": "Pembaruan v2.3.1: Pemisahan akurat Akun Standard USD (0.01 lot disiplin & filter Grade A+) vs Akun Cent USC (0.05 lot / 0.08 lot Sesi US, maks 3 posisi).",
+  "changelog": "Pembaruan v2.3.2: Hot Live Auto-Update! Copier otomatis mengunduh & memuat ulang update Cloud saat aplikasi sedang berjalan tanpa perlu ditutup manual.",
   "features": [
+    "Hot Live In-App Auto-Update: Copier memeriksa Cloud setiap 45 detik saat berjalan & reload otomatis",
+    "Instant Broadcast Trigger: Mendukung perintah update instan langsung dari Master Bot",
     "Deteksi Akun 100% Akurat: USD Standard vs Cent USC tanpa salah deteksi",
     "Lot Otomatis Berdasarkan Tipe Akun: 0.01 Lot di USD Standard, 0.05/0.08 Lot di Cent USC",
     "Batas Posisi Cent Diperluas: Maksimal 3 posisi di luar sesi US untuk akun Cent",
     "Pencegahan Salah Simbol: Pemilihan otomatis XAUUSD standar vs XAUUSDc cent",
-    "In-App Cloud OTA Auto-Updater tanpa timpa config"
+    "Preserve Config: Pengaturan akun & lot kustom member tetap aman 100%"
   ]
 }
