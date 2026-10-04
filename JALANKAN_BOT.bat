@@ -27,8 +27,10 @@ echo.
 echo ======================================================================
 echo.
 
+:loop
 .\.venv\Scripts\python.exe main.py run-all
 
 echo.
-echo Bot telah berhenti.
-pause
+echo [AUTO-RELOAD] Memulai ulang bot trading dalam 2 detik...
+timeout /t 2 /nobreak >nul
+goto loop

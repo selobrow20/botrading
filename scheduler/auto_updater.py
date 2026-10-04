@@ -32,6 +32,20 @@ class GitAutoUpdater:
         self.auto_restart = auto_restart
         self.notifier = notifier
         self._is_updating = False
+        self.initial_head = self._get_current_head()
+
+    def _get_current_head(self) -> str:
+        try:
+            proc = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(self.base_dir),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            return proc.stdout.strip()
+        except Exception:
+            return ""
 
     def check_for_updates(self) -> Tuple[bool, str, str]:
         """
@@ -197,9 +211,16 @@ class GitAutoUpdater:
             return False
 
         self._is_updating = True
+        current_head = self._get_current_head()
         try:
             has_update, local_h, remote_h = self.check_for_updates()
             if not has_update:
+                if self.initial_head and current_head and (current_head != self.initial_head):
+                    logger.info(f"🚀 Terdeteksi kodingan lokal berubah ({self.initial_head[:7]} -> {current_head[:7]}). Me-restart proses bot...")
+                    self.initial_head = current_head
+                    if self.auto_restart:
+                        self.restart_process()
+                    return True
                 logger.debug(f"Git repo up-to-date ({local_h[:7] if local_h else 'ok'}). Tidak ada kodingan baru.")
                 return False
 
