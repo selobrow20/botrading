@@ -407,3 +407,53 @@ def test_natural_conversation_chat():
     assert any(w in resp_consec.lower() for w in ["stop trading", "rehat", "cut loss", "banting hp"])
 
 
+def test_stance_and_caption_score_and_grade_formatting():
+    """Memastikan skor persentase tidak terkalikan 100 dua kali (7700%) dan tidak ada duplikasi 'Grade Grade'."""
+    # 1. Test generate_stance_response dengan score 77.0 dan Grade yang sudah ada kata 'Grade'
+    resp_stance = ChatAgent.generate_stance_response(
+        ticker="XAUUSD",
+        price=2684.50,
+        signal="SELL",
+        setup_grade="Grade A (Setup Kuat ⭐️⭐️⭐️⭐️)",
+        pdf_confluence_score=77.0,
+        indicators={"rsi": 38.5},
+        tp_price=2663.0,
+        sl_price=2695.0,
+        prediction="Bearish Kontinuasi",
+        reasons=["Rejection Resisten 20 EMA"],
+        user_name="Nabil",
+    )
+    assert "7700%" not in resp_stance
+    assert "77% Konfluensi 9 Buku" in resp_stance
+    assert "Grade Grade" not in resp_stance
+    assert "Grade A (Setup Kuat" in resp_stance
+
+    # 2. Test generate_ticker_analysis_response dengan desimal 0.85
+    resp_analysis = ChatAgent.generate_ticker_analysis_response(
+        ticker="XAUUSD",
+        price=2684.50,
+        signal="BUY",
+        change_pct=0.45,
+        setup_grade="Grade Grade A+",
+        pdf_confluence_score=0.85,
+        indicators={"rsi": 55.0},
+    )
+    assert "8500%" not in resp_analysis
+    assert "85% Konfluensi 9 Buku" in resp_analysis
+    assert "Grade Grade" not in resp_analysis
+    assert "Grade A+" in resp_analysis
+
+    # 3. Test generate_chart_caption
+    resp_caption = ChatAgent.generate_chart_caption(
+        ticker="XAUUSD",
+        price=2684.50,
+        setup_grade="Grade A+",
+        pdf_confluence_score=77.0,
+    )
+    assert "7700%" not in resp_caption
+    assert "77% Konfluensi" in resp_caption
+    assert "Grade Grade" not in resp_caption
+    assert "Grade A+" in resp_caption
+
+
+

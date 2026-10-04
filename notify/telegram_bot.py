@@ -1,4 +1,5 @@
 import os
+import re
 import asyncio
 import html
 from datetime import datetime, timezone, timedelta
@@ -115,6 +116,16 @@ class TelegramNotifier:
         else:
             wr_badge = ""
 
+        def _get_grade_and_score():
+            raw_grade = getattr(sig, "setup_grade", "") or "Grade A"
+            clean_g = re.sub(r"^(Grade\s*)+", "", str(raw_grade).strip(), flags=re.IGNORECASE).strip()
+            g_str = f"Grade {clean_g}" if clean_g else "Grade A"
+            raw_s = float(getattr(sig, "pdf_confluence_score", 0.0) or 0.0)
+            if raw_s > 100.0:
+                raw_s /= 100.0
+            s_val = min(100, max(0, int(round(raw_s if raw_s > 1.0 else raw_s * 100.0))))
+            return g_str, s_val
+
         lines = []
 
         if sig.signal == "BUY":
@@ -140,10 +151,9 @@ class TelegramNotifier:
             # Telaah 9 Buku PDF untuk Sinyal Masuk
             pdf_details = getattr(sig, "pdf_confluence_details", [])
             if pdf_details:
-                grade_str = getattr(sig, "setup_grade", "") or "Grade A"
-                score_val = getattr(sig, "pdf_confluence_score", 0.0)
+                grade_str, score_val = _get_grade_and_score()
                 lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-                lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val:.0f}%):</b>")
+                lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val}%):</b>")
                 for chk in pdf_details[:5]:
                     lines.append(f"• {html.escape(chk)}")
 
@@ -177,10 +187,9 @@ class TelegramNotifier:
 
             pdf_details = getattr(sig, "pdf_confluence_details", [])
             if pdf_details:
-                grade_str = getattr(sig, "setup_grade", "") or "Grade A"
-                score_val = getattr(sig, "pdf_confluence_score", 0.0)
+                grade_str, score_val = _get_grade_and_score()
                 lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-                lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val:.0f}%):</b>")
+                lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val}%):</b>")
                 for chk in pdf_details[:5]:
                     lines.append(f"• {html.escape(chk)}")
                 pred = getattr(sig, "market_direction_prediction", "")
@@ -206,10 +215,9 @@ class TelegramNotifier:
 
             pdf_details = getattr(sig, "pdf_confluence_details", [])
             if pdf_details:
-                grade_str = getattr(sig, "setup_grade", "") or "Grade A"
-                score_val = getattr(sig, "pdf_confluence_score", 0.0)
+                grade_str, score_val = _get_grade_and_score()
                 lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-                lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val:.0f}%):</b>")
+                lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val}%):</b>")
                 for chk in pdf_details[:4]:
                     lines.append(f"• {html.escape(chk)}")
             elif sig.reasons:
@@ -3250,10 +3258,13 @@ class TelegramBotCommands:
             f"🛑 <b>Batas SL:</b> <code>{sl_str}</code>",
         ])
         if sig.setup_grade:
-            grade_clean = sig.setup_grade.replace("Grade Grade ", "").replace("Grade ", "")
-            score_num = sig.pdf_confluence_score or 0.0
-            score_clean = int(score_num if score_num > 1.0 else score_num * 100.0)
-            caption_lines.append(f"⭐ <b>Kualitas Setup:</b> Grade {grade_clean} ({score_clean}%)")
+            clean_g = re.sub(r"^(Grade\s*)+", "", str(sig.setup_grade).strip(), flags=re.IGNORECASE).strip()
+            grade_str = f"Grade {clean_g}" if clean_g else ""
+            score_num = float(sig.pdf_confluence_score or 0.0)
+            if score_num > 100.0:
+                score_num /= 100.0
+            score_clean = min(100, max(0, int(round(score_num if score_num > 1.0 else score_num * 100.0))))
+            caption_lines.append(f"⭐ <b>Kualitas Setup:</b> {grade_str} ({score_clean}%)")
         if sig.market_direction_prediction:
             caption_lines.append(f"🎯 <b>Prediksi Arah:</b> <i>{html.escape(sig.market_direction_prediction)}</i>")
 

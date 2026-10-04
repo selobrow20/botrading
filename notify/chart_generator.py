@@ -523,7 +523,12 @@ class ChartGenerator:
 
         # 1. Sinyal BUY / SELL resmi yang lolos telaah 9 Buku PDF
         if signal in ["BUY", "SELL"] and (conf_score >= 0.50 or setup_grade in ["A+", "A"]):
-            grade_str = f"Grade {setup_grade}" if setup_grade else f"{int(conf_score*100)}%"
+            clean_grade = re.sub(r"^(Grade\s*)+", "", str(setup_grade or "").strip(), flags=re.IGNORECASE).strip()
+            score_num = float(conf_score or 0.0)
+            if score_num > 100.0:
+                score_num /= 100.0
+            conf_pct = min(100, max(0, int(round(score_num if score_num > 1.0 else score_num * 100.0))))
+            grade_str = f"Grade {clean_grade}" if clean_grade else f"{conf_pct}%"
             return True, f"Sinyal {signal} ({grade_str})", f"Sinyal {signal} terkonfirmasi dengan konfluensi 9 buku PDF."
 
         # 2. Pola Pullback Bob Volman + Penolakan Support

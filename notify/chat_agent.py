@@ -46,6 +46,23 @@ KNOWN_IDX_TICKERS = {
 class ChatAgent:
     """Agen percakapan bahasa gaul dengan integrasi seluruh fitur sistem trading."""
 
+    @staticmethod
+    def _clean_grade(setup_grade: Optional[str]) -> str:
+        if not setup_grade:
+            return ""
+        clean = re.sub(r"^(Grade\s*)+", "", str(setup_grade).strip(), flags=re.IGNORECASE).strip()
+        return f"Grade {clean}" if clean else ""
+
+    @staticmethod
+    def _clean_conf_pct(pdf_confluence_score: Optional[float]) -> int:
+        if not pdf_confluence_score:
+            return 0
+        score = float(pdf_confluence_score)
+        if score > 100.0:
+            score = score / 100.0
+        pct = score if score > 1.0 else score * 100.0
+        return min(100, max(0, int(round(pct))))
+
     @classmethod
     def extract_ticker(cls, text: str) -> Optional[str]:
         """
@@ -514,8 +531,9 @@ class ChatAgent:
             lines.append(f"🛑 <b>Batas SL:</b> <code>{sl_fmt}</code> ({sign_sl}{abs(pct_sl):.2f}%)")
 
         if setup_grade:
-            conf_pct = int((pdf_confluence_score or 0) * 100)
-            lines.append(f"⭐ <b>Kualitas Setup:</b> Grade {setup_grade} ({conf_pct}% Konfluensi)")
+            grade_str = cls._clean_grade(setup_grade)
+            conf_pct = cls._clean_conf_pct(pdf_confluence_score)
+            lines.append(f"⭐ <b>Kualitas Setup:</b> {grade_str} ({conf_pct}% Konfluensi)")
 
         if prediction:
             lines.append(f"🎯 <b>Arah Market:</b> <i>{html.escape(prediction)}</i>")
@@ -569,8 +587,9 @@ class ChatAgent:
         ]
 
         if setup_grade:
-            conf_pct = int(pdf_confluence_score * 100)
-            lines.append(f"⭐ <b>Kualitas Setup:</b> <b>Grade {setup_grade}</b> ({conf_pct}% Konfluensi 9 Buku)")
+            grade_str = cls._clean_grade(setup_grade)
+            conf_pct = cls._clean_conf_pct(pdf_confluence_score)
+            lines.append(f"⭐ <b>Kualitas Setup:</b> <b>{grade_str}</b> ({conf_pct}% Konfluensi 9 Buku)")
 
         if prediction:
             lines.append(f"🎯 <b>Proyeksi Arah:</b> <i>{html.escape(prediction)}</i>")
@@ -790,7 +809,7 @@ class ChatAgent:
         price_fmt = f"${price:,.2f}" if is_gold else f"Rp {price:,.0f}"
 
         rsi_val = indicators.get("rsi", 50.0)
-        conf_pct = int(pdf_confluence_score * 100) if pdf_confluence_score else 0
+        conf_pct = cls._clean_conf_pct(pdf_confluence_score)
 
         if signal == "BUY":
             headline = f"Gue lagi ambil posisi <b>BUY</b> di {disp_name} bor! 🚀"
@@ -824,7 +843,8 @@ class ChatAgent:
         ]
 
         if setup_grade and signal in ["BUY", "SELL"]:
-            lines.append(f"⭐ <b>Kualitas Setup:</b> Grade {setup_grade} ({conf_pct}% Konfluensi 9 Buku)")
+            grade_str = cls._clean_grade(setup_grade)
+            lines.append(f"⭐ <b>Kualitas Setup:</b> {grade_str} ({conf_pct}% Konfluensi 9 Buku)")
 
         if tp_price and sl_price and signal in ["BUY", "SELL"]:
             tp_fmt = f"${tp_price:,.2f}" if is_gold else f"Rp {tp_price:,.0f}"
