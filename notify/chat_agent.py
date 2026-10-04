@@ -8,6 +8,7 @@ rekap history, edukasi strategi PDF, dan copier.
 
 import re
 import html
+import random
 from typing import Dict, Any, Optional, Tuple, List
 from config.settings import setup_logger
 
@@ -983,11 +984,91 @@ class ChatAgent:
         return "\n".join(lines)
 
     @classmethod
-    def generate_chat_response(cls, intent: str, user_name: str = "Bor", extra: Optional[Dict[str, Any]] = None) -> str:
-        """Menghasilkan teks balasan percakapan natural layaknya manusia biasa yang ramah."""
+    def generate_chat_response(
+        cls,
+        intent: str,
+        user_name: str = "Bor",
+        extra: Optional[Dict[str, Any]] = None,
+        raw_text: str = ""
+    ) -> str:
+        """
+        Menghasilkan teks balasan percakapan natural layaknya teman trader akrab:
+        - Bahasa gaul santai, asik, tidak kaku / template robot.
+        - Memahami konteks obrolan: curhat capek/loss/profit, ngopi, becandaan, nanya kabar, opini pasar.
+        - Penuh variasi dinamis sehingga tidak pernah monoton.
+        """
         extra = extra or {}
+        text_clean = (raw_text or extra.get("raw_text", "")).lower().strip()
 
+        # 1. Konteks Tertawa / Candaan ("wkwk", "haha", "kocak", "ngakak", "anjir", "gokil")
+        if any(w in text_clean for w in ["wkwk", "haha", "hehe", "kocak", "anjir", "gokil", "ngakak", "lucu", "lawak"]):
+            laugh_replies = [
+                f"Wkwkwk bisa aja lu {user_name}! 😂 Tapi beneran kan bor, trading mah kudu santai dan dinikmati biar ga cepet ubanan haha!",
+                f"Haha ngakak bor! 🤣 Di market yang penting jangan sampe kitanya yang kena prank market ya wkwk! Santai tapi SL tetep dikunci!",
+                f"Wkwk asik dah ngobrol sama lu {user_name}! Suasana market yang tegang langsung adem. Sambil ngopi santai kita bor ☕😎",
+            ]
+            return random.choice(laugh_replies)
+
+        # 2. Konteks Kopi / Santai / Tanya Kegiatan ("lagi apa", "lagi ngapain", "ngopi", "kopi", "tidur", "makan", "santai")
+        if any(w in text_clean for w in ["ngopi", "kopi"]):
+            coffee_replies = [
+                f"Wah pas banget bor {user_name}, kopi item udah siap nemenin mantau chart nih ☕. Lu udah ngopi belum? Jangan lupa sruput dulu biar analisa makin tajem dan kepala dingin!",
+                f"Kopi emang bensin sejati trader bor! ☕ Mantap, sambil ngopi santai sambil nungguin setup Grade A+ dateng ke zona kita ya!",
+                f"Seruput dulu kopinya bor ☕😎 Trading jangan tegang-tegang, sabar nunggu momen itu separuh dari cuan!",
+            ]
+            return random.choice(coffee_replies)
+
+        if any(w in text_clean for w in ["lagi apa", "lagi ngapain", "ngapain lu", "ngapain bor", "sibuk ga"]):
+            activity_replies = [
+                f"Lagi anteng di depan monitor nih {user_name}, mantau live chart XAU/USD sama screening saham-saham IDX. Lu lagi santai apa lagi mantau pasar juga bor? ☕📈",
+                f"Nih lagi nungguin setup konfluensi 9 Buku PDF yang bener-bener mateng bor. Gamau buru-buru open posisi kalau belum Grade A+. Lu ada yang lagi diincer ga hari ini?",
+                f"Lagi melototin chart live nih bor {user_name}, jagain radar 24 jam biar lu dapet momentum yang presisi. Lu lagi di mana nih sekarang, santai kan?",
+            ]
+            return random.choice(activity_replies)
+
+        if any(w in text_clean for w in ["tidur", "ngantuk", "istirahat"]):
+            sleep_replies = [
+                f"Tidur? Ga ada kamusnya di database gue bor wkwk! Mata gue melotot 24 jam jagain market biar lu bisa tidur pules tanpa was-was kena floating! Kalau lu udah ngantuk, istirahat gih bor, kesehatan nomer satu! 😴✨",
+                f"Gue mah robot yang pantang tidur bor wkwk! Lu istirahat aja duluan kalau capek, biarin gue yang jagain radar MT5 semalaman. Tidur nyenyak bor {user_name}!",
+            ]
+            return random.choice(sleep_replies)
+
+        # 3. Konteks Capek / Pusing / Burnout ("capek", "pusing", "mumet", "pening", "lelah", "stres", "stress", "degdegan")
+        if any(w in text_clean for w in ["capek", "pusing", "mumet", "pening", "lelah", "stres", "stress", "degdegan", "gemetar"]):
+            tired_replies = [
+                f"Tarik napas dalem-dalem dulu bor {user_name}... 🧘‍♂️ Wajar banget kalau trading kadang bikin capek atau pusing. Saran tulus dari temen: tutup chart dulu 1-2 jam, cari angin, mandi air anget atau ngopi santai. Jangan paksain entry pas lagi lelah bor, nanti malah kejebak revenge trade. Nanti pas lu udah seger dan ada momentum Grade A+, kita hajar bareng lagi! Gue jagain terus kok 🤝",
+                f"Pusing ya bor? Tenang, gue temenin. Jangan dipaksain kalau kepala lagi mumet. Market buka terus tiap hari, peluang ga bakal habis. Mending lu rehat dulu sejenak bor, biarin gue yang jagain radar. Nanti pas setup cakep beneran nongol, gue panggil lu!",
+            ]
+            return random.choice(tired_replies)
+
+        # 4. Konteks Kondisi Pasar / Liar / Sepi ("sepi", "liar", "gila", "kenceng", "volatile", "sideway", "whipsaw")
+        if any(w in text_clean for w in ["sepi", "liar", "gila", "kenceng", "volatile", "sideway", "whipsaw"]):
+            market_banter_replies = [
+                f"Iya nih bor {user_name}, kalau market lagi sideway/sepi biasanya lagi fase konsolidasi (*buildup* ala Bob Volman). Momen kayak gini justru kita harus paling sabar: 'Cash is a position'. Tunggu harga breakout dan konfirmasi Grade A+ biar ga kejebak whipsaw!",
+                f"Wkwk bener bor, market kalau lagi liar emang suka bikin sport jantung! Makanya rule kita jelas: SL minimal 60 pips 1:1, rasio Risk:Reward terjaga. Selama lu disiplin ikutin rule, market se-liar apa pun bakal lu lewati dengan aman!",
+            ]
+            return random.choice(market_banter_replies)
+
+        # 5. Konteks Tanya Saran / Pendapat Bebas ("menurut lu", "gimana nih", "saran lu", "bagusnya", "mending")
+        if any(w in text_clean for w in ["menurut lu", "gimana nih", "saran lu", "bagusnya", "mending"]):
+            advice_replies = [
+                f"Kalau menurut gue pribadi bor: jangan pernah masuk pasar cuma karena FOMO (takut ketinggalan). Di 9 Buku PDF ada hukum baku: 'Tunggu harga dateng ke zona kita, bukan kita yang ngejar harga'. Kalau sekarang belum ada setup Grade A+ yang jelas, posisi terbaik adalah *CASH/WAITING*. Disiplin nunggu itu bagian dari strategi cuan bor!",
+                f"Pandangan gue bor: trading itu kuncinya di kesabaran sama lot sizing. Kalau akun Standard USD, strictly 0.01 lot dan tunggu momen Grade A+ aja. Kalau Cent USC, main di 0.05 lot. Jangan pernah nekat open di luar rule, tidur nyenyak itu lebih mahal daripada nebak-nebak pucuk!",
+            ]
+            return random.choice(advice_replies)
+
+        # Standard Intent Handling (dengan variasi santai & menjaga kecocokan unit tests)
         if intent == "GREETING":
+            if "pagi" in text_clean:
+                return f"Pagi juga {user_name}! ☀️ Semangat bor! Market Asia udah mulai gerak nih, mari kita berburu peluang cuan hari ini dengan sabar dan disiplin!"
+            if "siang" in text_clean:
+                return f"Siang bor {user_name}! ☀️ Jangan lupa makan siang dulu ya bor. Market siang biasanya agak anteng sebelum nanti sore London buka!"
+            if "sore" in text_clean:
+                return f"Sore bor {user_name}! ☕ Jam-jam segini sesi London lagi anget-angetnya nih. Tetap fokus ya bor!"
+            if "malam" in text_clean:
+                return f"Malam bor {user_name}! 🌙 Sesi US lagi panas-panasnya nih, volatilitas emas biasanya lagi liar. Sabar nunggu setup yang jelas ya!"
+            if "assalamualaikum" in text_clean:
+                return f"Wa'alaikumsalam bor {user_name}! 🙏 Semoga hari ini berkah, tradingan kita lancar dan dijauhin dari boncos ya bor!"
             return (
                 f"Yo halo {user_name}! 😎 Lagi mantau market apa nih hari ini?\n\n"
                 f"Gold sama saham-saham IDX lagi gue pantauin terus nih. "
@@ -995,6 +1076,11 @@ class ChatAgent:
             )
 
         elif intent == "THANKS":
+            if any(w in text_clean for w in ["keren", "pinter", "hebat", "jago", "top", "gokil", "mantap"]):
+                return (
+                    f"Haha makasih banyak bor {user_name}! 🙏 Pujian lu bikin server gue makin adem wkwk ❄️. "
+                    f"Tapi tetep, yang paling keren itu disiplin lu sendiri yang mau ngikutin rule money management! Cuan bareng, sukses bareng! 🚀"
+                )
             return (
                 f"Sama-sama bor {user_name}! Santai aja, kita kan partneran cari cuan bareng. 🤝🔥\n"
                 f"Kalau butuh cek chart, tanya analisa, atau mau liat setup yang lagi cakep, tinggal panggil gue aja ya!"
@@ -1008,7 +1094,7 @@ class ChatAgent:
 
         elif intent == "CURHAT_LOSS":
             return (
-                f"Sabar ya bor, tarik napas dulu sejenak. 🧘‍♂️\n\n"
+                f"Sabar ya bor {user_name}, tarik napas dulu sejenak. 🧘‍♂️\n\n"
                 f"Kena SL itu bukan tanda lu gagal, tapi bukti bahwa lu disiplin menjaga modal dari kehancuran total. "
                 f"Trader profesional kelas dunia pun sering salah, tapi portofolionya tetap tumbuh konsisten karena saat salah ruginya terukur kecil (1-2%), "
                 f"dan saat bener cuannya lebar.\n\n"
@@ -1034,8 +1120,12 @@ class ChatAgent:
             )
 
         else:
-            # Chitchat default
-            return (
-                f"Siap bor {user_name}! Mau ngobrolin apa nih seputar market hari ini? "
-                f"Mau tanya arah Gold, cek analisa saham, atau liat chart langsung ngomong aja santai ya, gue standby terus! 🚀"
-            )
+            # Chitchat default variatif layaknya ngobrol santai di warkop
+            chitchat_replies = [
+                f"Siap bor {user_name}! Santai aja ngobrol sama gue. Lu lagi ada posisi yang lagi running atau lagi nungguin setup baru nih? ☕📈",
+                f"Ada gue di sini bor {user_name}! Gimana pandangan lu soal market hari ini? Kalau ada saham atau chart emas yang mau dibedah bareng, bilang aja langsung ya!",
+                f"Yo bor {user_name}! Mau ngobrolin apa nih seputar market hari ini? Mau tanya arah Gold, cek analisa saham, atau liat chart langsung ngomong aja santai ya, gue standby terus! 🚀",
+                f"Siap nemenin bor {user_name}! Mau diskusi teknikal, bahas psikologi trading, atau minta chart live langsung colek gue aja ya. Santai kayak di tongkrongan sendiri! 😎",
+                f"Mantap bor! Gue standby 24 jam di sini. Ada yang lagi bikin penasaran di market hari ini, atau mau cek posisi MT5 dan analisa?",
+            ]
+            return random.choice(chitchat_replies)

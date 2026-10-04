@@ -374,3 +374,27 @@ def test_generate_news_stance_response():
     )
     assert "Klop banget" in resp_aligned
     assert "STRONG BUY" in resp_aligned
+
+
+def test_natural_conversation_chat():
+    # 1. Laugh / jokes
+    resp_laugh = ChatAgent.generate_chat_response("CHITCHAT", user_name="Budi", raw_text="wkwkwk kocak amat lu bor")
+    assert any(k in resp_laugh for k in ["😂", "🤣", "wkwk", "haha", "Budi"])
+
+    # 2. Coffee
+    resp_coffee = ChatAgent.generate_chat_response("CHITCHAT", user_name="Budi", raw_text="ngopi dulu bor biar adem")
+    assert "☕" in resp_coffee
+    assert any(k in resp_coffee for k in ["kopi", "seruput", "sruput"])
+
+    # 3. What are you doing / activity
+    resp_act = ChatAgent.generate_chat_response("CHITCHAT", user_name="Budi", raw_text="lagi ngapain lu bor")
+    assert any(k in resp_act for k in ["chart", "monitor", "pantau", "9 Buku PDF"])
+
+    # 4. Burnout / Tired
+    resp_tired = ChatAgent.generate_chat_response("CHITCHAT", user_name="Budi", raw_text="capek bgt gw trading hari ini pusing")
+    assert any(k in resp_tired for k in ["napas", "istirahat", "rehat", "mumet", "Budi"])
+
+    # 5. Market opinion
+    resp_op = ChatAgent.generate_chat_response("CHITCHAT", user_name="Budi", raw_text="menurut lu gimana bor kondisi sekarang")
+    assert any(k in resp_op for k in ["zona", "Grade A+", "disiplin", "lot"])
+

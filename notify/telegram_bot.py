@@ -4024,7 +4024,7 @@ class TelegramBotCommands:
 
         # 6. Intent CURHAT_LOSS, CURHAT_PROFIT, IDENTITY
         if intent in ["CURHAT_LOSS", "CURHAT_PROFIT", "IDENTITY"]:
-            reply_text = ChatAgent.generate_chat_response(intent=intent, user_name=user_name)
+            reply_text = ChatAgent.generate_chat_response(intent=intent, user_name=user_name, raw_text=user_text)
             await update.message.reply_html(reply_text)
             return
 
@@ -4134,12 +4134,12 @@ class TelegramBotCommands:
 
         # 18. Intent STATUS: Pengguna menanyakan status bot
         if intent == "STATUS":
-            reply_text = ChatAgent.generate_chat_response(intent="STATUS", user_name=user_name)
+            reply_text = ChatAgent.generate_chat_response(intent="STATUS", user_name=user_name, raw_text=user_text)
             await update.message.reply_html(reply_text)
             return
 
         # 19. Default: GREETING, THANKS, CHITCHAT
-        reply_text = ChatAgent.generate_chat_response(intent=intent, user_name=user_name)
+        reply_text = ChatAgent.generate_chat_response(intent=intent, user_name=user_name, raw_text=user_text)
         await update.message.reply_html(reply_text)
 
     async def news_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
