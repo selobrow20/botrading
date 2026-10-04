@@ -36,11 +36,15 @@ def restart_copier():
     try:
         import subprocess
         script_file = str(Path(__file__).resolve())
-        # Jika dijalankan tanpa batch runner loop, spawn proses baru agar tetap berjalan
+        # Jika dijalankan tanpa batch runner loop, spawn START_COPIER.bat di jendela baru
         if os.environ.get("COPIER_IN_LOOP") != "1":
             try:
-                flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if sys.platform == "win32" else 0
-                subprocess.Popen([sys.executable, script_file], cwd=str(Path(__file__).resolve().parent), creationflags=flags)
+                bat_file = Path(__file__).resolve().parent / "START_COPIER.bat"
+                if bat_file.exists() and sys.platform == "win32":
+                    subprocess.Popen(["cmd.exe", "/c", str(bat_file)], cwd=str(Path(__file__).resolve().parent), creationflags=subprocess.CREATE_NEW_CONSOLE)
+                else:
+                    flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if sys.platform == "win32" else 0
+                    subprocess.Popen([sys.executable, script_file], cwd=str(Path(__file__).resolve().parent), creationflags=flags)
             except Exception:
                 pass
         time.sleep(1.0)
