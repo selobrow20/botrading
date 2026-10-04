@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.3.0"
+CLIENT_COPIER_VERSION = "2.3.1"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -354,6 +354,11 @@ class MT5MemberBridge:
         self.suffix = cfg.get("symbol_suffix", "")
         self.mt5 = None
         self._detect_mt5()
+
+    @property
+    def lot(self) -> float:
+        val, _ = self.calculate_lot_size({}, self.is_cent_account())
+        return val
 
     def calculate_lot_size(self, sig: dict, is_cent: bool) -> tuple[float, str]:
         """
@@ -1093,8 +1098,8 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
     print("✅ [LISENSI TERVERIFIKASI RESMI DARI MASTER ADMIN] 🎉")
     print(f"👤 Pengguna Terdaftar : {user_display} (Chat ID: {user_id})")
     print(f"⏱️ Masa Aktif Lisensi : {rem_str} (Berlaku s/d: {exp_str})")
-    print(f"🔒 Proteksi Anti-Share: Terkunci ke akun ini (Tidak bisa dipindahtangankan)")
-    print(f"📦 Ukuran Lot MT5     : {bridge.lot} Lot")
+    active_lot, lot_lbl = bridge.calculate_lot_size({}, bridge.is_cent_account())
+    print(f"📦 Ukuran Lot MT5     : {active_lot} Lot ({lot_lbl})")
     print(f"📡 Status             : Standby menerima sinyal 9 Buku PDF...")
     print("=" * 65 + "\n")
 
