@@ -275,7 +275,7 @@ class PipelineRunner:
                     except Exception:
                         pass
 
-                    if (is_gold or res_sig.get("is_gold")) and not mt5_bridge_active:
+                    if is_gold or res_sig.get("is_gold"):
                         try:
                             self.notifier.send_tp_sl_report(res_sig)
                         except Exception as e:
@@ -646,7 +646,7 @@ class PipelineRunner:
             except Exception:
                 pass
 
-            if not df_gold.empty and not mt5_active:
+            if not df_gold.empty:
                 resolved_gold = self.storage.resolve_open_signals("XAUUSD", df_gold)
                 for res_sig in resolved_gold:
                     # Validasi ketat: Hanya kirim laporan TP/SL jika sinyal entry pernah dinotifikasikan ke user
@@ -873,11 +873,11 @@ class PipelineRunner:
                     elif reason_str == "TP":
                         note = f"🎯 Transaksi MT5 #{pos_id} sukses menyentuh Take Profit di ${exit_price:,.2f} ({pnl_cash:+.2f} {unit_curr}). Target keuntungan 9 Buku PDF berhasil dicapai!"
                     else:
-                        note = f"🛡️ Transaksi MT5 #{pos_id} ditutup (Take Profit Manual / Early Close) di ${exit_price:,.2f} ({pnl_cash:+.2f} {unit_curr}) untuk mengamankan keuntungan!"
+                        note = f"🛡️ Transaksi MT5 #{pos_id} ditutup (Take Profit Manual oleh Trader) di ${exit_price:,.2f} ({pnl_cash:+.2f} {unit_curr}) untuk mengamankan keuntungan!"
                 elif reason_str == "SL":
                     note = f"🛑 Transaksi MT5 #{pos_id} menyentuh Stop Loss di ${exit_price:,.2f} ({pnl_cash:+.2f} {unit_curr}). Batas toleransi risiko berhasil mengamankan modal trading Anda."
                 else:
-                    note = f"🛑 Transaksi MT5 #{pos_id} ditutup (Cut Loss Manual) di ${exit_price:,.2f} ({pnl_cash:+.2f} {unit_curr}). Disiplin proteksi modal berhasil mengamankan portofolio."
+                    note = f"🛑 Transaksi MT5 #{pos_id} ditutup (Cut Loss Manual oleh Trader) di ${exit_price:,.2f} ({pnl_cash:+.2f} {unit_curr}). Disiplin proteksi modal berhasil mengamankan portofolio."
 
                 rep_dict = {
                     "id": entry_sig.get("id") if entry_sig else deal_ticket,
@@ -951,6 +951,147 @@ class PipelineRunner:
 
         except Exception as e:
             logger.warning(f"Error pengecekan MT5 closed deals: {e}")
+
+        # -------------------------------------------------------------
+        # 1B. EVALUASI REAL-TIME SINYAL EMAS TERBUKA DI DATABASE (LIVE TICK)
+        # -------------------------------------------------------------
+        # Menjamin SEMUA sinyal (baik dieksekusi di Master MT5 maupun yang
+        # hanya dicopy member / dieksekusi terpisah) diselesaikan secara LIVE (0-delay).
+        # Begitu harga tick menyentuh TP atau SL, langsung kirim kartu hasil ke Telegram!
+        try:
+            if bridge.is_available():
+                gold_sym = bridge.gold_symbol or "XAUUSD"
+                tick = bridge.mt5.symbol_info_tick(gold_sym)
+                if tick and getattr(tick, "bid", 0) > 0 and getattr(tick, "ask", 0) > 0:
+                    bid_p = float(tick.bid)
+                    ask_p = float(tick.ask)
+
+                    # Ambil tiket posisi aktif di Master MT5 saat ini
+                    open_mt5_pos = bridge.mt5.positions_get(symbol=gold_sym) or []
+                    open_mt5_tickets = {int(p.ticket) for p in open_mt5_pos}
+
+                    open_signals = []
+                    with self.storage._get_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time,
+                                   take_profit_price, stop_loss_price, outcome, is_notified, mt5_ticket
+                            FROM signals
+                            WHERE outcome = 'OPEN' AND (ticker LIKE '%XAU%' OR ticker LIKE '%GOLD%' OR ticker LIKE '%GC=F%')
+                            ORDER BY id ASC
+                        """)
+                        open_signals = [dict(r) for r in cursor.fetchall()]
+
+                    from zoneinfo import ZoneInfo
+                    tz_wib = ZoneInfo("Asia/Jakarta")
+                    now_wib_str = datetime.now(tz_wib).strftime("%Y-%m-%d %H:%M WIB")
+
+                    for osig in open_signals:
+                        sig_id = osig["id"]
+                        sig_tkt = osig.get("mt5_ticket")
+
+                        # Jika posisi ini aktif terbuka di Master MT5, biarkan MT5 yang menutupnya via deal broker
+                        if sig_tkt and int(sig_tkt) in open_mt5_tickets:
+                            continue
+
+                        s_type = str(osig["signal_type"]).upper()
+                        entry_p = float(osig.get("price") or 0.0)
+                        tp_p = float(osig.get("take_profit_price") or 0.0)
+                        sl_p = float(osig.get("stop_loss_price") or 0.0)
+
+                        if entry_p <= 0 or (tp_p <= 0 and sl_p <= 0):
+                            continue
+
+                        hit_outcome = None
+                        hit_exit_price = 0.0
+                        hit_reason = None
+                        hit_note = ""
+
+                        if s_type == "BUY":
+                            # Order BUY: exit saat bid menyentuh SL (bid <= sl) atau TP (bid >= tp)
+                            if sl_p > 0 and bid_p <= sl_p:
+                                hit_outcome = "LOSE"
+                                hit_exit_price = bid_p
+                                hit_reason = "SL"
+                                pnl_pct = round(((hit_exit_price - entry_p) / entry_p) * 100.0, 2)
+                                hit_note = f"🛑 Sinyal XAU/USD #{sig_id} menyentuh Stop Loss di ${hit_exit_price:,.2f}. Batas toleransi risiko berhasil mengamankan modal trading Anda."
+                            elif tp_p > 0 and bid_p >= tp_p:
+                                hit_outcome = "WIN"
+                                hit_exit_price = bid_p
+                                hit_reason = "TP"
+                                pnl_pct = round(((hit_exit_price - entry_p) / entry_p) * 100.0, 2)
+                                hit_note = f"🎯 Sinyal XAU/USD #{sig_id} sukses menyentuh Take Profit di ${hit_exit_price:,.2f}. Target keuntungan 9 Buku PDF berhasil dicapai!"
+                        elif s_type == "SELL":
+                            # Order SELL: exit saat ask menyentuh SL (ask >= sl) atau TP (ask <= tp)
+                            if sl_p > 0 and ask_p >= sl_p:
+                                hit_outcome = "LOSE"
+                                hit_exit_price = ask_p
+                                hit_reason = "SL"
+                                pnl_pct = round(((entry_p - hit_exit_price) / entry_p) * 100.0, 2)
+                                hit_note = f"🛑 Sinyal XAU/USD #{sig_id} menyentuh Stop Loss di ${hit_exit_price:,.2f}. Batas toleransi risiko berhasil mengamankan modal trading Anda."
+                            elif tp_p > 0 and ask_p <= tp_p:
+                                hit_outcome = "WIN"
+                                hit_exit_price = ask_p
+                                hit_reason = "TP"
+                                pnl_pct = round(((entry_p - hit_exit_price) / entry_p) * 100.0, 2)
+                                hit_note = f"🎯 Sinyal XAU/USD #{sig_id} sukses menyentuh Take Profit di ${hit_exit_price:,.2f}. Target keuntungan 9 Buku PDF berhasil dicapai!"
+
+                        if hit_outcome:
+                            # 1. Update database seketika
+                            with self.storage._get_connection() as conn:
+                                c = conn.cursor()
+                                c.execute("""
+                                    UPDATE signals
+                                    SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?
+                                    WHERE id = ?
+                                """, (hit_outcome, hit_exit_price, now_wib_str, pnl_pct, hit_note, sig_id))
+                                conn.commit()
+
+                            logger.info(
+                                f"⚡ [LIVE TICK RESOLVED] Sinyal #{sig_id} {s_type} terselesaikan LIVE: "
+                                f"{hit_outcome} @ ${hit_exit_price:,.2f} ({pnl_pct:+.2f}%) - {hit_reason}"
+                            )
+
+                            # 2. Set Directional Cooldown jika SL
+                            if hit_reason == "SL" and hit_outcome == "LOSE":
+                                try:
+                                    cfg_mt5_dc = self.config.get("mt5", {}) if hasattr(self, "config") else load_config().get("mt5", {})
+                                    dir_cd_mins = int(cfg_mt5_dc.get("directional_cooldown_mins", 35))
+                                    if dir_cd_mins > 0 and s_type in ("BUY", "SELL"):
+                                        from datetime import timedelta
+                                        lock_until = datetime.now(tz_wib) + timedelta(minutes=dir_cd_mins)
+                                        bridge.directional_sl_cooldown[s_type] = lock_until
+                                        logger.info(
+                                            f"🔒 [DIRECTIONAL COOLDOWN SET] Arah {s_type} dikunci {dir_cd_mins} menit "
+                                            f"setelah SL sinyal #{sig_id}. Berlaku sampai {lock_until.strftime('%H:%M')} WIB."
+                                        )
+                                except Exception as dc_err:
+                                    logger.debug(f"Gagal set directional cooldown live tick: {dc_err}")
+
+                            # 3. Broadcast kartu laporan hasil LIVE ke Telegram (hanya jika sinyal pernah dinotifikasikan)
+                            if osig.get("is_notified", 1):
+                                rep_dict = {
+                                    "id": sig_id,
+                                    "ticker": "XAUUSD",
+                                    "strategy_name": osig.get("strategy_name") or "9 Buku PDF Confluence",
+                                    "signal_type": s_type,
+                                    "price": entry_p,
+                                    "exit_price": hit_exit_price,
+                                    "take_profit_price": tp_p if tp_p > 0 else None,
+                                    "stop_loss_price": sl_p if sl_p > 0 else None,
+                                    "pnl_pct": pnl_pct,
+                                    "outcome": hit_outcome,
+                                    "candle_time": osig.get("candle_time", "-"),
+                                    "exit_time": now_wib_str,
+                                    "outcome_note": hit_note,
+                                    "is_gold": True,
+                                }
+                                try:
+                                    self.notifier.send_tp_sl_report(rep_dict)
+                                except Exception as ex_nt:
+                                    logger.warning(f"Gagal broadcast laporan live tick #{sig_id} ke Telegram: {ex_nt}")
+        except Exception as ex_tick_res:
+            logger.debug(f"Pengecekan live tick sinyal terbuka dilewati: {ex_tick_res}")
 
         # Trailing stop & Break-Even Protection (BEP) XAU/USD
         try:

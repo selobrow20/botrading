@@ -1443,12 +1443,10 @@ class MT5Bridge:
             offset = self.get_broker_time_offset()
             tz_wib = ZoneInfo("Asia/Jakarta")
 
-            # MT5 history_deals_get membandingkan datetime terhadap jam server broker.
-            # Berikan buffer ke depan (+24 jam) agar transaksi real-time yang baru saja terjadi
-            # tidak terpotong oleh perbedaan zona waktu broker vs mesin lokal / UTC.
-            now_server = datetime.now() + timedelta(seconds=offset)
-            from_server = now_server - timedelta(hours=hours)
-            to_server = now_server + timedelta(hours=24)
+            # Ambil seluruh riwayat deals dengan rentang waktu aman (hours s/d +1 hari).
+            # Menggunakan datetime lokal langsung tanpa penambahan offset yang mendistorsi query datetime.
+            from_server = datetime.now() - timedelta(hours=max(hours, 24))
+            to_server = datetime.now() + timedelta(days=1)
 
             deals = mt5.history_deals_get(from_server, to_server)
             if not deals:

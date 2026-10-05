@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.3.5"
+CLIENT_COPIER_VERSION = "2.3.6"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -1368,8 +1368,20 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
             return
 
         # Deteksi Laporan Hasil / Penutupan Resmi dari Master Bot (Auto-Sync Close untuk Member)
-        if "[LAPORAN HASIL]" in msg_upper or "STOP LOSS TERSENTUH" in msg_upper or "TAKE PROFIT TERCAPAI" in msg_upper:
-            target_act = "BUY" if ("AKSI SINYAL: BUY" in msg_upper or "BUY / LONG" in msg_upper or "BUY" in msg_upper) else ("SELL" if ("AKSI SINYAL: SELL" in msg_upper or "SELL / SHORT" in msg_upper or "SELL" in msg_upper) else None)
+        if any(k in msg_upper for k in ["[LAPORAN HASIL]", "STOP LOSS TERSENTUH", "TAKE PROFIT TERCAPAI", "CUT LOSS MANUAL", "PROFIT DIAMANKAN"]):
+            target_act = None
+            m_act = re.search(r"Aksi Sinyal[:\s*]+(BUY|SELL)", msg_text, re.IGNORECASE)
+            if m_act:
+                target_act = m_act.group(1).upper()
+            elif "BUY / LONG" in msg_upper or "AKSI SINYAL: BUY" in msg_upper:
+                target_act = "BUY"
+            elif "SELL / SHORT" in msg_upper or "AKSI SINYAL: SELL" in msg_upper:
+                target_act = "SELL"
+            elif "BUY" in msg_upper and "SELL" not in msg_upper:
+                target_act = "BUY"
+            elif "SELL" in msg_upper and "BUY" not in msg_upper:
+                target_act = "SELL"
+
             if target_act:
                 sym = bridge.find_broker_symbol()
                 closed_list = bridge.close_all_positions(sym, action=target_act)

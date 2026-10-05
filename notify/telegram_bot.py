@@ -549,21 +549,27 @@ class TelegramNotifier:
             total_pnl = stats.get("total_pnl", 0.0)
 
         is_early_close = is_win and ("DIAMANKAN LEBIH AWAL" in note_upper or "SEBELUM TARGET" in note_upper or "REVERSAL GUARD" in note_upper or "EARLY TP" in note_upper)
+        is_manual_win = is_win and ("MANUAL" in note_upper or "EARLY CLOSE" in note_upper)
+        is_manual_cut_loss = not is_win and ("MANUAL" in note_upper or "CLOSE MANUAL" in note_upper)
 
         if is_win:
             if is_trailing_win:
                 header = "🎯 <b>[LAPORAN HASIL] PROFIT TERKUNCI (TRAILING STOP / BEP)!</b> 🛡️"
                 outcome_badge = "🟢 <b>HASIL: WIN / PROFIT TERKUNCI</b>"
-            elif is_early_close:
-                header = "🛡️ <b>[LAPORAN HASIL] PROFIT DIAMANKAN LEBIH AWAL!</b> 💰"
-                outcome_badge = "🟢 <b>HASIL: WIN / DIAMANKAN LEBIH AWAL</b>"
+            elif is_early_close or is_manual_win:
+                header = "🛡️ <b>[LAPORAN HASIL] PROFIT DIAMANKAN LEBIH AWAL (MANUAL CLOSE)!</b> 💰"
+                outcome_badge = "🟢 <b>HASIL: WIN / MANUAL PROFIT SECURED</b>"
             else:
                 header = "🎯 <b>[LAPORAN HASIL] TAKE PROFIT TERCAPAI!</b> 🚀"
                 outcome_badge = "🟢 <b>HASIL: WIN / PROFIT MAKSIMAL</b>"
             pnl_badge = f"💰 <b>Keuntungan (PnL):</b> <code>+{abs(pnl_pct):.2f}%</code>"
         else:
-            header = "🛑 <b>[LAPORAN HASIL] STOP LOSS TERSENTUH!</b> ⚠️"
-            outcome_badge = "🔴 <b>HASIL: LOSE / PROTEKSI MODAL</b>"
+            if is_manual_cut_loss:
+                header = "🛑 <b>[LAPORAN HASIL] CUT LOSS MANUAL / PROTEKSI MODAL!</b> 🛡️"
+                outcome_badge = "🔴 <b>HASIL: CUT LOSS MANUAL (TRADER / MEMBER CLOSE)</b>"
+            else:
+                header = "🛑 <b>[LAPORAN HASIL] STOP LOSS TERSENTUH!</b> ⚠️"
+                outcome_badge = "🔴 <b>HASIL: LOSE / PROTEKSI MODAL</b>"
             pnl_badge = f"📉 <b>Kerugian (PnL):</b> <code>-{abs(pnl_pct):.2f}%</code>"
 
         action_label = "BUY / LONG" if sig_type == "BUY" else "SELL / SHORT" if is_gold else "SELL / EXIT"

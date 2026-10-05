@@ -1,9 +1,9 @@
 {
-  "version": "2.3.5",
+  "version": "2.3.6",
   "name": "MT5 VIP Auto-Copier (9 Buku PDF Confluence)",
   "released_at": "2026-10-05",
   "min_python": "3.10",
-  "changelog": "Pembaruan v2.3.5: Auto-Spawn Reopen Guaranteed (jendela copier baru otomatis terbuka seketika via os.startfile/ShellExecute tanpa member perlu buka manual), Instant OTA Cache-Buster, batas London 12:00 - 16:00 WIB, dan multi-posisi akun Cent USC.",
+  "changelog": "Pembaruan v2.3.6: Instant Live Auto-Sync Close untuk segala jenis laporan hasil (TP, SL, dan Cut Loss Manual), zero delay synchronizer antara Master & Member.",
   "features": [
     "Auto-Spawn Reopen: Jendela copier baru dijamin otomatis terbuka kembali saat update diterapkan",
     "Zero-Touch Hot Reload: Transisi mulus tanpa member perlu buka-tutup manual",
