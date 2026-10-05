@@ -1,11 +1,14 @@
 {
-  "version": "2.3.6",
+  "version": "2.3.7",
   "name": "MT5 VIP Auto-Copier (9 Buku PDF Confluence)",
   "released_at": "2026-10-05",
   "min_python": "3.10",
-  "changelog": "Pembaruan v2.3.6: Instant Live Auto-Sync Close untuk segala jenis laporan hasil (TP, SL, dan Cut Loss Manual), zero delay synchronizer antara Master & Member.",
+  "changelog": "Pembaruan v2.3.7: Sinkronisasi SOP Presisi 9 Buku PDF (Filter Anti-Pucuk & Anti-Dasar, Bob Volman USD Distance Gold, dan Auto-BEP Profit Riil +15 Pips), auto-reopen tanpa intervensi manual.",
   "features": [
-    "Auto-Spawn Reopen: Jendela copier baru dijamin otomatis terbuka kembali saat update diterapkan",
+    "SOP Presisi 9 Buku PDF: Sinkronisasi aturan entry Diskon/Bawah & Premium/Atas",
+    "Auto-BEP Profit Riil: Otomatis kunci +15 pips saat floating profit +45 pips (75% ke target TP)",
+    "Bebas Cambukan Reversal: Cut loss prematur 22 pips dihapus, posisi bernapas ke Hard TP/SL 60 pips",
+    "Auto-Spawn Reopen: Jendela copier baru otomatis terbuka kembali saat update diterapkan",
     "Zero-Touch Hot Reload: Transisi mulus tanpa member perlu buka-tutup manual",
     "Instant OTA Cache-Buster: Pembaruan Cloud terdeteksi seketika tanpa tertahan CDN cache GitHub",
     "London Session Protection (12:00 - 16:00 WIB): Filter anti-manipulasi likuiditas jam 12 s/d jam 4 sore",
