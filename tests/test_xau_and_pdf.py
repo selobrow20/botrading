@@ -989,6 +989,83 @@ def test_london_judas_swing_and_overextended_protection():
     assert any("Anti-Judas Swing" in r or "BOB VOLMAN" in r for r in sig.reasons)
 
 
+def test_premium_discount_veto_blocks_buying_top_and_selling_bottom():
+    """Menguji Lapis 3 Veto: Dilarang BUY di area Premium (>65%) dan dilarang SELL di area Discount (<35%)."""
+    # 1. Kasus BUY di pucuk resisten (pos_in_range = 80% > 65%)
+    pucuk_buy_bar = pd.Series({
+        "Close": 4160.0,
+        "High": 4165.0,
+        "Low": 4158.0,
+        "Open": 4159.0,
+        "ema_20": 4159.0,
+        "ema_50": 4140.0,
+        "ema_200": 4120.0,
+        "rsi": 62.0,
+        "volume_ratio": 1.2,
+        "fib_swing_high": 4165.0,
+        "fib_swing_low": 4140.0,
+        # pos_in_range = (4160 - 4140) / (4165 - 4140) = 20 / 25 = 80.0% (Deep Premium!)
+    })
+    res_buy = SignalEngine.validate_pdf_entry_confluence(pucuk_buy_bar, signal_type="BUY")
+    assert res_buy.is_approved is False
+    assert any("BUY di Area Premium" in c or "Premium" in c for c in res_buy.checks)
+
+    # 2. Kasus SELL di dasar jurang support (pos_in_range = 16% < 35%)
+    dasar_sell_bar = pd.Series({
+        "Close": 4132.0,
+        "High": 4135.0,
+        "Low": 4130.0,
+        "Open": 4134.0,
+        "ema_20": 4133.0,
+        "ema_50": 4150.0,
+        "ema_200": 4170.0,
+        "rsi": 42.0,
+        "volume_ratio": 1.2,
+        "fib_swing_high": 4150.0,
+        "fib_swing_low": 4130.0,
+        # pos_in_range = (4132 - 4130) / (4150 - 4130) = 2 / 20 = 10.0% (Deep Discount!)
+    })
+    res_sell = SignalEngine.validate_pdf_entry_confluence(dasar_sell_bar, signal_type="SELL")
+    assert res_sell.is_approved is False
+    assert any("SELL di Area Discount" in c or "Discount" in c for c in res_sell.checks)
+
+
+def test_rsi_and_wick_rejection_vetoes():
+    """Menguji Lapis 3 Veto: RSI ekstrem dan Rejection Candlestick berlawanan arah."""
+    # 1. Kasus BUY namun candle shooting star merah dengan ekor atas panjang (rejection atas)
+    rejection_buy_bar = pd.Series({
+        "Close": 4150.0,
+        "High": 4160.0,
+        "Low": 4149.0,
+        "Open": 4155.0,  # Merah (Close < Open), ekor atas (4160-4155)/11 = 45%
+        "ema_20": 4149.0,
+        "ema_50": 4140.0,
+        "rsi": 55.0,
+        "volume_ratio": 1.1,
+        "pattern_shooting_star": 1,
+    })
+    res_buy = SignalEngine.validate_pdf_entry_confluence(rejection_buy_bar, signal_type="BUY")
+    assert res_buy.is_approved is False
+    assert any("Rejection" in c or "ekor" in c.lower() for c in res_buy.checks)
+
+    # 2. Kasus SELL namun candle pinbar hijau dengan ekor bawah panjang (rejection bawah)
+    rejection_sell_bar = pd.Series({
+        "Close": 4140.0,
+        "High": 4142.0,
+        "Low": 4130.0,
+        "Open": 4135.0,  # Hijau (Close > Open), ekor bawah (4135-4130)/12 = 41%
+        "ema_20": 4141.0,
+        "ema_50": 4150.0,
+        "rsi": 45.0,
+        "volume_ratio": 1.1,
+        "pattern_pinbar": 1,
+    })
+    res_sell = SignalEngine.validate_pdf_entry_confluence(rejection_sell_bar, signal_type="SELL")
+    assert res_sell.is_approved is False
+    assert any("Rejection" in c or "ekor" in c.lower() for c in res_sell.checks)
+
+
+
 
 
 

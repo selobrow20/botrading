@@ -68,15 +68,15 @@ mt5:
   min_grid_spacing: 1.0             # Jarak minimal antar posisi $1.00 USD (10 pips) agar tidak staking di titik yang sama
   use_trailing_stop: false          # Dinonaktifkan: fokus pengawalan target TP/SL & Auto-BEP
   enable_break_even: true           # Auto Break-Even (BEP) saat floating profit mencapai target
-  break_even_quick_pips: 20.0       # Sinyal Cepat: Otomatis BEP saat floating profit +20 pips ($2.00 USD) agar bebas risiko!
-  break_even_long_pips: 35.0        # Sinyal Long / TP Jauh: Otomatis BEP saat floating profit +35 pips ($3.50 USD)
-  break_even_buffer_pips: 2.0       # Buffer pengaman di atas entry: +2 pips ($0.20 USD) menutup komisi/profit tipis
+  break_even_quick_pips: 45.0       # Sinyal Cepat: Otomatis BEP saat floating profit +45 pips ($4.50 USD / 75% ke target TP 60 pips)
+  break_even_long_pips: 100.0       # Sinyal Long / TP Jauh: Otomatis BEP saat floating profit +100 pips ($10.00 USD)
+  break_even_buffer_pips: 15.0      # Buffer pengaman di atas entry: +15 pips ($1.50 USD = 15 USC) mengunci untung riil jika kena pullback
   enable_reversal_auto_close: true  # Mengizinkan cut loss / auto-close dini jika terkonfirmasi pembalikan tren 90% - 100% 9 Buku PDF
-  reversal_auto_close_min_score: 90.0  # Batas minimal skor pembalikan untuk cut loss dini (90% - 100%)
-  enable_reversal_flip: true        # Mengizinkan pembalikan posisi (Cut loss posisi lama & langsung masuk posisi sebaliknya) jika skor >= 90%
-  min_reversal_flip_score: 90.0     # Minimal skor 90% untuk flip posisi sebaliknya sesuai 9 Buku PDF
-  enable_fast_reversal_guard: true  # Deteksi junam kilat berlawanan arah secara real-time (TF 1m/5m)
-  fast_reversal_pips_threshold: 22.0 # Cut loss dini & auto-flip jika junam >= 22 pips berlawanan arah
+  reversal_auto_close_min_score: 92.0  # Batas minimal skor pembalikan untuk cut loss dini (92% - 100%)
+  enable_reversal_flip: true        # Mengizinkan pembalikan posisi (Cut loss posisi lama & langsung masuk posisi sebaliknya) jika skor >= 92%
+  min_reversal_flip_score: 92.0     # Minimal skor 92% untuk flip posisi sebaliknya sesuai 9 Buku PDF
+  enable_fast_reversal_guard: false # Dinonaktifkan: Mencegah cut loss dini 22 pips yang mencambuk modal (biarkan posisi bernapas ke TP/SL 60 pips)
+  fast_reversal_pips_threshold: 45.0 # Ambang batas pips jika fast reversal diaktifkan
   enable_judas_swing_filter: true   # Filter anti-manipulasi likuiditas Sesi London (12:00 - 16:00 WIB / jam 4 sore)
   london_h1_confirmation: true      # Khusus Sesi London: Open posisi wajib konfirmasi searah tren & candle H1 (1-Hour)
   london_h1_max_hour: 16            # Maksimal jam 16:00 WIB (setelah jam 4 sore manipulasi reda, kembali ke M15 biasa)

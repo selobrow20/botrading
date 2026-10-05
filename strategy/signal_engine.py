@@ -324,6 +324,29 @@ class SignalEngine:
         is_retest_confirmed_sell = False
         retest_zone_sell = ""
 
+        # Deteksi Aset: Gold vs Saham/Forex
+        is_gold = (close > 500.0) or any(k in str(curr_row.get("symbol", "")).upper() for k in ["XAU", "GOLD"])
+
+        # Bob Volman: Jarak Dinamis ke 20 EMA (Gold dihitung dalam USD absolut, bukan % saham)
+        if is_gold:
+            dist_ema20_usd = abs(close - ema20)
+            dist_ema20_pct = dist_ema20_usd
+            volman_near = (dist_ema20_usd <= 2.50)
+            volman_moderate = (dist_ema20_usd <= 4.00)
+            dist_ema20_str = f"${dist_ema20_usd:.2f} USD"
+        else:
+            dist_ema20_pct = abs(close - ema20) / max(ema20, 1.0) * 100.0
+            dist_ema20_usd = dist_ema20_pct
+            volman_near = (dist_ema20_pct <= 2.0)
+            volman_moderate = (dist_ema20_pct <= 3.5)
+            dist_ema20_str = f"{dist_ema20_pct:.1f}%"
+
+        # Penentuan Posisi Premium vs Discount (Trading Alchemist - Rizki Aditama & Fibonacci)
+        fib_sh = float(curr_row.get("fib_swing_high", 0.0) or 0.0)
+        fib_sl = float(curr_row.get("fib_swing_low", 0.0) or 0.0)
+        has_swing = (fib_sh > fib_sl > 0.0) and ((fib_sh - fib_sl) >= (1.50 if is_gold else 0.002))
+        pos_in_range = ((close - fib_sl) / (fib_sh - fib_sl)) if has_swing else 0.50
+
         if signal_type == "BUY":
             # 1. Martin J. Pring & Trading Alchemist: Tren Mayor Bullish (Close >= EMA 50)
             if close >= ema50:
@@ -342,14 +365,13 @@ class SignalEngine:
                     checks.append("❌ Martin Pring & Alchemist: Dilarang Buy di Bawah EMA 50 Tanpa Konfirmasi BOS / Demand Zone Institusi")
 
             # 2. Bob Volman: Area Nilai Dinamis 20 EMA & Buildup (Tidak mengejar pucuk)
-            dist_ema20_pct = abs(close - ema20) / max(ema20, 1.0) * 100.0
-            if volman_pb or dist_ema20_pct <= 2.0:
+            if volman_pb or volman_near:
                 score += 20.0
                 buildup_text = " + Kompresi Buildup Siap Breakout" if volman_buildup else ""
-                pb_text = "Pullback Support 20 EMA" if volman_pb else f"Dekat Dinamis EMA 20 ({dist_ema20_pct:.1f}%)"
+                pb_text = "Pullback Support 20 EMA" if volman_pb else f"Dekat Dinamis EMA 20 ({dist_ema20_str})"
                 checks.append(f"✅ Bob Volman: Area Nilai Terpenuhi ({pb_text}{buildup_text})")
             else:
-                checks.append(f"⚠️ Bob Volman: Harga terlalu jauh dari 20 EMA ({dist_ema20_pct:.1f}% > 2.0% - Overextended)")
+                checks.append(f"⚠️ Bob Volman: Harga terlalu jauh dari 20 EMA ({dist_ema20_str} - Overextended)")
 
             # 3. Mega Profit & Bob Volman: Candlestick Reversal Bawah
             if pinbar:
@@ -495,14 +517,15 @@ class SignalEngine:
                     checks.append("❌ Martin Pring & Alchemist: Dilarang Sell di Atas EMA 50 Tanpa Konfirmasi BOS / Supply Zone Institusi")
 
             # 2. Bob Volman: Rejection dari Resisten Dinamis 20 EMA
-            dist_ema20_pct = abs(close - ema20) / max(ema20, 1.0) * 100.0
             if close <= ema20 * 1.005:
-                if dist_ema20_pct <= 2.0:
+                if volman_near:
                     score += 20.0
-                    checks.append(f"✅ Bob Volman: Rejection Resisten Dinamis 20 EMA ({dist_ema20_pct:.1f}%)")
-                else:
+                    checks.append(f"✅ Bob Volman: Rejection Resisten Dinamis 20 EMA ({dist_ema20_str})")
+                elif volman_moderate:
                     score += 10.0
-                    checks.append(f"⚠️ Bob Volman: Harga terlalu jauh di bawah EMA 20 ({dist_ema20_pct:.1f}% > 2.0% - Overextended Sell)")
+                    checks.append(f"ℹ️ Bob Volman: Jarak Moderat di bawah EMA 20 ({dist_ema20_str})")
+                else:
+                    checks.append(f"⚠️ Bob Volman: Harga terlalu jauh di bawah EMA 20 ({dist_ema20_str} - Overextended Sell)")
             else:
                 checks.append("⚠️ Bob Volman: Harga masih berada di atas EMA 20")
 
@@ -632,12 +655,12 @@ class SignalEngine:
             # 1. Volman (Bob Volman - Price Action)
             if volman_pb and volman_buildup:
                 module_scores["Volman"] = 95.0
-            elif volman_pb or dist_ema20_pct <= 1.5:
+            elif volman_pb or volman_near:
                 module_scores["Volman"] = 85.0
-            elif dist_ema20_pct <= 2.0:
-                module_scores["Volman"] = 70.0
+            elif volman_moderate:
+                module_scores["Volman"] = 65.0
             else:
-                module_scores["Volman"] = max(20.0, 60.0 - dist_ema20_pct * 10)
+                module_scores["Volman"] = 25.0
 
             # 2. Pring (Martin J. Pring)
             if close >= ema50 and close >= ema200 and 40.0 <= rsi <= 65.0:
@@ -723,12 +746,12 @@ class SignalEngine:
 
         else:  # SELL
             # 1. Volman (Bob Volman - Price Action)
-            if close <= ema20 * 1.005 and dist_ema20_pct <= 1.5:
+            if close <= ema20 * 1.005 and volman_near:
                 module_scores["Volman"] = 85.0
-            elif close <= ema20 * 1.005 and dist_ema20_pct <= 2.0:
-                module_scores["Volman"] = 70.0
+            elif close <= ema20 * 1.005 and volman_moderate:
+                module_scores["Volman"] = 65.0
             else:
-                module_scores["Volman"] = max(20.0, 50.0 - dist_ema20_pct * 10)
+                module_scores["Volman"] = 25.0
 
             # 2. Pring (Martin J. Pring)
             if close <= ema50 and close <= ema200 and 35.0 <= rsi <= 60.0:
@@ -817,17 +840,49 @@ class SignalEngine:
                 max_solo_score = s
                 solo_candidate = mod
 
-        is_solo_sniper = (not is_counter_trend) and (solo_candidate is not None) and (max_solo_score >= 80.0)
+        # Solo sniper wajib didukung minimal 2 modul searah agar tidak ada modul tunggal keliru
+        is_solo_sniper = (not is_counter_trend) and (solo_candidate is not None) and (max_solo_score >= 80.0) and (num_agreeing >= 2)
         min_score = 75.0 if (session == "LONDON" or is_counter_trend) else 65.0
 
         # Penentuan Hak Veto Lapis 3 (Risk Guard Mutlak):
+        # 1. Veto Premium vs Discount (Trading Alchemist & Fibonacci)
+        is_pos_veto = (is_buy and has_swing and pos_in_range > 0.65) or ((not is_buy) and has_swing and pos_in_range < 0.35)
+        # 2. Veto RSI Ekstrem (Martin Pring & Wave Principle)
+        is_rsi_veto = (is_buy and rsi >= 68.0) or ((not is_buy) and rsi <= 32.0)
+        # 3. Veto Candlestick Rejection Berlawanan (Mega Profit)
+        is_wick_veto = (is_buy and ((shooting_star and close <= open_p) or (upper_wick_ratio >= 0.40 and close <= open_p))) or (
+            (not is_buy) and ((pinbar and close >= open_p) or (wick_ratio >= 0.40 and close >= open_p))
+        )
+        # 4. Veto Kompresi Datar / Chop (Bob Volman & Al Brooks)
         is_chop_veto = (is_flat_chop and not pinbar and not engulfing and not (bos_bull if is_buy else bos_bear))
+        # 5. Veto Sesi London (Anti-Judas Swing)
         is_london_veto = (session == "LONDON" and 65.0 <= score < 75.0)
+        # 6. Veto Reversal Melawan Tren
         is_reversal_veto = (is_counter_trend and 65.0 <= score < 75.0)
 
-        if is_chop_veto:
+        if is_pos_veto:
+            zone_desc = "Premium (Pucuk Resisten > 65%)" if is_buy else "Discount (Dasar Support < 35%)"
+            action_desc = "BUY di Area Premium" if is_buy else "SELL di Area Discount"
+            entry_pathway = f"Tertahan (Veto Lapis 3: Dilarang {action_desc})"
+            setup_grade = "Grade B / C (Area Bahaya Ekstrem ⚠️)"
+            prediction = f"Harga berada di area {zone_desc} ({pos_in_range*100:.0f}% rentang swing). Veto Lapis 3 menahan entry demi mencegah beli pucuk / jual dasar."
+            checks.append(f"🛡️ Veto Lapis 3 (Trading Alchemist): Dilarang {action_desc}. Smart money mencari likuiditas lawan!")
+            is_approved = False
+        elif is_rsi_veto:
+            entry_pathway = "Tertahan (Veto Lapis 3: RSI Momentum Ekstrem)"
+            setup_grade = "Grade B / C (RSI Overbought/Oversold ⚠️)"
+            prediction = f"RSI berada pada tingkat jenuh ekstrem ({rsi:.1f}). Veto Lapis 3 menahan entry demi keamanan modal."
+            checks.append(f"🛡️ Veto Lapis 3 (Wave Principle & Martin Pring): RSI {rsi:.1f} jenuh ekstrem - rawan pembalikan keras.")
+            is_approved = False
+        elif is_wick_veto:
+            entry_pathway = "Tertahan (Veto Lapis 3: Rejection Candlestick Berlawanan Arah)"
+            setup_grade = "Grade B / C (Rejection Melawan Arah ⚠️)"
+            prediction = "Candlestick ditolak keras oleh pelaku pasar berlawanan arah. Veto Lapis 3 menahan entry."
+            checks.append(f"🛡️ Veto Lapis 3 (Mega Profit): Candlestick tertolak keras berlawanan arah ({'Ekor Atas' if is_buy else 'Ekor Bawah'} >= 40%).")
+            is_approved = False
+        elif is_chop_veto:
             entry_pathway = "Tertahan (Veto Lapis 3: Flat Chop / Kompresi Datar)"
-            setup_grade = "Grade C (Chop / Sideways Berbahaya ⚠️)"
+            setup_grade = "Grade B / C (Chop / Sideways Berbahaya ⚠️)"
             prediction = f"Arah market datar/chop (ADX < 20 & EMA menyempit). Veto Lapis 3 menahan entry demi keamanan modal."
             checks.append("⚠️ Veto Lapis 3: Kompresi Datar / Chop tanpa candlestick pinbar/BOS.")
             is_approved = False
@@ -1531,7 +1586,7 @@ class SignalEngine:
         else:
             # Jika sinyal dasar masih netral namun telaah 9 Buku PDF membuktikan Grade A (>=65% atau >=75% di London)
             min_promo_score = london_min_score if is_london_session else 65.0
-            if apply_pdf_filter and pdf_score >= min_promo_score and is_gold and not rsi_extreme_reject and not ema_overextended_reject and not macro_blocked:
+            if apply_pdf_filter and pdf_approved and pdf_score >= min_promo_score and is_gold and not rsi_extreme_reject and not ema_overextended_reject and not macro_blocked:
                 if not h1_ok:
                     signal = "HOLD"
                     reasons = [h1_reason]
