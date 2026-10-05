@@ -931,6 +931,54 @@ def test_retest_badge_in_telegram_format():
     assert "$2,705.00" in msg
 
 
+def test_london_judas_swing_and_overextended_protection():
+    """Menguji proteksi Sesi London (12:00 - 17:00 WIB): Anti-Judas Swing & Anti-Overextended EMA20 Bob Volman."""
+    from strategy.signal_engine import SignalEngine
+    from zoneinfo import ZoneInfo
+    from datetime import datetime
+
+    engine = SignalEngine()
+
+    # 1. Uji Anti-Judas Swing di jam 12:30 WIB (Pre-London):
+    # Asian Range dibentuk jam 05:00 - 12:00 (High 4155, Low 4136).
+    # Harga menembus ke 4130 (di bawah Asian Low). Sinyal SELL harus ditolak oleh Anti-Judas Swing.
+    dt_london_judas = datetime(2026, 10, 5, 12, 30, tzinfo=ZoneInfo("Asia/Jakarta"))
+    idx_times = pd.date_range("2026-10-05 06:00", periods=27, freq="15min", tz="Asia/Jakarta")
+
+    highs = [4155.0 if i < 15 else 4145.0 for i in range(27)]
+    lows = [4136.0 if i < 20 else 4128.0 for i in range(27)]
+    closes = [4145.0 if i < 20 else 4130.0 for i in range(27)]
+
+    df_judas = pd.DataFrame({
+        "Open": closes,
+        "High": highs,
+        "Low": lows,
+        "Close": closes,
+        "ema_20": [4142.0] * 27,
+        "ema_50": [4150.0] * 27,
+        "volume_ratio": [1.1] * 27,
+        "rsi": [38.0] * 27,
+        "atr": [3.5] * 27,
+    }, index=idx_times)
+
+    is_trap, trap_reason = engine.check_london_judas_swing(
+        df=df_judas,
+        curr_price=4130.0,
+        signal_type="SELL",
+        curr_row=df_judas.iloc[-1],
+    )
+    assert is_trap is True
+    assert "Anti-Judas Swing" in trap_reason
+    assert "Low Asia" in trap_reason
+
+    # 2. Uji filter Bob Volman London EMA20 Tight Distance:
+    # Jarak harga (4131.0) ke EMA20 (4143.0) = $12.0 USD > batas $2.50 USD di Sesi London
+    sig = engine.evaluate_bar(df_judas, ticker="XAUUSD", apply_pdf_filter=True)
+    assert sig.signal == "HOLD"
+    assert any("Anti-Judas Swing" in r or "BOB VOLMAN" in r for r in sig.reasons)
+
+
+
 
 
 

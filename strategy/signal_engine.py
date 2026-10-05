@@ -147,7 +147,7 @@ def get_trading_session(dt: Optional[Any] = None) -> Tuple[str, str]:
 
     if t >= time(19, 0) or t < time(4, 0):
         return "US", "Sesi US (New York)"
-    elif time(14, 0) <= t < time(19, 0):
+    elif time(12, 0) <= t < time(19, 0):
         return "LONDON", "Sesi London (Eropa)"
     else:
         return "ASIA", "Sesi Asia (Tokyo/Sydney)"
@@ -921,11 +921,12 @@ class SignalEngine:
                 ts_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
 
             t = ts_wib.time()
-            # Jendela utama manipulasi pembukaan London: 14:00 s/d 15:30 WIB
-            if not (time(14, 0) <= t <= time(15, 30)):
+            # Jendela utama manipulasi pre-London & pembukaan London: 12:00 s/d 16:30 WIB
+            # Pasar Eropa (Frankfurt/London) mulai beroperasi & memburu likuiditas Asian Range
+            if not (time(12, 0) <= t <= time(16, 30)):
                 return False, ""
 
-            # Cari data sesi Asia hari ini (05:00 - 14:00 WIB)
+            # Cari data sesi Asia hari ini (05:00 - 12:00 WIB)
             recent_bars = df.tail(40)
             asia_highs = []
             asia_lows = []
@@ -936,7 +937,7 @@ class SignalEngine:
                         b_ts = idx_val.tz_convert(ZoneInfo("Asia/Jakarta")) if idx_val.tzinfo else idx_val.tz_localize(ZoneInfo("Asia/Jakarta"))
                     else:
                         b_ts = pd.to_datetime(idx_val).tz_localize(ZoneInfo("Asia/Jakarta"))
-                    if b_ts.date() == ts_wib.date() and time(5, 0) <= b_ts.time() < time(14, 0):
+                    if b_ts.date() == ts_wib.date() and time(5, 0) <= b_ts.time() < time(12, 0):
                         asia_highs.append(float(row.get("High", row.get("high", 0.0))))
                         asia_lows.append(float(row.get("Low", row.get("low", 999999.0))))
                 except Exception:
@@ -959,25 +960,26 @@ class SignalEngine:
             lower_wick = max(0.0, (min(open_c, close_c) - low_c) / c_range)
             vol_ratio = float(curr_row.get("volume_ratio", 1.0))
 
-            # 1. Kasus BUY Trap (Bullish Judas Swing di Pucuk Asia High):
-            # Harga menyentuh/menembus High Asia, tapi ada sumbu atas (upper wick) atau volume kecil
+            # 1. Kasus BUY Trap (Bullish Judas Swing di Pucuk Asia High - ICT & Bob Volman):
+            # Harga menyentuh/menembus di atas High Asia, atau memicu Buy Stop retail di pucuk
             if signal_type == "BUY":
-                is_near_asian_high = high_c >= (asian_high - 1.50)
-                if is_near_asian_high and (upper_wick >= 0.22 or close_c < asian_high or vol_ratio < 1.4):
+                is_at_or_above_high = (curr_price >= asian_high - 1.0) or (high_c >= asian_high - 0.50)
+                if is_at_or_above_high:
                     return True, (
-                        f"🛑 Filter Anti-Judas Swing (Sesi London): Terdeteksi sapuan likuiditas di pucuk High Asia (${asian_high:.2f}). "
-                        f"Candle menunjukkan penolakan atas ({upper_wick*100:.0f}% upper wick). "
-                        f"Sangat rentan dump/junam tajam oleh institusi London, sinyal BUY ditahan demi keamanan modal."
+                        f"🛑 Filter Anti-Judas Swing 9 Buku (Sesi London): Terdeteksi sapuan likuiditas di pucuk High Asia (${asian_high:.2f}). "
+                        f"Harga (${curr_price:.2f}) berada di zona jebakan Buy-Side Liquidity. "
+                        f"Kaidah ICT & Bob Volman: Dilarang BUY di pucuk range Asia saat London Open tanpa retest valid ke EMA 20."
                     )
 
-            # 2. Kasus SELL Trap (Bearish Judas Swing di Lembah Asia Low):
+            # 2. Kasus SELL Trap (Bearish Judas Swing di Lembah Asia Low - ICT & Bob Volman):
+            # Harga menyentuh/menembus di bawah Low Asia, memicu Sell Stop retail di dasar jurang
             elif signal_type == "SELL":
-                is_near_asian_low = low_c <= (asian_low + 1.50)
-                if is_near_asian_low and (lower_wick >= 0.22 or close_c > asian_low or vol_ratio < 1.4):
+                is_at_or_below_low = (curr_price <= asian_low + 1.0) or (low_c <= asian_low + 0.50)
+                if is_at_or_below_low:
                     return True, (
-                        f"🛑 Filter Anti-Judas Swing (Sesi London): Terdeteksi sapuan likuiditas di dasar Low Asia (${asian_low:.2f}). "
-                        f"Candle menunjukkan penolakan bawah ({lower_wick*100:.0f}% lower wick). "
-                        f"Sangat rentan pump/pantulan tajam oleh institusi London, sinyal SELL ditahan demi keamanan modal."
+                        f"🛑 Filter Anti-Judas Swing 9 Buku (Sesi London): Terdeteksi sapuan likuiditas di bawah Low Asia (${asian_low:.2f}). "
+                        f"Harga (${curr_price:.2f}) berada di zona jebakan Sell-Side Liquidity. "
+                        f"Kaidah ICT & Bob Volman: Dilarang SELL di dasar jurang / extension breakdown saat London Open karena rentan V-Shape reversal!"
                     )
 
             return False, ""
@@ -1371,19 +1373,25 @@ class SignalEngine:
             # FILTER 2: Anti-Kejar Harga Overextended dari EMA20 (Bob Volman)
             if not rsi_extreme_reject:
                 price_dist_ema = abs(curr_price - ema20_now)
-                max_allowed_dist = atr_clamp * max_ema_dist_mult
+                # Di Sesi London (12:00 - 17:00 WIB), toleransi diperketat menjadi maksimal 2.50 USD (25 pips)
+                # Kaidah Bob Volman: Masuk di sesi London wajib di dekat 20 EMA, dilarang entry saat harga overextended!
+                if is_london_session:
+                    max_allowed_dist = min(atr_clamp * max_ema_dist_mult, 2.50)
+                else:
+                    max_allowed_dist = atr_clamp * max_ema_dist_mult
+
                 if price_dist_ema > max_allowed_dist:
                     ema_overextended_reject = True
                     ema_overextended_reason = (
-                        f"🚫 [FILTER ANTI-KEJAR LILIN] {target_sig_type} ditolak. "
+                        f"🚫 [FILTER ANTI-KEJAR LILIN BOB VOLMAN] {target_sig_type} ditolak. "
                         f"Harga (${curr_price:.2f}) terlalu jauh dari EMA20 (${ema20_now:.2f}): "
-                        f"jarak ${price_dist_ema:.2f} > batas ${max_allowed_dist:.2f} ({max_ema_dist_mult}x ATR). "
-                        f"Kaidah Bob Volman: Entry saat overextended = masuk saat momentum sudah habis. "
-                        f"Tunggu pullback ke EMA20."
+                        f"jarak ${price_dist_ema:.2f} > batas aman ${max_allowed_dist:.2f} (Kaidah Sesi London). "
+                        f"Kaidah Bob Volman: Dilarang entry saat harga overextended meninggalkan 20 EMA. "
+                        f"Wajib tunggu pullback retest ke 20 EMA!"
                     )
 
-        # Filter Khusus Sesi London: Wajib konfirmasi H1 (1-Hour) searah tren (HANYA Jam 14:00 - 17:00 WIB)
-        # Sesuai arahan pengguna: "ampe jam 5 aja max pake h1 sesi london, karna setelah jam segitu manipulasi udah jarang"
+        # Filter Khusus Sesi London: Wajib konfirmasi H1 (1-Hour) searah tren (Jam 12:00 - 17:00 WIB)
+        # Sesuai arahan pengguna: Menghentikan manipulasi pembukaan Eropa & London
         h1_ok = True
         h1_reason = ""
         enable_h1_london = self.config.get("mt5", {}).get("london_h1_confirmation", True)
@@ -1400,8 +1408,8 @@ class SignalEngine:
             else:
                 ts_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
 
-            # Wajib H1 hanya berlaku mulai jam 14:00 sampai maksimal jam 17:00 WIB (jam 5 sore)
-            is_london_h1_time = dtime(14, 0) <= ts_wib.time() < dtime(london_h1_max_hour, 0)
+            # Wajib H1 berlaku mulai jam 12:00 (Pre-London) sampai maksimal jam 17:00 WIB (jam 5 sore)
+            is_london_h1_time = dtime(12, 0) <= ts_wib.time() < dtime(london_h1_max_hour, 0)
 
         if is_london_session and is_london_h1_time and enable_h1_london and df_h1 is not None and apply_pdf_filter:
             h1_ok, h1_reason = self.validate_london_h1_confirmation(
