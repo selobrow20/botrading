@@ -211,13 +211,12 @@ class GitAutoUpdater:
             return False
 
         self._is_updating = True
-        current_head = self._get_current_head()
         try:
             has_update, local_h, remote_h = self.check_for_updates()
             if not has_update:
-                if self.initial_head and current_head and (current_head != self.initial_head):
-                    logger.info(f"🚀 Terdeteksi kodingan lokal berubah ({self.initial_head[:7]} -> {current_head[:7]}). Me-restart proses bot...")
-                    self.initial_head = current_head
+                if self.initial_head and local_h and (local_h != self.initial_head):
+                    logger.info(f"🚀 Terdeteksi kodingan lokal berubah ({self.initial_head[:7]} -> {local_h[:7]}). Me-restart proses bot...")
+                    self.initial_head = local_h
                     if self.auto_restart:
                         self.restart_process()
                     return True

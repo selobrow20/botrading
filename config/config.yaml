@@ -62,10 +62,10 @@ mt5:
   max_slippage: 20
   gold_symbol: XAUUSDc
   trading_hours: all
-  max_positions_usd: 1
-  max_positions_cent: 1             # Di luar Sesi US (siang/sore), maksimal HANYA 1 posisi (stop penumpukan posisi ganda)
-  us_session_max_positions: 2       # Khusus Sesi US (19:00 - 24:00 WIB), akun USC boleh 1 / 2 posisi agresif
-  min_grid_spacing: 1.0             # Jarak minimal antar posisi $1.00 USD (10 pips) agar sinyal candle baru tidak terblokir
+  max_positions_usd: 1              # Akun USD Standard: Maksimal 1 posisi (disiplin margin)
+  max_positions_cent: 3             # Akun Cent (USC): Maksimal 3 posisi (bisa nambah/layering saat ada sinyal bagus)
+  us_session_max_positions: 3       # Sesi US Akun Cent (USC): Maksimal 3 posisi
+  min_grid_spacing: 1.0             # Jarak minimal antar posisi $1.00 USD (10 pips) agar tidak staking di titik yang sama
   use_trailing_stop: false          # Dinonaktifkan: fokus pengawalan target TP/SL & Auto-BEP
   enable_break_even: true           # Auto Break-Even (BEP) saat floating profit mencapai target
   break_even_quick_pips: 20.0       # Sinyal Cepat: Otomatis BEP saat floating profit +20 pips ($2.00 USD) agar bebas risiko!

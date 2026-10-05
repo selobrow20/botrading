@@ -934,9 +934,9 @@ class MT5Bridge:
             max_positions = int(cfg_mt5.get("max_positions_usd", 1))
         else:
             if is_us:
-                max_positions = int(cfg_mt5.get("us_session_max_positions", 2))
+                max_positions = int(cfg_mt5.get("us_session_max_positions", 3))
             else:
-                max_positions = int(cfg_mt5.get("max_positions_cent", 1))
+                max_positions = int(cfg_mt5.get("max_positions_cent", 3))
 
         if len(active_same_sym) >= max_positions:
             mode_lbl = (
