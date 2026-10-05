@@ -27,31 +27,31 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.3.3"
+CLIENT_COPIER_VERSION = "2.3.4"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
-def restart_copier():
-    """Me-restart copier secara mulus tanpa perlu member menutup dan membuka ulang aplikasi."""
+def parse_version(v_str: str) -> tuple:
+    """Parse string versi '2.3.4' menjadi tuple (2, 3, 4) untuk perbandingan semver akurat."""
     try:
-        import subprocess
-        script_file = str(Path(__file__).resolve())
-        # Jika dijalankan tanpa batch runner loop, spawn START_COPIER.bat di jendela baru
-        if os.environ.get("COPIER_IN_LOOP") != "1":
-            try:
-                bat_file = Path(__file__).resolve().parent / "START_COPIER.bat"
-                if bat_file.exists() and sys.platform == "win32":
-                    subprocess.Popen(["cmd.exe", "/c", str(bat_file)], cwd=str(Path(__file__).resolve().parent), creationflags=subprocess.CREATE_NEW_CONSOLE)
-                else:
-                    flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if sys.platform == "win32" else 0
-                    subprocess.Popen([sys.executable, script_file], cwd=str(Path(__file__).resolve().parent), creationflags=flags)
-            except Exception:
-                pass
-        time.sleep(1.0)
-        os._exit(42)
-    except Exception as e:
-        print(f"⚠️ Gagal restart otomatis: {e}. Silakan buka kembali START_COPIER.bat.")
-        os._exit(0)
+        nums = re.findall(r"\d+", str(v_str))
+        return tuple(map(int, nums)) if nums else (0, 0, 0)
+    except Exception:
+        return (0, 0, 0)
+
+def restart_copier():
+    """
+    Me-restart copier secara mulus di console yang sama persis.
+    Member TIDAK PERLU lagi buka-tutup jendela console saat ada update!
+    """
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except Exception:
+        pass
+    # Exit code 42 ditangkap oleh loop supervisor (baik START_COPIER.bat maupun runner Python)
+    # untuk me-reload kodingan terbaru di jendela console yang sama tanpa berkedip/buka-tutup.
+    os._exit(42)
 
 def apply_zip_update(zip_path_or_bytes, preserve_config: bool = True):
     """
@@ -95,29 +95,40 @@ def apply_zip_update(zip_path_or_bytes, preserve_config: bool = True):
 def check_and_apply_ota_update(silent: bool = False) -> bool:
     """
     Memeriksa pembaruan Over-The-Air (OTA) langsung dari GitHub Cloud.
-    Jika ada versi baru, unduh otomatis dan restart tanpa perlu download/timpa zip manual!
+    Jika ada versi baru, unduh otomatis dan reload langsung tanpa perlu download/timpa zip manual!
     """
     import urllib.request
     try:
+        cache_buster = f"?t={int(time.time())}"
         req = urllib.request.Request(
-            OTA_VERSION_URL,
-            headers={"User-Agent": "MT5-VIP-Copier-AutoUpdater"}
+            OTA_VERSION_URL + cache_buster,
+            headers={
+                "User-Agent": "MT5-VIP-Copier-AutoUpdater",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
         )
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=7) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             remote_ver = data.get("version", "").strip()
             changelog = data.get("changelog", "Peningkatan stabilitas dan akurasi.")
 
-        if remote_ver and remote_ver > CLIENT_COPIER_VERSION:
+        if remote_ver and parse_version(remote_ver) > parse_version(CLIENT_COPIER_VERSION):
             print("\n" + "=" * 70)
             print(f"🔔 [NOTIFIKASI UPDATE OTOMATIS] Versi Baru v{remote_ver} Tersedia!")
             print(f"📝 Info: {changelog}")
-            print(f"📥 Mengunduh pembaruan otomatis langsung dari Cloud (Tanpa Timpa ZIP)...")
+            print(f"📥 Mengunduh pembaruan otomatis langsung dari Cloud (Tanpa Perlu Timpa ZIP)...")
             req_script = urllib.request.Request(
-                OTA_SCRIPT_URL,
-                headers={"User-Agent": "MT5-VIP-Copier-AutoUpdater"}
+                OTA_SCRIPT_URL + cache_buster,
+                headers={
+                    "User-Agent": "MT5-VIP-Copier-AutoUpdater",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0"
+                }
             )
-            with urllib.request.urlopen(req_script, timeout=15) as s_resp:
+            with urllib.request.urlopen(req_script, timeout=20) as s_resp:
                 new_code = s_resp.read().decode("utf-8")
 
             if len(new_code) > 1000 and "CLIENT MT5 AUTO-COPIER" in new_code:
@@ -131,9 +142,9 @@ def check_and_apply_ota_update(silent: bool = False) -> bool:
                     f.write(new_code)
                 print("✅ [PEMBARUAN BERHASIL DITERAPKAN OTOMATIS]")
                 print("🛡️ Pengaturan Akun & Lot Anda tetap aman.")
-                print("🔄 Me-restart copier ke versi terbaru dalam 3 detik...")
+                print("🔄 Memuat ulang Copier ke versi terbaru tanpa perlu buka-tutup...")
                 print("=" * 70 + "\n")
-                time.sleep(3)
+                time.sleep(1.0)
                 restart_copier()
                 return True
         elif not silent:
@@ -1162,11 +1173,11 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
     # Live In-App OTA Poller: Memeriksa dan menerapkan update otomatis saat aplikasi SEDANG BERJALAN AKTIF
     async def live_ota_checker_daemon():
         """
-        Memeriksa update sistem di Cloud setiap 45 detik saat copier aktif.
+        Memeriksa update sistem di Cloud setiap 30 detik saat copier aktif berjalan.
         Jika versi baru dirilis, copier otomatis memperbarui file dan me-reload tanpa perlu ditutup manual!
         """
         while True:
-            await asyncio.sleep(45)
+            await asyncio.sleep(30)
             try:
                 updated = await asyncio.to_thread(check_and_apply_ota_update, silent=True)
                 if updated:
@@ -1191,7 +1202,7 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
 
         # 0a. DETEKSI PERINTAH UPDATE INSTAN DARI MASTER BOT (BROADCAST / UPDATE)
         msg_raw_test = (event.raw_text or "").upper()
-        if any(cmd in msg_raw_test for cmd in ["[UPDATE_COPIER]", "UPDATE_COPIER", "/UPDATE_COPIER", "/UPDATE_CLIENT"]):
+        if any(cmd in msg_raw_test for cmd in ["[UPDATE_COPIER]", "UPDATE_COPIER", "/UPDATE_COPIER", "/UPDATE_CLIENT", "UPDATE AUTO-COPIER", "AUTO-UPDATE"]):
             print("\n" + "=" * 70)
             print("🔔 [PERINTAH PEMBARUAN MASTER BOT DITERIMA SECARA LANGSUNG]")
             print("🚀 Memeriksa dan menerapkan update terbaru dari Cloud tanpa perlu menutup aplikasi...")
@@ -1220,10 +1231,14 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
                         except Exception:
                             pass
                         print("✅ [PEMBARUAN BERHASIL DITERAPKAN OTOMATIS]")
-                        print("🔄 Me-restart copier ke versi terbaru dalam 2 detik...")
+                        print("🔄 Memuat ulang Copier ke versi terbaru tanpa perlu buka-tutup...")
                         print("=" * 70 + "\n")
-                        await client.disconnect()
-                        time.sleep(2)
+                        try:
+                            if client.is_connected():
+                                asyncio.create_task(client.disconnect())
+                        except Exception:
+                            pass
+                        time.sleep(1.0)
                         restart_copier()
                         return
                     else:
@@ -1544,4 +1559,21 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import subprocess
+    # Supervisor loop otomatis: Memastikan copier selalu reload di jendela console yang SAMA
+    # baik dijalankan via START_COPIER.bat, terminal CMD, PowerShell, maupun klik langsung.
+    # Member tidak perlu lagi menutup dan membuka ulang aplikasi saat ada update!
+    if os.environ.get("COPIER_SUPERVISED") != "1" and "--test" not in sys.argv and "--no-supervise" not in sys.argv:
+        os.environ["COPIER_SUPERVISED"] = "1"
+        while True:
+            exit_code = subprocess.call([sys.executable, str(Path(__file__).resolve())] + sys.argv[1:])
+            if exit_code in (42, 100):
+                print("\n" + "=" * 65)
+                print("🔄 [HOT RELOAD] Memuat ulang Copier ke versi terbaru tanpa perlu buka-tutup...")
+                print("=" * 65 + "\n")
+                time.sleep(1.0)
+                continue
+            else:
+                sys.exit(exit_code)
+    else:
+        main()

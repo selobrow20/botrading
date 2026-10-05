@@ -1,16 +1,17 @@
 {
-  "version": "2.3.3",
+  "version": "2.3.4",
   "name": "MT5 VIP Auto-Copier (9 Buku PDF Confluence)",
   "released_at": "2026-10-05",
   "min_python": "3.10",
-  "changelog": "Pembaruan v2.3.3: Akun Cent (USC) diizinkan hingga maksimal 3 posisi aktif di MT5. Akun USD Standard otomatis mengeksekusi sinyal Grade A+ dengan lot disiplin 0.01.",
+  "changelog": "Pembaruan v2.3.4: True Zero-Touch Hot Reload (copier otomatis update & reload di jendela yang sama tanpa member perlu buka-tutup), Instant OTA Cache-Buster, batas anti-manipulasi Sesi London diperketat 12:00 - 16:00 WIB (jam 4 sore), dan batas 3 posisi akun Cent USC.",
   "features": [
-    "Hot Live In-App Auto-Update: Copier memeriksa Cloud setiap 45 detik saat berjalan & reload otomatis",
+    "Zero-Touch Hot Reload: Copier otomatis reload di jendela yang sama tanpa member perlu buka-tutup aplikasi",
+    "Instant OTA Cache-Buster: Pembaruan Cloud terdeteksi seketika tanpa tertahan CDN cache GitHub",
+    "London Session Protection (12:00 - 16:00 WIB): Filter anti-manipulasi likuiditas jam 12 s/d jam 4 sore",
     "Batas Posisi Cent Diperluas: Akun Cent (USC) diizinkan hingga maksimal 3 posisi aktif di MT5",
     "Eksekusi Cerdas USD Standard: Akun USD otomatis masuk pada sinyal Grade A+ (0.01 Lot)",
     "Instant Broadcast Trigger: Mendukung perintah update instan langsung dari Master Bot",
     "Deteksi Akun 100% Akurat: USD Standard vs Cent USC tanpa salah deteksi",
-    "Pencegahan Salah Simbol: Pemilihan otomatis XAUUSD standar vs XAUUSDc cent",
     "Preserve Config: Pengaturan akun & lot kustom member tetap aman 100%"
   ]
 }

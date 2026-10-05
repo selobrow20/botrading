@@ -398,22 +398,37 @@ class TelegramNotifier:
             from config.settings import BASE_DIR
             p = BASE_DIR / zip_path
 
+        # Selalu refresh file member_copier.zip dari folder member_copier jika ada perubahan
+        try:
+            copier_dir = p.parent / "member_copier"
+            if copier_dir.exists() and copier_dir.is_dir():
+                import zipfile
+                with zipfile.ZipFile(p, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for item in copier_dir.rglob("*"):
+                        if item.is_file() and "__pycache__" not in str(item) and not item.name.endswith(".pyc") and not item.name.endswith(".session") and not item.name.endswith(".bak") and not item.name.endswith(".tmp"):
+                            rel_p = item.relative_to(copier_dir)
+                            zf.write(item, arcname=str(rel_p))
+                logger.info(f"Paket member_copier.zip diperbarui otomatis: {p.stat().st_size} bytes")
+        except Exception as e_zip:
+            logger.warning(f"Gagal auto-refresh zip copier: {e_zip}")
+
         if not p.exists():
             logger.error(f"File zip copier tidak ditemukan di {p}")
             return {"success": False, "sent_count": 0, "recipients": [], "error": f"File {p} tidak ditemukan."}
 
         caption = custom_caption or (
-            "📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀\n"
+            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.3.4 (VIP 9 BUKU PDF)</b> 🚀\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.\n\n"
-            "✨ <b>FITUR & LOGIKA BARU:</b>\n"
-            "1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.\n"
-            "2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.\n"
-            "3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.\n"
-            "4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.\n"
-            "5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).\n\n"
+            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5 v2.3.4.\n\n"
+            "✨ <b>FITUR & LOGIKA TERBARU (v2.3.4):</b>\n"
+            "1. 🔄 <b>Zero-Touch In-App Hot Reload:</b> Copier otomatis memperbarui diri dan reload di jendela console yang sama tanpa member perlu buka-tutup aplikasi!\n"
+            "2. ⚡ <b>Instant OTA Cache-Buster:</b> Deteksi update Cloud langsung aktif tanpa tertahan cache GitHub.\n"
+            "3. 🏛️ <b>Proteksi Sesi London (12:00 - 16:00 WIB):</b> Filter ketat Judas Swing & konfirmasi H1 jam 12 s/d jam 4 sore.\n"
+            "4. 📦 <b>Batas Akun Cent USC (Max 3 Posisi):</b> Diizinkan menampung hingga 3 posisi aktif dengan grid $1.00 USD.\n"
+            "5. 🎯 <b>USD Standard Mode Sniper:</b> Otomatis masuk sinyal Grade A+ (>=80%) dengan lot disiplin 0.01.\n"
+            "6. 🛡️ <b>Preserve User Config:</b> Pengaturan akun dan lot kustom member tetap aman 100%.\n\n"
             "🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>\n"
-            "Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!\n"
+            "Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-reload sendiri (bebas repot timpa ZIP atau buka-tutup)!\n"
             "━━━━━━━━━━━━━━━━━━━━━━"
         )
 
@@ -2063,13 +2078,14 @@ class TelegramBotCommands:
 
         status_msg = await update.message.reply_html("⏳ <b>Menyiapkan dan mengirim file paket Auto-Copier MT5 (VIP 9 Buku PDF)...</b>")
         caption_text = (
-            "🚀 <b>PAKET AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b>\n"
+            "🚀 <b>PAKET AUTO-COPIER MT5 v2.3.4 (VIP 9 BUKU PDF)</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "✨ <b>FITUR & LOGIKA TERBARU:</b>\n"
-            "• 🎯 <b>Retest Entry Diskon/Premium:</b> Posisi presisi di ayunan terbaik S/R & Order Block.\n"
-            "• ⚖️ <b>Min SL/TP 60 Pips (1:1):</b> Target proporsional Kaidah 9 Buku (TP >= SL).\n"
-            "• 🛡️ <b>Anti-Hedging & Auto-Flip:</b> Proteksi tabrakan order & eksekusi cepat.\n"
-            "• ⚡ <b>Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (Bebas Error 10030).\n\n"
+            "• 🔄 <b>Zero-Touch Hot Reload:</b> Auto-update langsung di jendela console tanpa perlu buka-tutup.\n"
+            "• 🏛️ <b>Proteksi London (12:00 - 16:00 WIB):</b> Filter ketat Judas Swing & candle H1 jam 12 s/d jam 4 sore.\n"
+            "• 📦 <b>Akun Cent USC (Max 3 Posisi):</b> Diizinkan menampung s/d 3 posisi aktif grid $1.00 USD.\n"
+            "• 🎯 <b>USD Mode Sniper:</b> Hanya eksekusi sinyal Grade A+ (>=80%) lot 0.01.\n"
+            "• ⚖️ <b>Min SL/TP 60 Pips (1:1):</b> Target proporsional Kaidah 9 Buku (TP >= SL).\n\n"
             "🛠️ <b>PETUNJUK CEPAT:</b>\n"
             "1. Ekstrak ZIP ini di PC/Laptop/VPS Anda.\n"
             "2. Buka MetaTrader 5 (pastikan Algo Trading aktif).\n"

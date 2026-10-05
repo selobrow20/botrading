@@ -8,15 +8,18 @@ from member_copier.client_copier import (
     CLIENT_COPIER_VERSION,
     apply_zip_update,
     check_and_apply_ota_update,
+    parse_version,
 )
 
 
 def test_copier_version_exists():
-    assert CLIENT_COPIER_VERSION == "2.3.3"
+    assert CLIENT_COPIER_VERSION == "2.3.4"
     v_file = Path("member_copier/version.json")
     assert v_file.exists()
     data = json.loads(v_file.read_text(encoding="utf-8"))
-    assert data["version"] == "2.3.3"
+    assert data["version"] == "2.3.4"
+    assert parse_version("2.3.4") > parse_version("2.3.3")
+    assert parse_version("2.4.0") > parse_version("2.3.10")
 
 
 def test_apply_zip_update_preserves_user_config(tmp_path, monkeypatch):
