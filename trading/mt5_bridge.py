@@ -325,16 +325,21 @@ class MT5Bridge:
         dir_cd = cfg_mt5.get("directional_cooldown_mins", 35)
         if signal_type and dir_cd > 0:
             locked_until = self.directional_sl_cooldown.get(signal_type)
-            if locked_until and now_wib < locked_until:
-                remaining_dir = int((locked_until - now_wib).total_seconds() / 60)
-                msg = (
-                    f"⏸️ [DIRECTIONAL COOLDOWN] Arah {signal_type} dikunci sementara. "
-                    f"Stop Loss {signal_type} terakhir baru saja terjadi. "
-                    f"Sisa waktu jeda: {remaining_dir} menit. "
-                    f"Kaidah Anti-Revenge (9 Buku PDF): Jangan re-entry arah sama setelah kena SL. "
-                    f"Tunggu struktur pasar reset untuk {signal_type} berikutnya."
-                )
-                return False, msg, f"directional_cooldown_{signal_type.lower()}"
+            if locked_until:
+                rem_sec = int((locked_until - now_wib).total_seconds())
+                if rem_sec > 0:
+                    rem_str = f"{rem_sec} detik" if rem_sec < 60 else f"{rem_sec // 60}m {rem_sec % 60}s"
+                    msg = (
+                        f"⏸️ [DIRECTIONAL COOLDOWN] Arah {signal_type} dikunci sementara. "
+                        f"Stop Loss {signal_type} terakhir baru saja terjadi. "
+                        f"Sisa waktu jeda: {rem_str}. "
+                        f"Kaidah Anti-Revenge (9 Buku PDF): Jangan re-entry arah sama setelah kena SL. "
+                        f"Tunggu struktur pasar reset untuk {signal_type} berikutnya."
+                    )
+                    return False, msg, f"directional_cooldown_{signal_type.lower()}"
+                else:
+                    # Sudah lewat dari batas waktu, bersihkan kuncian arah
+                    self.directional_sl_cooldown[signal_type] = None
 
         # 3. Consecutive Loss Circuit Breaker (Proteksi SL Beruntun)
         # Sesuai analisa & perbaikan (2 Oct 2026):
