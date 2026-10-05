@@ -1367,6 +1367,18 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
                     print(f"   ⚠️ Gagal memproses SL baru: {ex}")
             return
 
+        # Deteksi Laporan Hasil / Penutupan Resmi dari Master Bot (Auto-Sync Close untuk Member)
+        if "[LAPORAN HASIL]" in msg_upper or "STOP LOSS TERSENTUH" in msg_upper or "TAKE PROFIT TERCAPAI" in msg_upper:
+            target_act = "BUY" if ("AKSI SINYAL: BUY" in msg_upper or "BUY / LONG" in msg_upper or "BUY" in msg_upper) else ("SELL" if ("AKSI SINYAL: SELL" in msg_upper or "SELL / SHORT" in msg_upper or "SELL" in msg_upper) else None)
+            if target_act:
+                sym = bridge.find_broker_symbol()
+                closed_list = bridge.close_all_positions(sym, action=target_act)
+                if closed_list:
+                    for c in closed_list:
+                        status_lbl = "BERHASIL" if c["success"] else "GAGAL"
+                        print(f"\n🔒 [{datetime.now().strftime('%H:%M:%S')}] [AUTO-SYNC CLOSE] Posisi {c['action']} #{c['ticket']} {status_lbl} ditutup seketika mengikuti Laporan Hasil Master Bot!")
+            return
+
         # Deteksi Peringatan Dini Pembalikan Arah (Early Warning Alert)
         if "PERINGATAN DINI PEMBALIKAN ARAH TREN" in msg_upper:
             print(f"\n⚠️ [{datetime.now().strftime('%H:%M:%S')}] PERINGATAN DINI DARI MASTER BOT:")

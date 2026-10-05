@@ -264,7 +264,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
     )
     scheduler.add_job(
         runner.check_and_report_mt5_deals,
-        trigger=IntervalTrigger(seconds=15),
+        trigger=IntervalTrigger(seconds=3),
         id="mt5_deal_watcher_job",
         name="Pemantauan Real-Time TP/SL MT5",
         replace_existing=True,
@@ -291,7 +291,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         logger.info(f"Git Auto-Puller aktif: memeriksa commit origin/{git_cfg.get('branch', 'main')} tiap {pull_interval_mins} menit.")
 
     scheduler.start()
-    logger.info(f"BackgroundScheduler aktif (interval: {interval_mins}m, news: 1m, MT5 watcher: 15s LIVE, git auto-pull: 5m).")
+    logger.info(f"BackgroundScheduler aktif (interval: {interval_mins}m, news: 1m, MT5 watcher: 3s LIVE, git auto-pull: 5m).")
 
     # Jalankan initial run & sync kalender di thread terpisah agar tidak menahan startup listener Telegram
     def _initial_startup_tasks():

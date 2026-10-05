@@ -873,11 +873,11 @@ class PipelineRunner:
                     elif reason_str == "TP":
                         note = f"🎯 Transaksi MT5 #{pos_id} sukses menyentuh Take Profit di ${exit_price:,.2f} ({pnl_cash:+.2f} {unit_curr}). Target keuntungan 9 Buku PDF berhasil dicapai!"
                     else:
-                        note = f"🛡️ Transaksi MT5 #{pos_id} ditutup menguntungkan di ${exit_price:,.2f} ({pnl_cash:+.2f} {unit_curr}) sebelum target TP penuh tersentuh."
+                        note = f"🛡️ Transaksi MT5 #{pos_id} ditutup (Take Profit Manual / Early Close) di ${exit_price:,.2f} ({pnl_cash:+.2f} {unit_curr}) untuk mengamankan keuntungan!"
                 elif reason_str == "SL":
                     note = f"🛑 Transaksi MT5 #{pos_id} menyentuh Stop Loss di ${exit_price:,.2f} ({pnl_cash:+.2f} {unit_curr}). Batas toleransi risiko berhasil mengamankan modal trading Anda."
                 else:
-                    note = f"Transaksi MT5 #{pos_id} ditutup pada harga ${exit_price:,.2f} ({pnl_cash:+.2f} {unit_curr})."
+                    note = f"🛑 Transaksi MT5 #{pos_id} ditutup (Cut Loss Manual) di ${exit_price:,.2f} ({pnl_cash:+.2f} {unit_curr}). Disiplin proteksi modal berhasil mengamankan portofolio."
 
                 rep_dict = {
                     "id": entry_sig.get("id") if entry_sig else deal_ticket,
@@ -1637,10 +1637,10 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
-    # Jadwalkan pengecekan deal penutupan posisi MT5 (TP/SL hit) tiap 15 detik (LIVE)
+    # Jadwalkan pengecekan deal penutupan posisi MT5 (TP/SL hit) tiap 3 detik (LIVE INSTANT)
     scheduler.add_job(
         runner.check_and_report_mt5_deals,
-        trigger=IntervalTrigger(seconds=15),
+        trigger=IntervalTrigger(seconds=3),
         id="mt5_deal_watcher_job",
         name="Pemantauan Real-Time TP/SL MT5",
         replace_existing=True,

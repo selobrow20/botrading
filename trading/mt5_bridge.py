@@ -1457,7 +1457,7 @@ class MT5Bridge:
                 # Filter kepemilikan deal bot:
                 # 1. d.magic == self.magic_number
                 # 2. ATAU deal pembuka (DEAL_ENTRY_IN) memiliki magic == self.magic_number
-                #    (Penting karena closing manual MT5 atau broker cent sering menyetel magic = 0 pada DEAL_ENTRY_OUT)
+                # 3. ATAU transaksi pada simbol Gold (XAUUSD / XAUUSDc) baik dibuka bot maupun manual oleh user ("gw")
                 is_bot = (d.magic == self.magic_number)
                 in_deal = None
 
@@ -1467,7 +1467,8 @@ class MT5Bridge:
                     if in_deal and in_deal.magic == self.magic_number:
                         is_bot = True
 
-                if not is_bot:
+                is_gold = any(g in (d.symbol or "").upper() for g in ["XAU", "GOLD"])
+                if not is_bot and not is_gold:
                     continue
 
                 # Cek alasan penutupan: 4 = SL, 5 = TP, lainnya = Regular/Client/Manual
