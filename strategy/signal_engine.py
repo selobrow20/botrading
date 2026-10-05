@@ -921,9 +921,9 @@ class SignalEngine:
                 ts_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
 
             t = ts_wib.time()
-            # Jendela utama manipulasi pre-London & pembukaan London: 12:00 s/d 16:30 WIB
+            # Jendela utama manipulasi pre-London & pembukaan London: 12:00 s/d 16:00 WIB (jam 4 sore)
             # Pasar Eropa (Frankfurt/London) mulai beroperasi & memburu likuiditas Asian Range
-            if not (time(12, 0) <= t <= time(16, 30)):
+            if not (time(12, 0) <= t <= time(16, 0)):
                 return False, ""
 
             # Cari data sesi Asia hari ini (05:00 - 12:00 WIB)
@@ -1408,7 +1408,7 @@ class SignalEngine:
             else:
                 ts_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
 
-            # Wajib H1 berlaku mulai jam 12:00 (Pre-London) sampai maksimal jam 17:00 WIB (jam 5 sore)
+            # Wajib H1 berlaku mulai jam 12:00 (Pre-London) sampai maksimal jam 16:00 WIB (jam 4 sore)
             is_london_h1_time = dtime(12, 0) <= ts_wib.time() < dtime(london_h1_max_hour, 0)
 
         if is_london_session and is_london_h1_time and enable_h1_london and df_h1 is not None and apply_pdf_filter:

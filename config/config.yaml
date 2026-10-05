@@ -77,9 +77,9 @@ mt5:
   min_reversal_flip_score: 90.0     # Minimal skor 90% untuk flip posisi sebaliknya sesuai 9 Buku PDF
   enable_fast_reversal_guard: true  # Deteksi junam kilat berlawanan arah secara real-time (TF 1m/5m)
   fast_reversal_pips_threshold: 22.0 # Cut loss dini & auto-flip jika junam >= 22 pips berlawanan arah
-  enable_judas_swing_filter: true   # Filter anti-manipulasi likuiditas Sesi London (14:00 - 15:30 WIB)
+  enable_judas_swing_filter: true   # Filter anti-manipulasi likuiditas Sesi London (12:00 - 16:00 WIB / jam 4 sore)
   london_h1_confirmation: true      # Khusus Sesi London: Open posisi wajib konfirmasi searah tren & candle H1 (1-Hour)
-  london_h1_max_hour: 17            # Maksimal jam 17:00 WIB (setelah jam 5 sore manipulasi reda, kembali ke M15 biasa)
+  london_h1_max_hour: 16            # Maksimal jam 16:00 WIB (setelah jam 4 sore manipulasi reda, kembali ke M15 biasa)
   # Target Take Profit & Stop Loss Gold XAUUSD
   # HARD CONSTRAINT PENGGUNA: SL & TP MINIMAL 60 PIPS ($6.00 USD) 1:1 DILARANG DI BAWAH ITU!
   gold_short_tp_pips: 60.0          # Target TP cepat mode sideways/normal: Minimal 60 pips ($6.00 USD) - R:R 1:1

@@ -932,7 +932,7 @@ def test_retest_badge_in_telegram_format():
 
 
 def test_london_judas_swing_and_overextended_protection():
-    """Menguji proteksi Sesi London (12:00 - 17:00 WIB): Anti-Judas Swing & Anti-Overextended EMA20 Bob Volman."""
+    """Menguji proteksi Sesi London (12:00 - 16:00 WIB / jam 4 sore): Anti-Judas Swing & Anti-Overextended EMA20 Bob Volman."""
     from strategy.signal_engine import SignalEngine
     from zoneinfo import ZoneInfo
     from datetime import datetime
@@ -942,7 +942,6 @@ def test_london_judas_swing_and_overextended_protection():
     # 1. Uji Anti-Judas Swing di jam 12:30 WIB (Pre-London):
     # Asian Range dibentuk jam 05:00 - 12:00 (High 4155, Low 4136).
     # Harga menembus ke 4130 (di bawah Asian Low). Sinyal SELL harus ditolak oleh Anti-Judas Swing.
-    dt_london_judas = datetime(2026, 10, 5, 12, 30, tzinfo=ZoneInfo("Asia/Jakarta"))
     idx_times = pd.date_range("2026-10-05 06:00", periods=27, freq="15min", tz="Asia/Jakarta")
 
     highs = [4155.0 if i < 15 else 4145.0 for i in range(27)]
@@ -971,7 +970,19 @@ def test_london_judas_swing_and_overextended_protection():
     assert "Anti-Judas Swing" in trap_reason
     assert "Low Asia" in trap_reason
 
-    # 2. Uji filter Bob Volman London EMA20 Tight Distance:
+    # 2. Uji batas jam 16:00 WIB: Setelah jam 16:00 (misal 16:15 WIB), Judas Swing dinonaktifkan
+    idx_after_4pm = pd.date_range("2026-10-05 09:45", periods=27, freq="15min", tz="Asia/Jakarta") # candle terakhir 16:15
+    df_after_4pm = df_judas.copy()
+    df_after_4pm.index = idx_after_4pm
+    is_trap_4pm, _ = engine.check_london_judas_swing(
+        df=df_after_4pm,
+        curr_price=4130.0,
+        signal_type="SELL",
+        curr_row=df_after_4pm.iloc[-1],
+    )
+    assert is_trap_4pm is False
+
+    # 3. Uji filter Bob Volman London EMA20 Tight Distance:
     # Jarak harga (4131.0) ke EMA20 (4143.0) = $12.0 USD > batas $2.50 USD di Sesi London
     sig = engine.evaluate_bar(df_judas, ticker="XAUUSD", apply_pdf_filter=True)
     assert sig.signal == "HOLD"
