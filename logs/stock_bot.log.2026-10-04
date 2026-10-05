@@ -1,0 +1,1558 @@
+[2026-10-04 20:01:56] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:01:57] [WARNING] [telegram_bot:78] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 20:01:57] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-142\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🛠️ <b>CARA UPDATE:</b>
+1. Ekstrak <code>member_copier.zip</code> ini ke folder copier.
+2. Timpa file <code>client_copier.py</code> dan <code>PANDUAN_MEMBER.txt</code>.
+3. Jalankan kembali <code>START_COPIER.bat</code>!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 20:01:57] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-142\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🛠️ <b>CARA UPDATE:</b>
+1. Ekstrak <code>member_copier.zip</code> ini ke folder copier.
+2. Timpa file <code>client_copier.py</code> dan <code>PANDUAN_MEMBER.txt</code>.
+3. Jalankan kembali <code>START_COPIER.bat</code>!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 20:01:57] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-142\test_copier_broadcast_and_docu0\member_copier.zip
+Test
+[2026-10-04 20:01:57] [ERROR] [auto_updater:84] - Error saat memeriksa update Git: 
+[2026-10-04 20:01:57] [INFO] [auto_updater:206] - 🚀 Terdeteksi kodingan baru di GitHub (abc1234 -> def5678). Memulai git pull...
+[2026-10-04 20:01:57] [INFO] [auto_updater:210] - ✅ Git pull berhasil! Commit: def5678 - feat: new trailing stop (selobrow)
+[2026-10-04 20:01:57] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:01:57] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:01:57] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:01:57] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:01:57] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 20:01:57] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 20:01:57] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 20:01:58] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_200157_84.png
+[2026-10-04 20:01:58] [INFO] [scheduler:522] - ⚡ Sinyal Konfirmasi Chart A+ (SELL) terkirim ke Telegram untuk XAUUSD!
+[2026-10-04 20:01:58] [INFO] [scheduler:540] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 20:01:58] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:01:58] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 20:01:58] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 20:01:58] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 20:01:58] [INFO] [scheduler:540] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 20:01:59] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_200158_91.png
+[2026-10-04 20:02:00] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_BBCA_JK_1d_20261004_200159_69.png
+[2026-10-04 20:02:03] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-10-04 20:02:04] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-10-04 20:02:04] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:02:07] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:02:12] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:02:12] [INFO] [fetcher:281] - Menunggu 1.0 detik sebelum retry...
+[2026-10-04 20:02:13] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 2/3
+[2026-10-04 20:02:13] [INFO] [fetcher:281] - Menunggu 2.0 detik sebelum retry...
+[2026-10-04 20:02:15] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 3/3
+[2026-10-04 20:02:15] [ERROR] [fetcher:284] - Gagal mengambil data EURUSD=X setelah 3 percobaan.
+[2026-10-04 20:02:15] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 20:02:15] [WARNING] [mt5_bridge:848] - ❌ Eksekusi MT5 Ditolak: Skor konfluensi 9 Buku PDF (50%) belum tembus batas minimal akurasi (65%). Sinyal tanpa konfluensi 9 PDF dilarang dieksekusi!
+[2026-10-04 20:02:15] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100001 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:02:15] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100002 SELL XAUUSD (0.01 lot) @ 2760.0 (TP: 2740.0, SL: 2770.0) sukses dieksekusi.
+[2026-10-04 20:02:15] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100003 BUY XAUUSD (0.05 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:02:15] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100004 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:02:15] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100005 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:02:15] [INFO] [mt5_bridge:801] - Eksekusi MT5 dilewati: Di luar jam aktif trading (19:00-23:00 WIB). Waktu saat ini: 12:00 WIB.
+[2026-10-04 20:02:15] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100006 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:02:15] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100007 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:02:15] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.00 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 20:02:15] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.50 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 20:02:15] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:02:15] [INFO] [scheduler:1383] - 🔄 [REVERSAL FLIP AUTHORIZED] Sinyal pembalikan BUY XAUUSD (Skor: 95.0%) diizinkan melewati Anti-Hedging Guard untuk pembalikan arah (Cut Loss posisi lawan & Masuk BUY)!
+[2026-10-04 20:02:15] [INFO] [mt5_bridge:887] - 🔄 [REVERSAL FLIP 90-100% 9 BUKU PDF] Terdeteksi sinyal pembalikan arah BUY super kuat (Skor: 95.0% >= 90.0%). Menutup posisi lawan [#99999 (SELL @ 2750.0)] untuk cut loss & flip ke BUY!
+[2026-10-04 20:02:16] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100008 BUY XAUUSD (0.08 lot) @ 2755.0 (TP: 2780.0, SL: 2740.0) sukses dieksekusi.
+[2026-10-04 20:02:16] [INFO] [mt5_bridge:1022] - 🛡️ [USD STANDARD FILTER] Sinyal XAUUSD BUY adalah sinyal standar/kurang bagus (Skor 70%, Grade A). Sesuai arahan pengguna: Akun Standard USD DILARANG masuk pada sinyal 0.01 standar. HANYA masuk pada sinyal Grade A+ (0.05 lot bagus). Order dilewati demi melindungi modal USD!
+[2026-10-04 20:02:16] [INFO] [mt5_bridge:1029] - 💎 [USD HIGH GRADE] Sinyal Grade A+ (85%) untuk Akun Standard USD: Membuka posisi disiplin 0.01 Lot.
+[2026-10-04 20:02:16] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100009 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:02:16] [INFO] [mt5_bridge:951] - Batas posisi tercapai (1/1 posisi XAUUSD aktif di MT5). Mode: CENT USC Disiplin (Maks 1 Posisi). Menunggu posisi selesai (TP/SL) sebelum membuka posisi baru.
+[2026-10-04 20:02:16] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100010 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:02:16] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:02:16] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 20:02:16] [INFO] [mt5_bridge:175] - ⏸️ Reversal Cooldown MT5 diaktifkan selama 30 menit (sampai 20:32 WIB). Alasan: Uji Coba Reversal
+[2026-10-04 20:02:16] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 20:02:16] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:02:16] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:02:16] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:02:16] [INFO] [fetcher:268] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-10-02 s/d 2026-10-02 00:00)
+[2026-10-04 20:02:16] [INFO] [storage:329] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 20:02:16] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:02:16] [INFO] [fetcher:268] - Sukses mengambil 111 bar data untuk BBCA.JK (2026-09-28 s/d 2026-10-02 16:00)
+[2026-10-04 20:02:16] [INFO] [storage:329] - Berhasil menyimpan 111 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 20:02:18] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-10-04 20:02:19] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-10-04 20:02:19] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-10-04 20:02:32] [WARNING] [telegram_bot:78] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 20:02:32] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 117).
+[2026-10-04 20:02:32] [INFO] [storage:453] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 118).
+[2026-10-04 20:02:32] [INFO] [telegram_bot:236] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>20:02 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 20:02:32] [INFO] [telegram_bot:236] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>20:02 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 20:02:32] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:02:32] [INFO] [storage:453] - Sinyal BUY untuk DUMMY_1791118952414.JK tersimpan (ID: 629).
+[2026-10-04 20:02:32] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:02:32] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 20:02:32] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-10-04 20:02:32] [INFO] [scheduler:238] - Memproses BBCA.JK...
+[2026-10-04 20:02:32] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:02:32] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 20:02:32] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 20:02:34] [INFO] [scheduler:442] - Sinyal BUY untuk BBCA.JK tidak dinotifikasikan (Candle lampau/telat (2026-10-02 < hari ini 2026-10-04)).
+[2026-10-04 20:02:34] [INFO] [scheduler:238] - Memproses BBRI.JK...
+[2026-10-04 20:02:34] [INFO] [fetcher:249] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:02:34] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 20:02:34] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-10-04 20:02:42] [WARNING] [fetcher:124] - Gagal mengambil data Spot Gold dari primary feed: HTTPSConnectionPool(host='biquote.io', port=443): Max retries exceeded with url: /api/XAUUSD/ohlc?interval=15m&limit=100 (Caused by ConnectTimeoutError(<HTTPSConnection(host='biquote.io', port=443) at 0x2568ffade50>, 'Connection to biquote.io timed out. (connect timeout=6)'))
+[2026-10-04 20:02:42] [WARNING] [fetcher:233] - Gagal fetch dari MT5 dan direct Spot Gold feed, fallback ke COMEX Gold Futures (GC=F)...
+[2026-10-04 20:02:42] [INFO] [fetcher:249] - Mengambil data GC=F (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:02:42] [INFO] [fetcher:268] - Sukses mengambil 344 bar data untuk GC=F (2026-09-29 s/d 2026-10-03 03:45)
+[2026-10-04 20:02:42] [INFO] [storage:329] - Berhasil menyimpan 344 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:02:42] [INFO] [scheduler:540] - === Pipeline Selesai: 2 saham diproses, 1 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 20:02:42] [INFO] [storage:329] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 20:02:42] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 20:02:42] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 20:02:42] [INFO] [storage:453] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-10-04 20:02:42] [INFO] [storage:608] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-10-04 20:02:42] [INFO] [storage:608] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-10-04 20:02:42] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:02:42] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:02:43] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:02:43] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:02:44] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:04:53] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:04:53] [INFO] [main:291] - Git Auto-Puller aktif: memeriksa commit origin/main tiap 5 menit.
+[2026-10-04 20:04:53] [INFO] [main:294] - BackgroundScheduler aktif (interval: 15m, news: 1m, MT5 watcher: 15s LIVE, git auto-pull: 5m).
+[2026-10-04 20:04:54] [INFO] [economic_calendar:123] - Berhasil mengunduh 79 event dari Forex Factory.
+[2026-10-04 20:04:54] [INFO] [economic_calendar:305] - Kalender ekonomi berhasil disinkronisasi: 10 event tersimpan.
+[2026-10-04 20:04:54] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:04:54] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 20:04:54] [INFO] [mt5_bridge:106] - Ditemukan instalasi terminal MT5 di: C:\Program Files\MetaTrader 5\terminal64.exe
+[2026-10-04 20:05:03] [INFO] [mt5_bridge:508] - Koneksi MT5 aktif! Akun #114202389 (HFMarketsGlobal-Live7 - Real | Cent (USC)) | Saldo: 58.87 USC (~ $0.59 USD)
+[2026-10-04 20:05:03] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 20:05:03] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 20:05:04] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:05:04] [INFO] [main:318] - Telegram Bot Polling listener berjalan di main thread...
+[2026-10-04 20:05:04] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:05:54] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:05:54] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:06:54] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:06:54] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:07:04] [INFO] [main:225] - 🔄 Terdeteksi instance bot lama (PID 13696). Menutup instance lama agar proses baru mengambil alih...
+[2026-10-04 20:07:04] [INFO] [main:225] - 🔄 Terdeteksi instance bot lama (PID 15004). Menutup instance lama agar proses baru mengambil alih...
+[2026-10-04 20:07:04] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:07:04] [INFO] [main:291] - Git Auto-Puller aktif: memeriksa commit origin/main tiap 5 menit.
+[2026-10-04 20:07:04] [INFO] [main:294] - BackgroundScheduler aktif (interval: 15m, news: 1m, MT5 watcher: 15s LIVE, git auto-pull: 5m).
+[2026-10-04 20:07:04] [INFO] [economic_calendar:123] - Berhasil mengunduh 79 event dari Forex Factory.
+[2026-10-04 20:07:04] [INFO] [economic_calendar:305] - Kalender ekonomi berhasil disinkronisasi: 10 event tersimpan.
+[2026-10-04 20:07:04] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:07:04] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 20:07:04] [INFO] [mt5_bridge:106] - Ditemukan instalasi terminal MT5 di: C:\Program Files\MetaTrader 5\terminal64.exe
+[2026-10-04 20:07:10] [INFO] [mt5_bridge:508] - Koneksi MT5 aktif! Akun #114202389 (HFMarketsGlobal-Live7 - Real | Cent (USC)) | Saldo: 58.87 USC (~ $0.59 USD)
+[2026-10-04 20:07:10] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:07:10] [INFO] [main:318] - Telegram Bot Polling listener berjalan di main thread...
+[2026-10-04 20:07:10] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 20:07:10] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 20:07:10] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:08:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:08:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:09:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:09:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:10:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:10:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:11:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:11:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:12:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:12:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:13:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:13:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:14:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:14:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:15:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:15:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:16:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:16:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:16:17] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:16:17] [WARNING] [telegram_bot:78] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 20:16:17] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-144\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 20:16:17] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-144\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 20:16:17] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-144\test_copier_broadcast_and_docu0\member_copier.zip
+Test
+[2026-10-04 20:16:17] [ERROR] [auto_updater:84] - Error saat memeriksa update Git: 
+[2026-10-04 20:16:17] [INFO] [auto_updater:206] - 🚀 Terdeteksi kodingan baru di GitHub (abc1234 -> def5678). Memulai git pull...
+[2026-10-04 20:16:17] [INFO] [auto_updater:210] - ✅ Git pull berhasil! Commit: def5678 - feat: new trailing stop (selobrow)
+[2026-10-04 20:16:17] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:16:17] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:16:17] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:16:17] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:16:17] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 20:16:17] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 20:16:17] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 20:16:18] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_201617_96.png
+[2026-10-04 20:16:18] [INFO] [scheduler:522] - ⚡ Sinyal Konfirmasi Chart A+ (SELL) terkirim ke Telegram untuk XAUUSD!
+[2026-10-04 20:16:18] [INFO] [scheduler:540] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 20:16:18] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:16:18] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 20:16:18] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 20:16:18] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 20:16:18] [INFO] [scheduler:540] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 20:16:19] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_201619_03.png
+[2026-10-04 20:16:20] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_BBCA_JK_1d_20261004_201619_76.png
+[2026-10-04 20:16:23] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-10-04 20:16:24] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-10-04 20:16:24] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:16:30] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:16:31] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:16:31] [INFO] [fetcher:281] - Menunggu 1.0 detik sebelum retry...
+[2026-10-04 20:16:32] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 2/3
+[2026-10-04 20:16:32] [INFO] [fetcher:281] - Menunggu 2.0 detik sebelum retry...
+[2026-10-04 20:16:34] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 3/3
+[2026-10-04 20:16:34] [ERROR] [fetcher:284] - Gagal mengambil data EURUSD=X setelah 3 percobaan.
+[2026-10-04 20:16:34] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 20:16:34] [WARNING] [mt5_bridge:848] - ❌ Eksekusi MT5 Ditolak: Skor konfluensi 9 Buku PDF (50%) belum tembus batas minimal akurasi (65%). Sinyal tanpa konfluensi 9 PDF dilarang dieksekusi!
+[2026-10-04 20:16:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100001 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:16:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100002 SELL XAUUSD (0.01 lot) @ 2760.0 (TP: 2740.0, SL: 2770.0) sukses dieksekusi.
+[2026-10-04 20:16:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100003 BUY XAUUSD (0.05 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:16:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100004 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:16:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100005 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:16:34] [INFO] [mt5_bridge:801] - Eksekusi MT5 dilewati: Di luar jam aktif trading (19:00-23:00 WIB). Waktu saat ini: 12:00 WIB.
+[2026-10-04 20:16:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100006 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:16:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100007 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:16:34] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.00 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 20:16:34] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.50 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 20:16:34] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:16:34] [INFO] [scheduler:1383] - 🔄 [REVERSAL FLIP AUTHORIZED] Sinyal pembalikan BUY XAUUSD (Skor: 95.0%) diizinkan melewati Anti-Hedging Guard untuk pembalikan arah (Cut Loss posisi lawan & Masuk BUY)!
+[2026-10-04 20:16:34] [INFO] [mt5_bridge:887] - 🔄 [REVERSAL FLIP 90-100% 9 BUKU PDF] Terdeteksi sinyal pembalikan arah BUY super kuat (Skor: 95.0% >= 90.0%). Menutup posisi lawan [#99999 (SELL @ 2750.0)] untuk cut loss & flip ke BUY!
+[2026-10-04 20:16:35] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100008 BUY XAUUSD (0.08 lot) @ 2755.0 (TP: 2780.0, SL: 2740.0) sukses dieksekusi.
+[2026-10-04 20:16:35] [INFO] [mt5_bridge:1022] - 🛡️ [USD STANDARD FILTER] Sinyal XAUUSD BUY adalah sinyal standar/kurang bagus (Skor 70%, Grade A). Sesuai arahan pengguna: Akun Standard USD DILARANG masuk pada sinyal 0.01 standar. HANYA masuk pada sinyal Grade A+ (0.05 lot bagus). Order dilewati demi melindungi modal USD!
+[2026-10-04 20:16:35] [INFO] [mt5_bridge:1029] - 💎 [USD HIGH GRADE] Sinyal Grade A+ (85%) untuk Akun Standard USD: Membuka posisi disiplin 0.01 Lot.
+[2026-10-04 20:16:35] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100009 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:16:35] [INFO] [mt5_bridge:951] - Batas posisi tercapai (1/1 posisi XAUUSD aktif di MT5). Mode: CENT USC Disiplin (Maks 1 Posisi). Menunggu posisi selesai (TP/SL) sebelum membuka posisi baru.
+[2026-10-04 20:16:35] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100010 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:16:35] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:16:35] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 20:16:35] [INFO] [mt5_bridge:175] - ⏸️ Reversal Cooldown MT5 diaktifkan selama 30 menit (sampai 20:46 WIB). Alasan: Uji Coba Reversal
+[2026-10-04 20:16:35] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 20:16:35] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:16:35] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:16:35] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:16:35] [INFO] [fetcher:268] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-10-02 s/d 2026-10-02 00:00)
+[2026-10-04 20:16:35] [INFO] [storage:329] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 20:16:35] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:16:35] [INFO] [fetcher:268] - Sukses mengambil 111 bar data untuk BBCA.JK (2026-09-28 s/d 2026-10-02 16:00)
+[2026-10-04 20:16:35] [INFO] [storage:329] - Berhasil menyimpan 111 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 20:16:39] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-10-04 20:16:40] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-10-04 20:16:40] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-10-04 20:16:58] [WARNING] [telegram_bot:78] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 20:16:58] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 119).
+[2026-10-04 20:16:58] [INFO] [storage:453] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 120).
+[2026-10-04 20:16:58] [INFO] [telegram_bot:236] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>20:16 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 20:16:58] [INFO] [telegram_bot:236] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>20:16 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 20:16:58] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:16:58] [INFO] [storage:453] - Sinyal BUY untuk DUMMY_1791119818533.JK tersimpan (ID: 630).
+[2026-10-04 20:16:58] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:16:58] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 20:16:58] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-10-04 20:16:58] [INFO] [scheduler:238] - Memproses BBCA.JK...
+[2026-10-04 20:16:58] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:16:58] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 20:16:58] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 20:17:00] [INFO] [scheduler:442] - Sinyal BUY untuk BBCA.JK tidak dinotifikasikan (Candle lampau/telat (2026-10-02 < hari ini 2026-10-04)).
+[2026-10-04 20:17:00] [INFO] [scheduler:238] - Memproses BBRI.JK...
+[2026-10-04 20:17:00] [INFO] [fetcher:249] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:17:00] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 20:17:00] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-10-04 20:17:03] [INFO] [fetcher:118] - Sukses mengambil 101 bar Spot Gold (XAU/USD) dari direct spot feed (2026-10-02 01:45 s/d 2026-10-03 03:45)
+[2026-10-04 20:17:03] [INFO] [storage:329] - Berhasil menyimpan 101 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:17:03] [INFO] [scheduler:540] - === Pipeline Selesai: 2 saham diproses, 1 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 20:17:03] [INFO] [storage:329] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 20:17:03] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 20:17:03] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 20:17:03] [INFO] [storage:453] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-10-04 20:17:03] [INFO] [storage:608] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-10-04 20:17:03] [INFO] [storage:608] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-10-04 20:17:03] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:17:03] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:17:03] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:17:04] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:17:04] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:17:04] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:17:04] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:18:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:18:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:19:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:19:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:20:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:20:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:21:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:21:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:21:38] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:21:38] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:21:38] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:21:38] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:21:38] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 20:21:38] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 20:21:38] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 20:21:40] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_202139_84.png
+[2026-10-04 20:21:40] [INFO] [scheduler:537] - 🚀 [AUTO-EXECUTE A+] MT5 Order Sukses: #998877 SELL 0.05 lot @ $3,045.50
+[2026-10-04 20:21:40] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 1 notifikasi terkirim ===
+[2026-10-04 20:21:40] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:21:40] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 20:21:40] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 20:21:40] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 20:21:40] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 20:22:04] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:22:04] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 20:22:04] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 20:22:05] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:22:05] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:22:28] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:22:28] [WARNING] [telegram_bot:78] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 20:22:28] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-145\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 20:22:28] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-145\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 20:22:28] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-145\test_copier_broadcast_and_docu0\member_copier.zip
+Test
+[2026-10-04 20:22:28] [ERROR] [auto_updater:84] - Error saat memeriksa update Git: 
+[2026-10-04 20:22:28] [INFO] [auto_updater:206] - 🚀 Terdeteksi kodingan baru di GitHub (abc1234 -> def5678). Memulai git pull...
+[2026-10-04 20:22:28] [INFO] [auto_updater:210] - ✅ Git pull berhasil! Commit: def5678 - feat: new trailing stop (selobrow)
+[2026-10-04 20:22:28] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:22:28] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:22:28] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:22:28] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:22:28] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 20:22:28] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 20:22:28] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 20:22:29] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_202229_07.png
+[2026-10-04 20:22:29] [INFO] [scheduler:537] - 🚀 [AUTO-EXECUTE A+] MT5 Order Sukses: #998877 SELL 0.05 lot @ $3,045.50
+[2026-10-04 20:22:29] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 1 notifikasi terkirim ===
+[2026-10-04 20:22:29] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:22:29] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 20:22:29] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 20:22:29] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 20:22:29] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 20:22:30] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_202230_13.png
+[2026-10-04 20:22:31] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_BBCA_JK_1d_20261004_202230_88.png
+[2026-10-04 20:22:34] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-10-04 20:22:35] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-10-04 20:22:35] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:22:39] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:22:39] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:22:39] [INFO] [fetcher:281] - Menunggu 1.0 detik sebelum retry...
+[2026-10-04 20:22:40] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 2/3
+[2026-10-04 20:22:40] [INFO] [fetcher:281] - Menunggu 2.0 detik sebelum retry...
+[2026-10-04 20:22:42] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 3/3
+[2026-10-04 20:22:42] [ERROR] [fetcher:284] - Gagal mengambil data EURUSD=X setelah 3 percobaan.
+[2026-10-04 20:22:42] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 20:22:42] [WARNING] [mt5_bridge:848] - ❌ Eksekusi MT5 Ditolak: Skor konfluensi 9 Buku PDF (50%) belum tembus batas minimal akurasi (65%). Sinyal tanpa konfluensi 9 PDF dilarang dieksekusi!
+[2026-10-04 20:22:42] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100001 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:22:42] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100002 SELL XAUUSD (0.01 lot) @ 2760.0 (TP: 2740.0, SL: 2770.0) sukses dieksekusi.
+[2026-10-04 20:22:42] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100003 BUY XAUUSD (0.05 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:22:42] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100004 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:22:42] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100005 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:22:42] [INFO] [mt5_bridge:801] - Eksekusi MT5 dilewati: Di luar jam aktif trading (19:00-23:00 WIB). Waktu saat ini: 12:00 WIB.
+[2026-10-04 20:22:42] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100006 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:22:42] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100007 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:22:42] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.00 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 20:22:42] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.50 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 20:22:43] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:22:43] [INFO] [scheduler:1456] - 🔄 [REVERSAL FLIP AUTHORIZED] Sinyal pembalikan BUY XAUUSD (Skor: 95.0%) diizinkan melewati Anti-Hedging Guard untuk pembalikan arah (Cut Loss posisi lawan & Masuk BUY)!
+[2026-10-04 20:22:43] [INFO] [mt5_bridge:887] - 🔄 [REVERSAL FLIP 90-100% 9 BUKU PDF] Terdeteksi sinyal pembalikan arah BUY super kuat (Skor: 95.0% >= 90.0%). Menutup posisi lawan [#99999 (SELL @ 2750.0)] untuk cut loss & flip ke BUY!
+[2026-10-04 20:22:43] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100008 BUY XAUUSD (0.08 lot) @ 2755.0 (TP: 2780.0, SL: 2740.0) sukses dieksekusi.
+[2026-10-04 20:22:43] [INFO] [mt5_bridge:1022] - 🛡️ [USD STANDARD FILTER] Sinyal XAUUSD BUY adalah sinyal standar/kurang bagus (Skor 70%, Grade A). Sesuai arahan pengguna: Akun Standard USD DILARANG masuk pada sinyal 0.01 standar. HANYA masuk pada sinyal Grade A+ (0.05 lot bagus). Order dilewati demi melindungi modal USD!
+[2026-10-04 20:22:43] [INFO] [mt5_bridge:1029] - 💎 [USD HIGH GRADE] Sinyal Grade A+ (85%) untuk Akun Standard USD: Membuka posisi disiplin 0.01 Lot.
+[2026-10-04 20:22:43] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100009 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:22:43] [INFO] [mt5_bridge:951] - Batas posisi tercapai (1/1 posisi XAUUSD aktif di MT5). Mode: CENT USC Disiplin (Maks 1 Posisi). Menunggu posisi selesai (TP/SL) sebelum membuka posisi baru.
+[2026-10-04 20:22:43] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100010 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:22:43] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:22:43] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 20:22:43] [INFO] [mt5_bridge:175] - ⏸️ Reversal Cooldown MT5 diaktifkan selama 30 menit (sampai 20:52 WIB). Alasan: Uji Coba Reversal
+[2026-10-04 20:22:43] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 20:22:43] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:22:43] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:22:43] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:22:43] [INFO] [fetcher:268] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-10-02 s/d 2026-10-02 00:00)
+[2026-10-04 20:22:43] [INFO] [storage:329] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 20:22:43] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:22:44] [INFO] [fetcher:268] - Sukses mengambil 111 bar data untuk BBCA.JK (2026-09-28 s/d 2026-10-02 16:00)
+[2026-10-04 20:22:44] [INFO] [storage:329] - Berhasil menyimpan 111 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 20:22:46] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-10-04 20:22:46] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-10-04 20:22:47] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-10-04 20:23:01] [WARNING] [telegram_bot:78] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 20:23:01] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 121).
+[2026-10-04 20:23:01] [INFO] [storage:453] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 122).
+[2026-10-04 20:23:01] [INFO] [telegram_bot:236] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>20:23 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 20:23:01] [INFO] [telegram_bot:236] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>20:23 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 20:23:01] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:23:01] [INFO] [storage:453] - Sinyal BUY untuk DUMMY_1791120181410.JK tersimpan (ID: 631).
+[2026-10-04 20:23:01] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:23:01] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 20:23:01] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-10-04 20:23:01] [INFO] [scheduler:238] - Memproses BBCA.JK...
+[2026-10-04 20:23:01] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:23:01] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 20:23:01] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 20:23:04] [INFO] [scheduler:442] - Sinyal BUY untuk BBCA.JK tidak dinotifikasikan (Candle lampau/telat (2026-10-02 < hari ini 2026-10-04)).
+[2026-10-04 20:23:04] [INFO] [scheduler:238] - Memproses BBRI.JK...
+[2026-10-04 20:23:04] [INFO] [fetcher:249] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:23:04] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 20:23:04] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-10-04 20:23:06] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:23:06] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:23:08] [INFO] [fetcher:118] - Sukses mengambil 101 bar Spot Gold (XAU/USD) dari direct spot feed (2026-10-02 01:45 s/d 2026-10-03 03:45)
+[2026-10-04 20:23:08] [INFO] [storage:329] - Berhasil menyimpan 101 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:23:08] [INFO] [scheduler:613] - === Pipeline Selesai: 2 saham diproses, 1 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 20:23:08] [INFO] [storage:329] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 20:23:08] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 20:23:09] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 20:23:09] [INFO] [storage:453] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-10-04 20:23:09] [INFO] [storage:608] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-10-04 20:23:09] [INFO] [storage:608] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-10-04 20:23:09] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:23:09] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:23:09] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:23:10] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:23:11] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:24:08] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:24:08] [INFO] [main:291] - Git Auto-Puller aktif: memeriksa commit origin/main tiap 5 menit.
+[2026-10-04 20:24:08] [INFO] [main:294] - BackgroundScheduler aktif (interval: 15m, news: 1m, MT5 watcher: 15s LIVE, git auto-pull: 5m).
+[2026-10-04 20:24:08] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:24:08] [INFO] [main:318] - Telegram Bot Polling listener berjalan di main thread...
+[2026-10-04 20:24:08] [INFO] [economic_calendar:123] - Berhasil mengunduh 79 event dari Forex Factory.
+[2026-10-04 20:24:08] [INFO] [economic_calendar:305] - Kalender ekonomi berhasil disinkronisasi: 10 event tersimpan.
+[2026-10-04 20:24:08] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:24:08] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 20:24:08] [INFO] [mt5_bridge:106] - Ditemukan instalasi terminal MT5 di: C:\Program Files\MetaTrader 5\terminal64.exe
+[2026-10-04 20:24:08] [INFO] [mt5_bridge:508] - Koneksi MT5 aktif! Akun #114202389 (HFMarketsGlobal-Live7 - Real | Cent (USC)) | Saldo: 58.87 USC (~ $0.59 USD)
+[2026-10-04 20:24:08] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:24:08] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 20:24:08] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 20:24:55] [INFO] [main:225] - 🔄 Terdeteksi instance bot lama (PID 5208). Menutup instance lama agar proses baru mengambil alih...
+[2026-10-04 20:24:55] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:24:55] [INFO] [main:291] - Git Auto-Puller aktif: memeriksa commit origin/main tiap 5 menit.
+[2026-10-04 20:24:55] [INFO] [main:294] - BackgroundScheduler aktif (interval: 15m, news: 1m, MT5 watcher: 15s LIVE, git auto-pull: 5m).
+[2026-10-04 20:24:56] [INFO] [economic_calendar:123] - Berhasil mengunduh 79 event dari Forex Factory.
+[2026-10-04 20:24:56] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:24:56] [INFO] [main:318] - Telegram Bot Polling listener berjalan di main thread...
+[2026-10-04 20:24:56] [INFO] [economic_calendar:305] - Kalender ekonomi berhasil disinkronisasi: 10 event tersimpan.
+[2026-10-04 20:24:56] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:24:56] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 20:24:56] [INFO] [mt5_bridge:106] - Ditemukan instalasi terminal MT5 di: C:\Program Files\MetaTrader 5\terminal64.exe
+[2026-10-04 20:24:56] [INFO] [mt5_bridge:508] - Koneksi MT5 aktif! Akun #114202389 (HFMarketsGlobal-Live7 - Real | Cent (USC)) | Saldo: 58.87 USC (~ $0.59 USD)
+[2026-10-04 20:24:56] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:24:56] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 20:24:56] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 20:25:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:25:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:26:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:26:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:27:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:27:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:28:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:28:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:29:22] [ERROR] [telegram_bot:437] - Error saat mengirim file copier ke 7170889507: asyncio.run() cannot be called from a running event loop
+[2026-10-04 20:29:22] [ERROR] [telegram_bot:437] - Error saat mengirim file copier ke 8754997836: asyncio.run() cannot be called from a running event loop
+[2026-10-04 20:29:22] [ERROR] [telegram_bot:437] - Error saat mengirim file copier ke 8301678027: asyncio.run() cannot be called from a running event loop
+[2026-10-04 20:29:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:29:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:30:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:30:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:31:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:31:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:32:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:32:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:33:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:33:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:34:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:34:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:35:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:35:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:36:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:36:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:37:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:37:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:38:19] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:20] [WARNING] [telegram_bot:78] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 20:38:20] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-147\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 20:38:20] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-147\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 20:38:20] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-147\test_copier_broadcast_and_docu0\member_copier.zip
+Test
+[2026-10-04 20:38:20] [ERROR] [auto_updater:84] - Error saat memeriksa update Git: 
+[2026-10-04 20:38:20] [INFO] [auto_updater:206] - 🚀 Terdeteksi kodingan baru di GitHub (abc1234 -> def5678). Memulai git pull...
+[2026-10-04 20:38:20] [INFO] [auto_updater:210] - ✅ Git pull berhasil! Commit: def5678 - feat: new trailing stop (selobrow)
+[2026-10-04 20:38:20] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:20] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:20] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:20] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:38:20] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 20:38:20] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 20:38:20] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 20:38:21] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_203820_54.png
+[2026-10-04 20:38:21] [INFO] [scheduler:537] - 🚀 [AUTO-EXECUTE A+] MT5 Order Sukses: #998877 SELL 0.05 lot @ $3,045.50
+[2026-10-04 20:38:21] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 1 notifikasi terkirim ===
+[2026-10-04 20:38:21] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:38:21] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 20:38:21] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 20:38:21] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 20:38:21] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 20:38:22] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_203821_54.png
+[2026-10-04 20:38:22] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_BBCA_JK_1d_20261004_203822_26.png
+[2026-10-04 20:38:26] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-10-04 20:38:27] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-10-04 20:38:27] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:30] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:30] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:38:30] [INFO] [fetcher:281] - Menunggu 1.0 detik sebelum retry...
+[2026-10-04 20:38:31] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 2/3
+[2026-10-04 20:38:32] [INFO] [fetcher:281] - Menunggu 2.0 detik sebelum retry...
+[2026-10-04 20:38:34] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 3/3
+[2026-10-04 20:38:34] [ERROR] [fetcher:284] - Gagal mengambil data EURUSD=X setelah 3 percobaan.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 20:38:34] [WARNING] [mt5_bridge:848] - ❌ Eksekusi MT5 Ditolak: Skor konfluensi 9 Buku PDF (50%) belum tembus batas minimal akurasi (65%). Sinyal tanpa konfluensi 9 PDF dilarang dieksekusi!
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100001 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100002 SELL XAUUSD (0.01 lot) @ 2760.0 (TP: 2740.0, SL: 2770.0) sukses dieksekusi.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100003 BUY XAUUSD (0.05 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100004 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100005 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:801] - Eksekusi MT5 dilewati: Di luar jam aktif trading (19:00-23:00 WIB). Waktu saat ini: 12:00 WIB.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100006 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100007 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.00 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.50 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 20:38:34] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:34] [INFO] [scheduler:1456] - 🔄 [REVERSAL FLIP AUTHORIZED] Sinyal pembalikan BUY XAUUSD (Skor: 95.0%) diizinkan melewati Anti-Hedging Guard untuk pembalikan arah (Cut Loss posisi lawan & Masuk BUY)!
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:887] - 🔄 [REVERSAL FLIP 90-100% 9 BUKU PDF] Terdeteksi sinyal pembalikan arah BUY super kuat (Skor: 95.0% >= 90.0%). Menutup posisi lawan [#99999 (SELL @ 2750.0)] untuk cut loss & flip ke BUY!
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100008 BUY XAUUSD (0.08 lot) @ 2755.0 (TP: 2780.0, SL: 2740.0) sukses dieksekusi.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:1022] - 🛡️ [USD STANDARD FILTER] Sinyal XAUUSD BUY adalah sinyal standar/kurang bagus (Skor 70%, Grade A). Sesuai arahan pengguna: Akun Standard USD DILARANG masuk pada sinyal 0.01 standar. HANYA masuk pada sinyal Grade A+ (0.05 lot bagus). Order dilewati demi melindungi modal USD!
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:1029] - 💎 [USD HIGH GRADE] Sinyal Grade A+ (85%) untuk Akun Standard USD: Membuka posisi disiplin 0.01 Lot.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100009 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:951] - Batas posisi tercapai (1/1 posisi XAUUSD aktif di MT5). Mode: CENT USC Disiplin (Maks 1 Posisi). Menunggu posisi selesai (TP/SL) sebelum membuka posisi baru.
+[2026-10-04 20:38:34] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100010 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 20:38:35] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:35] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 20:38:35] [INFO] [mt5_bridge:175] - ⏸️ Reversal Cooldown MT5 diaktifkan selama 30 menit (sampai 21:08 WIB). Alasan: Uji Coba Reversal
+[2026-10-04 20:38:35] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 20:38:35] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:35] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:35] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:38:35] [INFO] [fetcher:268] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-10-02 s/d 2026-10-02 00:00)
+[2026-10-04 20:38:35] [INFO] [storage:329] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 20:38:35] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:38:35] [INFO] [fetcher:268] - Sukses mengambil 111 bar data untuk BBCA.JK (2026-09-28 s/d 2026-10-02 16:00)
+[2026-10-04 20:38:35] [INFO] [storage:329] - Berhasil menyimpan 111 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 20:38:37] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-10-04 20:38:38] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-10-04 20:38:38] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-10-04 20:38:50] [WARNING] [telegram_bot:78] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 20:38:50] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 123).
+[2026-10-04 20:38:50] [INFO] [storage:453] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 124).
+[2026-10-04 20:38:50] [INFO] [telegram_bot:236] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>20:38 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 20:38:50] [INFO] [telegram_bot:236] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>20:38 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 20:38:50] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:51] [INFO] [storage:453] - Sinyal BUY untuk DUMMY_1791121130991.JK tersimpan (ID: 632).
+[2026-10-04 20:38:51] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:38:51] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 20:38:51] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-10-04 20:38:51] [INFO] [scheduler:238] - Memproses BBCA.JK...
+[2026-10-04 20:38:51] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:38:51] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 20:38:51] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 20:38:52] [INFO] [scheduler:442] - Sinyal BUY untuk BBCA.JK tidak dinotifikasikan (Candle lampau/telat (2026-10-02 < hari ini 2026-10-04)).
+[2026-10-04 20:38:52] [INFO] [scheduler:238] - Memproses BBRI.JK...
+[2026-10-04 20:38:52] [INFO] [fetcher:249] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 20:38:53] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 20:38:53] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-10-04 20:38:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:38:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:38:56] [INFO] [fetcher:118] - Sukses mengambil 101 bar Spot Gold (XAU/USD) dari direct spot feed (2026-10-02 01:45 s/d 2026-10-03 03:45)
+[2026-10-04 20:38:56] [INFO] [storage:329] - Berhasil menyimpan 101 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:38:56] [INFO] [scheduler:613] - === Pipeline Selesai: 2 saham diproses, 1 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 20:38:56] [INFO] [storage:329] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 20:38:56] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 20:38:56] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 20:38:56] [INFO] [storage:453] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-10-04 20:38:56] [INFO] [storage:608] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-10-04 20:38:56] [INFO] [storage:608] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-10-04 20:38:57] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:57] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:57] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:57] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:38:58] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 20:39:55] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:39:56] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 20:39:56] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 20:39:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:39:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:40:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:40:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:41:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:41:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:42:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:42:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:43:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:43:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:44:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:44:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:45:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:45:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:46:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:46:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:47:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:47:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:48:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:48:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:49:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:49:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:50:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:50:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:51:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:51:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:52:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:52:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:53:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:53:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:54:55] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 20:54:56] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 20:54:56] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 20:54:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:54:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:55:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:55:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:56:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:56:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:57:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:57:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:58:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:58:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 20:59:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 20:59:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:00:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:00:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:01:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:01:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:02:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:02:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:03:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:03:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:04:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:04:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:05:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:05:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:06:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:06:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:07:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:07:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:08:56] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:08:56] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:09:28] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:09:28] [INFO] [main:291] - Git Auto-Puller aktif: memeriksa commit origin/main tiap 5 menit.
+[2026-10-04 21:09:28] [INFO] [main:294] - BackgroundScheduler aktif (interval: 15m, news: 1m, MT5 watcher: 15s LIVE, git auto-pull: 5m).
+[2026-10-04 21:09:28] [INFO] [economic_calendar:123] - Berhasil mengunduh 79 event dari Forex Factory.
+[2026-10-04 21:09:28] [INFO] [economic_calendar:305] - Kalender ekonomi berhasil disinkronisasi: 10 event tersimpan.
+[2026-10-04 21:09:28] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:09:29] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 21:09:29] [INFO] [mt5_bridge:106] - Ditemukan instalasi terminal MT5 di: C:\Program Files\MetaTrader 5\terminal64.exe
+[2026-10-04 21:09:29] [INFO] [mt5_bridge:508] - Koneksi MT5 aktif! Akun #114202389 (HFMarketsGlobal-Live7 - Real | Cent (USC)) | Saldo: 58.87 USC (~ $0.59 USD)
+[2026-10-04 21:09:29] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:09:29] [INFO] [main:318] - Telegram Bot Polling listener berjalan di main thread...
+[2026-10-04 21:09:29] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 21:09:29] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 21:09:29] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:10:29] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:10:29] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:11:09] [INFO] [main:225] - 🔄 Terdeteksi instance bot lama (PID 6240). Menutup instance lama agar proses baru mengambil alih...
+[2026-10-04 21:11:09] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:11:09] [INFO] [main:291] - Git Auto-Puller aktif: memeriksa commit origin/main tiap 5 menit.
+[2026-10-04 21:11:09] [INFO] [main:294] - BackgroundScheduler aktif (interval: 15m, news: 1m, MT5 watcher: 15s LIVE, git auto-pull: 5m).
+[2026-10-04 21:11:09] [INFO] [economic_calendar:123] - Berhasil mengunduh 79 event dari Forex Factory.
+[2026-10-04 21:11:09] [INFO] [economic_calendar:305] - Kalender ekonomi berhasil disinkronisasi: 10 event tersimpan.
+[2026-10-04 21:11:09] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:11:09] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 21:11:09] [INFO] [mt5_bridge:106] - Ditemukan instalasi terminal MT5 di: C:\Program Files\MetaTrader 5\terminal64.exe
+[2026-10-04 21:11:09] [INFO] [mt5_bridge:508] - Koneksi MT5 aktif! Akun #114202389 (HFMarketsGlobal-Live7 - Real | Cent (USC)) | Saldo: 58.87 USC (~ $0.59 USD)
+[2026-10-04 21:11:09] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:11:09] [INFO] [main:318] - Telegram Bot Polling listener berjalan di main thread...
+[2026-10-04 21:11:09] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 21:11:09] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 21:11:09] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:12:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:12:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:13:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:13:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:14:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:14:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:15:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:15:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:16:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:16:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:17:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:17:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:18:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:18:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:19:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:19:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:20:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:20:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:21:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:21:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:22:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:22:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:23:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:23:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:23:38] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:23:38] [WARNING] [telegram_bot:78] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 21:23:38] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-151\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 21:23:38] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-151\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 21:23:38] [INFO] [telegram_bot:318] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-151\test_copier_broadcast_and_docu0\member_copier.zip
+Test
+[2026-10-04 21:23:38] [ERROR] [auto_updater:84] - Error saat memeriksa update Git: 
+[2026-10-04 21:23:38] [INFO] [auto_updater:206] - 🚀 Terdeteksi kodingan baru di GitHub (abc1234 -> def5678). Memulai git pull...
+[2026-10-04 21:23:38] [INFO] [auto_updater:210] - ✅ Git pull berhasil! Commit: def5678 - feat: new trailing stop (selobrow)
+[2026-10-04 21:23:38] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:23:38] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:23:38] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:23:38] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:23:38] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 21:23:38] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 21:23:38] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 21:23:39] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_212339_06.png
+[2026-10-04 21:23:39] [INFO] [scheduler:537] - 🚀 [AUTO-EXECUTE A+] MT5 Order Sukses: #998877 SELL 0.05 lot @ $3,045.50
+[2026-10-04 21:23:39] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 1 notifikasi terkirim ===
+[2026-10-04 21:23:39] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:23:39] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 21:23:39] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 21:23:39] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 21:23:40] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 21:23:40] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_212340_15.png
+[2026-10-04 21:23:41] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_BBCA_JK_1d_20261004_212340_88.png
+[2026-10-04 21:23:44] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-10-04 21:23:45] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-10-04 21:23:45] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:23:48] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:23:49] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:23:49] [INFO] [fetcher:281] - Menunggu 1.0 detik sebelum retry...
+[2026-10-04 21:23:50] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 2/3
+[2026-10-04 21:23:50] [INFO] [fetcher:281] - Menunggu 2.0 detik sebelum retry...
+[2026-10-04 21:23:52] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 3/3
+[2026-10-04 21:23:52] [ERROR] [fetcher:284] - Gagal mengambil data EURUSD=X setelah 3 percobaan.
+[2026-10-04 21:23:52] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 21:23:52] [WARNING] [mt5_bridge:848] - ❌ Eksekusi MT5 Ditolak: Skor konfluensi 9 Buku PDF (50%) belum tembus batas minimal akurasi (65%). Sinyal tanpa konfluensi 9 PDF dilarang dieksekusi!
+[2026-10-04 21:23:52] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100001 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:23:52] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100002 SELL XAUUSD (0.01 lot) @ 2760.0 (TP: 2740.0, SL: 2770.0) sukses dieksekusi.
+[2026-10-04 21:23:52] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100003 BUY XAUUSD (0.05 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:23:52] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100004 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:23:52] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100005 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:23:52] [INFO] [mt5_bridge:801] - Eksekusi MT5 dilewati: Di luar jam aktif trading (19:00-23:00 WIB). Waktu saat ini: 12:00 WIB.
+[2026-10-04 21:23:52] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100006 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:23:52] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100007 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:23:52] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.00 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 21:23:52] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.50 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 21:23:52] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:23:52] [INFO] [scheduler:1456] - 🔄 [REVERSAL FLIP AUTHORIZED] Sinyal pembalikan BUY XAUUSD (Skor: 95.0%) diizinkan melewati Anti-Hedging Guard untuk pembalikan arah (Cut Loss posisi lawan & Masuk BUY)!
+[2026-10-04 21:23:52] [INFO] [mt5_bridge:887] - 🔄 [REVERSAL FLIP 90-100% 9 BUKU PDF] Terdeteksi sinyal pembalikan arah BUY super kuat (Skor: 95.0% >= 90.0%). Menutup posisi lawan [#99999 (SELL @ 2750.0)] untuk cut loss & flip ke BUY!
+[2026-10-04 21:23:53] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100008 BUY XAUUSD (0.08 lot) @ 2755.0 (TP: 2780.0, SL: 2740.0) sukses dieksekusi.
+[2026-10-04 21:23:53] [INFO] [mt5_bridge:1022] - 🛡️ [USD STANDARD FILTER] Sinyal XAUUSD BUY adalah sinyal standar/kurang bagus (Skor 70%, Grade A). Sesuai arahan pengguna: Akun Standard USD DILARANG masuk pada sinyal 0.01 standar. HANYA masuk pada sinyal Grade A+ (0.05 lot bagus). Order dilewati demi melindungi modal USD!
+[2026-10-04 21:23:53] [INFO] [mt5_bridge:1029] - 💎 [USD HIGH GRADE] Sinyal Grade A+ (85%) untuk Akun Standard USD: Membuka posisi disiplin 0.01 Lot.
+[2026-10-04 21:23:53] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100009 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:23:53] [INFO] [mt5_bridge:951] - Batas posisi tercapai (1/1 posisi XAUUSD aktif di MT5). Mode: CENT USC Disiplin (Maks 1 Posisi). Menunggu posisi selesai (TP/SL) sebelum membuka posisi baru.
+[2026-10-04 21:23:53] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100010 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:23:53] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:23:53] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 21:23:53] [INFO] [mt5_bridge:175] - ⏸️ Reversal Cooldown MT5 diaktifkan selama 30 menit (sampai 21:53 WIB). Alasan: Uji Coba Reversal
+[2026-10-04 21:23:53] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 21:23:53] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:23:53] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:23:53] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:23:53] [INFO] [fetcher:268] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-10-02 s/d 2026-10-02 00:00)
+[2026-10-04 21:23:53] [INFO] [storage:329] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 21:23:53] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:23:53] [INFO] [fetcher:268] - Sukses mengambil 111 bar data untuk BBCA.JK (2026-09-28 s/d 2026-10-02 16:00)
+[2026-10-04 21:23:53] [INFO] [storage:329] - Berhasil menyimpan 111 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 21:23:55] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-10-04 21:23:56] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-10-04 21:23:56] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-10-04 21:24:09] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:24:09] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:24:17] [WARNING] [telegram_bot:78] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 21:24:17] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 125).
+[2026-10-04 21:24:17] [INFO] [storage:453] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 126).
+[2026-10-04 21:24:17] [INFO] [telegram_bot:236] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:24 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 21:24:17] [INFO] [telegram_bot:236] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:24 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 21:24:17] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:24:17] [INFO] [storage:453] - Sinyal BUY untuk DUMMY_1791123857681.JK tersimpan (ID: 633).
+[2026-10-04 21:24:17] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:24:17] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 21:24:17] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-10-04 21:24:17] [INFO] [scheduler:238] - Memproses BBCA.JK...
+[2026-10-04 21:24:17] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:24:17] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 21:24:18] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 21:24:19] [INFO] [scheduler:442] - Sinyal BUY untuk BBCA.JK tidak dinotifikasikan (Candle lampau/telat (2026-10-02 < hari ini 2026-10-04)).
+[2026-10-04 21:24:19] [INFO] [scheduler:238] - Memproses BBRI.JK...
+[2026-10-04 21:24:19] [INFO] [fetcher:249] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:24:19] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 21:24:19] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-10-04 21:24:22] [INFO] [fetcher:118] - Sukses mengambil 101 bar Spot Gold (XAU/USD) dari direct spot feed (2026-10-02 01:45 s/d 2026-10-03 03:45)
+[2026-10-04 21:24:22] [INFO] [storage:329] - Berhasil menyimpan 101 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:24:22] [INFO] [scheduler:613] - === Pipeline Selesai: 2 saham diproses, 1 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 21:24:22] [INFO] [storage:329] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 21:24:22] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 21:24:22] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 21:24:22] [INFO] [storage:453] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-10-04 21:24:22] [INFO] [storage:608] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-10-04 21:24:22] [INFO] [storage:608] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-10-04 21:24:23] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:24:23] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:24:23] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:24:23] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:24:24] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:25:01] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:25:01] [INFO] [main:291] - Git Auto-Puller aktif: memeriksa commit origin/main tiap 5 menit.
+[2026-10-04 21:25:01] [INFO] [main:294] - BackgroundScheduler aktif (interval: 15m, news: 1m, MT5 watcher: 15s LIVE, git auto-pull: 5m).
+[2026-10-04 21:25:01] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:25:01] [INFO] [main:318] - Telegram Bot Polling listener berjalan di main thread...
+[2026-10-04 21:25:01] [INFO] [economic_calendar:123] - Berhasil mengunduh 79 event dari Forex Factory.
+[2026-10-04 21:25:01] [INFO] [economic_calendar:305] - Kalender ekonomi berhasil disinkronisasi: 10 event tersimpan.
+[2026-10-04 21:25:01] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:25:01] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 21:25:01] [INFO] [mt5_bridge:106] - Ditemukan instalasi terminal MT5 di: C:\Program Files\MetaTrader 5\terminal64.exe
+[2026-10-04 21:25:01] [INFO] [mt5_bridge:508] - Koneksi MT5 aktif! Akun #114202389 (HFMarketsGlobal-Live7 - Real | Cent (USC)) | Saldo: 58.87 USC (~ $0.59 USD)
+[2026-10-04 21:25:01] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:25:01] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 21:25:01] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 21:25:13] [INFO] [main:225] - 🔄 Terdeteksi instance bot lama (PID 580). Menutup instance lama agar proses baru mengambil alih...
+[2026-10-04 21:25:13] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:25:13] [INFO] [main:291] - Git Auto-Puller aktif: memeriksa commit origin/main tiap 5 menit.
+[2026-10-04 21:25:13] [INFO] [main:294] - BackgroundScheduler aktif (interval: 15m, news: 1m, MT5 watcher: 15s LIVE, git auto-pull: 5m).
+[2026-10-04 21:25:13] [INFO] [economic_calendar:123] - Berhasil mengunduh 79 event dari Forex Factory.
+[2026-10-04 21:25:13] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:25:13] [INFO] [main:318] - Telegram Bot Polling listener berjalan di main thread...
+[2026-10-04 21:25:14] [INFO] [economic_calendar:305] - Kalender ekonomi berhasil disinkronisasi: 10 event tersimpan.
+[2026-10-04 21:25:14] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:25:14] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 21:25:14] [INFO] [mt5_bridge:106] - Ditemukan instalasi terminal MT5 di: C:\Program Files\MetaTrader 5\terminal64.exe
+[2026-10-04 21:25:14] [INFO] [mt5_bridge:508] - Koneksi MT5 aktif! Akun #114202389 (HFMarketsGlobal-Live7 - Real | Cent (USC)) | Saldo: 58.87 USC (~ $0.59 USD)
+[2026-10-04 21:25:14] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:25:14] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 21:25:14] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 21:26:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:26:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:26:44] [INFO] [fetcher:249] - Mengambil data IYAA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:26:45] [WARNING] [fetcher:261] - Data kosong diterima untuk IYAA.JK pada percobaan 1.
+[2026-10-04 21:26:45] [INFO] [fetcher:281] - Menunggu 1.0 detik sebelum retry...
+[2026-10-04 21:26:46] [INFO] [fetcher:249] - Mengambil data IYAA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 2/3
+[2026-10-04 21:26:46] [WARNING] [fetcher:261] - Data kosong diterima untuk IYAA.JK pada percobaan 2.
+[2026-10-04 21:26:46] [INFO] [fetcher:281] - Menunggu 2.0 detik sebelum retry...
+[2026-10-04 21:26:48] [INFO] [fetcher:249] - Mengambil data IYAA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 3/3
+[2026-10-04 21:26:48] [WARNING] [fetcher:261] - Data kosong diterima untuk IYAA.JK pada percobaan 3.
+[2026-10-04 21:26:48] [ERROR] [fetcher:284] - Gagal mengambil data IYAA.JK setelah 3 percobaan.
+[2026-10-04 21:26:48] [INFO] [fetcher:249] - Mengambil data IYAA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:26:48] [WARNING] [fetcher:261] - Data kosong diterima untuk IYAA.JK pada percobaan 1.
+[2026-10-04 21:26:48] [INFO] [fetcher:281] - Menunggu 1.0 detik sebelum retry...
+[2026-10-04 21:26:49] [INFO] [fetcher:249] - Mengambil data IYAA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 2/3
+[2026-10-04 21:26:49] [WARNING] [fetcher:261] - Data kosong diterima untuk IYAA.JK pada percobaan 2.
+[2026-10-04 21:26:49] [INFO] [fetcher:281] - Menunggu 2.0 detik sebelum retry...
+[2026-10-04 21:26:51] [INFO] [fetcher:249] - Mengambil data IYAA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 3/3
+[2026-10-04 21:26:51] [WARNING] [fetcher:261] - Data kosong diterima untuk IYAA.JK pada percobaan 3.
+[2026-10-04 21:26:51] [ERROR] [fetcher:284] - Gagal mengambil data IYAA.JK setelah 3 percobaan.
+[2026-10-04 21:26:59] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:26:59] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:27:02] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_212700_90.png
+[2026-10-04 21:27:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:27:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:27:38] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:27:38] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:27:40] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_212739_36.png
+[2026-10-04 21:28:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:28:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:29:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:29:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:30:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:30:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:30:25] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:30:25] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:31:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:31:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:32:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:32:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:33:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:33:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:34:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:34:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:35:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:35:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:36:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:36:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:36:40] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:36:41] [WARNING] [telegram_bot:78] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 21:36:41] [INFO] [telegram_bot:325] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-152\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 21:36:41] [INFO] [telegram_bot:325] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-152\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 21:36:41] [INFO] [telegram_bot:325] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-152\test_copier_broadcast_and_docu0\member_copier.zip
+Test
+[2026-10-04 21:36:41] [ERROR] [auto_updater:84] - Error saat memeriksa update Git: 
+[2026-10-04 21:36:41] [INFO] [auto_updater:206] - 🚀 Terdeteksi kodingan baru di GitHub (abc1234 -> def5678). Memulai git pull...
+[2026-10-04 21:36:41] [INFO] [auto_updater:210] - ✅ Git pull berhasil! Commit: def5678 - feat: new trailing stop (selobrow)
+[2026-10-04 21:36:41] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:36:41] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:36:41] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:36:41] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:36:41] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 21:36:41] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 21:36:41] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 21:36:42] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_213641_64.png
+[2026-10-04 21:36:42] [INFO] [scheduler:537] - 🚀 [AUTO-EXECUTE A+] MT5 Order Sukses: #998877 SELL 0.05 lot @ $3,045.50
+[2026-10-04 21:36:42] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 1 notifikasi terkirim ===
+[2026-10-04 21:36:42] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:36:42] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 21:36:42] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 21:36:42] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 21:36:42] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 21:36:43] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_213642_66.png
+[2026-10-04 21:36:43] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_BBCA_JK_1d_20261004_213643_38.png
+[2026-10-04 21:36:47] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-10-04 21:36:48] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-10-04 21:36:48] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:36:52] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:36:52] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:36:52] [INFO] [fetcher:281] - Menunggu 1.0 detik sebelum retry...
+[2026-10-04 21:36:53] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 2/3
+[2026-10-04 21:36:53] [INFO] [fetcher:281] - Menunggu 2.0 detik sebelum retry...
+[2026-10-04 21:36:55] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 3/3
+[2026-10-04 21:36:55] [ERROR] [fetcher:284] - Gagal mengambil data EURUSD=X setelah 3 percobaan.
+[2026-10-04 21:36:55] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 21:36:55] [WARNING] [mt5_bridge:848] - ❌ Eksekusi MT5 Ditolak: Skor konfluensi 9 Buku PDF (50%) belum tembus batas minimal akurasi (65%). Sinyal tanpa konfluensi 9 PDF dilarang dieksekusi!
+[2026-10-04 21:36:55] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100001 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:36:55] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100002 SELL XAUUSD (0.01 lot) @ 2760.0 (TP: 2740.0, SL: 2770.0) sukses dieksekusi.
+[2026-10-04 21:36:55] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100003 BUY XAUUSD (0.05 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:36:55] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100004 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:36:55] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100005 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:36:55] [INFO] [mt5_bridge:801] - Eksekusi MT5 dilewati: Di luar jam aktif trading (19:00-23:00 WIB). Waktu saat ini: 12:00 WIB.
+[2026-10-04 21:36:55] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100006 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:36:55] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100007 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:36:55] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.00 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 21:36:55] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.50 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 21:36:55] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:36:55] [INFO] [scheduler:1456] - 🔄 [REVERSAL FLIP AUTHORIZED] Sinyal pembalikan BUY XAUUSD (Skor: 95.0%) diizinkan melewati Anti-Hedging Guard untuk pembalikan arah (Cut Loss posisi lawan & Masuk BUY)!
+[2026-10-04 21:36:55] [INFO] [mt5_bridge:887] - 🔄 [REVERSAL FLIP 90-100% 9 BUKU PDF] Terdeteksi sinyal pembalikan arah BUY super kuat (Skor: 95.0% >= 90.0%). Menutup posisi lawan [#99999 (SELL @ 2750.0)] untuk cut loss & flip ke BUY!
+[2026-10-04 21:36:56] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100008 BUY XAUUSD (0.08 lot) @ 2755.0 (TP: 2780.0, SL: 2740.0) sukses dieksekusi.
+[2026-10-04 21:36:56] [INFO] [mt5_bridge:1022] - 🛡️ [USD STANDARD FILTER] Sinyal XAUUSD BUY adalah sinyal standar/kurang bagus (Skor 70%, Grade A). Sesuai arahan pengguna: Akun Standard USD DILARANG masuk pada sinyal 0.01 standar. HANYA masuk pada sinyal Grade A+ (0.05 lot bagus). Order dilewati demi melindungi modal USD!
+[2026-10-04 21:36:56] [INFO] [mt5_bridge:1029] - 💎 [USD HIGH GRADE] Sinyal Grade A+ (85%) untuk Akun Standard USD: Membuka posisi disiplin 0.01 Lot.
+[2026-10-04 21:36:56] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100009 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:36:56] [INFO] [mt5_bridge:951] - Batas posisi tercapai (1/1 posisi XAUUSD aktif di MT5). Mode: CENT USC Disiplin (Maks 1 Posisi). Menunggu posisi selesai (TP/SL) sebelum membuka posisi baru.
+[2026-10-04 21:36:56] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100010 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:36:56] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:36:57] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 21:36:57] [INFO] [mt5_bridge:175] - ⏸️ Reversal Cooldown MT5 diaktifkan selama 30 menit (sampai 22:06 WIB). Alasan: Uji Coba Reversal
+[2026-10-04 21:36:57] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 21:36:57] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:36:57] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:36:57] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:36:57] [INFO] [fetcher:268] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-10-02 s/d 2026-10-02 00:00)
+[2026-10-04 21:36:57] [INFO] [storage:329] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 21:36:57] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:36:57] [INFO] [fetcher:268] - Sukses mengambil 111 bar data untuk BBCA.JK (2026-09-28 s/d 2026-10-02 16:00)
+[2026-10-04 21:36:57] [INFO] [storage:329] - Berhasil menyimpan 111 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 21:36:59] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-10-04 21:37:00] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-10-04 21:37:00] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-10-04 21:37:13] [WARNING] [telegram_bot:78] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 21:37:13] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 127).
+[2026-10-04 21:37:14] [INFO] [storage:453] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 128).
+[2026-10-04 21:37:14] [INFO] [telegram_bot:243] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:37 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 21:37:14] [INFO] [telegram_bot:243] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:37 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 21:37:14] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:14] [INFO] [storage:453] - Sinyal BUY untuk DUMMY_1791124634089.JK tersimpan (ID: 634).
+[2026-10-04 21:37:14] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:37:14] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 21:37:14] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-10-04 21:37:14] [INFO] [scheduler:238] - Memproses BBCA.JK...
+[2026-10-04 21:37:14] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:37:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:37:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:37:14] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 21:37:14] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 21:37:15] [INFO] [scheduler:442] - Sinyal BUY untuk BBCA.JK tidak dinotifikasikan (Candle lampau/telat (2026-10-02 < hari ini 2026-10-04)).
+[2026-10-04 21:37:15] [INFO] [scheduler:238] - Memproses BBRI.JK...
+[2026-10-04 21:37:15] [INFO] [fetcher:249] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:37:15] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 21:37:15] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-10-04 21:37:18] [INFO] [fetcher:118] - Sukses mengambil 101 bar Spot Gold (XAU/USD) dari direct spot feed (2026-10-02 01:45 s/d 2026-10-03 03:45)
+[2026-10-04 21:37:18] [INFO] [storage:329] - Berhasil menyimpan 101 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:37:18] [INFO] [scheduler:613] - === Pipeline Selesai: 2 saham diproses, 1 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 21:37:18] [INFO] [storage:329] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 21:37:18] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 21:37:18] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 21:37:18] [INFO] [storage:453] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-10-04 21:37:19] [INFO] [storage:608] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-10-04 21:37:19] [INFO] [storage:608] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-10-04 21:37:19] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:19] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:19] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:20] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:20] [INFO] [telegram_bot:83] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:36] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:36] [WARNING] [telegram_bot:79] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 21:37:36] [INFO] [telegram_bot:326] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-153\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 21:37:36] [INFO] [telegram_bot:326] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-153\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 21:37:36] [INFO] [telegram_bot:326] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-153\test_copier_broadcast_and_docu0\member_copier.zip
+Test
+[2026-10-04 21:37:36] [ERROR] [auto_updater:84] - Error saat memeriksa update Git: 
+[2026-10-04 21:37:36] [INFO] [auto_updater:206] - 🚀 Terdeteksi kodingan baru di GitHub (abc1234 -> def5678). Memulai git pull...
+[2026-10-04 21:37:36] [INFO] [auto_updater:210] - ✅ Git pull berhasil! Commit: def5678 - feat: new trailing stop (selobrow)
+[2026-10-04 21:37:36] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:36] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:36] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:36] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:37:36] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 21:37:36] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 21:37:36] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 21:37:37] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_213737_08.png
+[2026-10-04 21:37:37] [INFO] [scheduler:537] - 🚀 [AUTO-EXECUTE A+] MT5 Order Sukses: #998877 SELL 0.05 lot @ $3,045.50
+[2026-10-04 21:37:37] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 1 notifikasi terkirim ===
+[2026-10-04 21:37:37] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:37:37] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 21:37:37] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 21:37:37] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 21:37:37] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 21:37:38] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_213738_13.png
+[2026-10-04 21:37:39] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_BBCA_JK_1d_20261004_213738_89.png
+[2026-10-04 21:37:42] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-10-04 21:37:43] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-10-04 21:37:43] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:46] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:47] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:37:47] [INFO] [fetcher:281] - Menunggu 1.0 detik sebelum retry...
+[2026-10-04 21:37:48] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 2/3
+[2026-10-04 21:37:48] [INFO] [fetcher:281] - Menunggu 2.0 detik sebelum retry...
+[2026-10-04 21:37:50] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 3/3
+[2026-10-04 21:37:50] [ERROR] [fetcher:284] - Gagal mengambil data EURUSD=X setelah 3 percobaan.
+[2026-10-04 21:37:50] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 21:37:50] [WARNING] [mt5_bridge:848] - ❌ Eksekusi MT5 Ditolak: Skor konfluensi 9 Buku PDF (50%) belum tembus batas minimal akurasi (65%). Sinyal tanpa konfluensi 9 PDF dilarang dieksekusi!
+[2026-10-04 21:37:50] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100001 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:37:50] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100002 SELL XAUUSD (0.01 lot) @ 2760.0 (TP: 2740.0, SL: 2770.0) sukses dieksekusi.
+[2026-10-04 21:37:50] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100003 BUY XAUUSD (0.05 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:37:50] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100004 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:37:50] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100005 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:37:50] [INFO] [mt5_bridge:801] - Eksekusi MT5 dilewati: Di luar jam aktif trading (19:00-23:00 WIB). Waktu saat ini: 12:00 WIB.
+[2026-10-04 21:37:50] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100006 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:37:50] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100007 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:37:50] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.00 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 21:37:50] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.50 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 21:37:50] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:50] [INFO] [scheduler:1456] - 🔄 [REVERSAL FLIP AUTHORIZED] Sinyal pembalikan BUY XAUUSD (Skor: 95.0%) diizinkan melewati Anti-Hedging Guard untuk pembalikan arah (Cut Loss posisi lawan & Masuk BUY)!
+[2026-10-04 21:37:50] [INFO] [mt5_bridge:887] - 🔄 [REVERSAL FLIP 90-100% 9 BUKU PDF] Terdeteksi sinyal pembalikan arah BUY super kuat (Skor: 95.0% >= 90.0%). Menutup posisi lawan [#99999 (SELL @ 2750.0)] untuk cut loss & flip ke BUY!
+[2026-10-04 21:37:51] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100008 BUY XAUUSD (0.08 lot) @ 2755.0 (TP: 2780.0, SL: 2740.0) sukses dieksekusi.
+[2026-10-04 21:37:51] [INFO] [mt5_bridge:1022] - 🛡️ [USD STANDARD FILTER] Sinyal XAUUSD BUY adalah sinyal standar/kurang bagus (Skor 70%, Grade A). Sesuai arahan pengguna: Akun Standard USD DILARANG masuk pada sinyal 0.01 standar. HANYA masuk pada sinyal Grade A+ (0.05 lot bagus). Order dilewati demi melindungi modal USD!
+[2026-10-04 21:37:51] [INFO] [mt5_bridge:1029] - 💎 [USD HIGH GRADE] Sinyal Grade A+ (85%) untuk Akun Standard USD: Membuka posisi disiplin 0.01 Lot.
+[2026-10-04 21:37:51] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100009 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:37:51] [INFO] [mt5_bridge:951] - Batas posisi tercapai (1/1 posisi XAUUSD aktif di MT5). Mode: CENT USC Disiplin (Maks 1 Posisi). Menunggu posisi selesai (TP/SL) sebelum membuka posisi baru.
+[2026-10-04 21:37:51] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100010 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:37:51] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:51] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 21:37:51] [INFO] [mt5_bridge:175] - ⏸️ Reversal Cooldown MT5 diaktifkan selama 30 menit (sampai 22:07 WIB). Alasan: Uji Coba Reversal
+[2026-10-04 21:37:51] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 21:37:51] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:51] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:37:51] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:37:51] [INFO] [fetcher:268] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-10-02 s/d 2026-10-02 00:00)
+[2026-10-04 21:37:51] [INFO] [storage:329] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 21:37:51] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:37:51] [INFO] [fetcher:268] - Sukses mengambil 111 bar data untuk BBCA.JK (2026-09-28 s/d 2026-10-02 16:00)
+[2026-10-04 21:37:51] [INFO] [storage:329] - Berhasil menyimpan 111 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 21:37:53] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-10-04 21:37:54] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-10-04 21:37:54] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-10-04 21:38:06] [WARNING] [telegram_bot:79] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 21:38:06] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 129).
+[2026-10-04 21:38:06] [INFO] [storage:453] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 130).
+[2026-10-04 21:38:06] [INFO] [telegram_bot:244] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:38 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 21:38:06] [INFO] [telegram_bot:244] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:38 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 21:38:06] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:38:06] [INFO] [storage:453] - Sinyal BUY untuk DUMMY_1791124686446.JK tersimpan (ID: 635).
+[2026-10-04 21:38:06] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:38:06] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 21:38:06] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-10-04 21:38:06] [INFO] [scheduler:238] - Memproses BBCA.JK...
+[2026-10-04 21:38:06] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:38:06] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 21:38:06] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 21:38:07] [INFO] [scheduler:442] - Sinyal BUY untuk BBCA.JK tidak dinotifikasikan (Candle lampau/telat (2026-10-02 < hari ini 2026-10-04)).
+[2026-10-04 21:38:07] [INFO] [scheduler:238] - Memproses BBRI.JK...
+[2026-10-04 21:38:07] [INFO] [fetcher:249] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:38:08] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 21:38:08] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-10-04 21:38:11] [INFO] [fetcher:118] - Sukses mengambil 101 bar Spot Gold (XAU/USD) dari direct spot feed (2026-10-02 01:45 s/d 2026-10-03 03:45)
+[2026-10-04 21:38:11] [INFO] [storage:329] - Berhasil menyimpan 101 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:38:11] [INFO] [scheduler:613] - === Pipeline Selesai: 2 saham diproses, 1 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 21:38:11] [INFO] [storage:329] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 21:38:11] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 21:38:11] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 21:38:11] [INFO] [storage:453] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-10-04 21:38:11] [INFO] [storage:608] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-10-04 21:38:11] [INFO] [storage:608] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-10-04 21:38:11] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:38:11] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:38:12] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:38:12] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:38:13] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:38:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:38:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:39:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:39:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:40:03] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:03] [WARNING] [telegram_bot:79] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 21:40:03] [INFO] [telegram_bot:326] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-154\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 21:40:03] [INFO] [telegram_bot:326] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-154\test_copier_broadcast_and_docu0\member_copier.zip
+📦 <b>UPDATE AUTO-COPIER MT5 (VIP 9 BUKU PDF)</b> 🚀
+━━━━━━━━━━━━━━━━━━━━━━
+Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5.
+
+✨ <b>FITUR & LOGIKA BARU:</b>
+1. 🎯 <b>Retest Entry (Diskon/Premium):</b> Entry posisi terbaik di ayunan bawah/atas S/R & Order Block.
+2. ⚖️ <b>Min TP/SL 60 Pips (1:1):</b> Target terkunci minimal 60 pips ($6.00 USD), TP >= SL.
+3. 🏛️ <b>Konfirmasi H1 London & Anti-Judas Swing:</b> Filter manipulasi likuiditas sesi London.
+4. ⚡ <b>Fast Impulsive Reversal & Auto-Flip:</b> Cut loss dini & membalik arah instan.
+5. 🛡️ <b>Anti-Hedging & Auto Filling Mode:</b> Kompatibel FOK/IOC/RETURN (bebas error 10030).
+
+🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>
+Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-restart sendiri (bebas repot timpa ZIP)!
+━━━━━━━━━━━━━━━━━━━━━━
+[2026-10-04 21:40:03] [INFO] [telegram_bot:326] - [SIMULASI TELEGRAM DOC] C:\Users\USER\AppData\Local\Temp\pytest-of-USER\pytest-154\test_copier_broadcast_and_docu0\member_copier.zip
+Test
+[2026-10-04 21:40:03] [ERROR] [auto_updater:84] - Error saat memeriksa update Git: 
+[2026-10-04 21:40:03] [INFO] [auto_updater:206] - 🚀 Terdeteksi kodingan baru di GitHub (abc1234 -> def5678). Memulai git pull...
+[2026-10-04 21:40:03] [INFO] [auto_updater:210] - ✅ Git pull berhasil! Commit: def5678 - feat: new trailing stop (selobrow)
+[2026-10-04 21:40:04] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:04] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:04] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:04] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:40:04] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 21:40:04] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 21:40:04] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 21:40:05] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_214004_46.png
+[2026-10-04 21:40:05] [INFO] [scheduler:537] - 🚀 [AUTO-EXECUTE A+] MT5 Order Sukses: #998877 SELL 0.05 lot @ $3,045.50
+[2026-10-04 21:40:05] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 1 notifikasi terkirim ===
+[2026-10-04 21:40:05] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:40:05] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-10-04 21:40:05] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 1)
+[2026-10-04 21:40:05] [INFO] [scheduler:238] - Memproses XAUUSD...
+[2026-10-04 21:40:05] [INFO] [scheduler:613] - === Pipeline Selesai: 1 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 21:40:06] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_214005_50.png
+[2026-10-04 21:40:06] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_BBCA_JK_1d_20261004_214006_21.png
+[2026-10-04 21:40:09] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-10-04 21:40:10] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-10-04 21:40:11] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:13] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:40:14] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 21:40:14] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 21:40:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:40:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:40:14] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:14] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:40:14] [INFO] [fetcher:281] - Menunggu 1.0 detik sebelum retry...
+[2026-10-04 21:40:15] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 2/3
+[2026-10-04 21:40:15] [INFO] [fetcher:281] - Menunggu 2.0 detik sebelum retry...
+[2026-10-04 21:40:17] [INFO] [fetcher:249] - Mengambil data EURUSD=X (interval=5m, period=1d, start=None, end=None) - Percobaan 3/3
+[2026-10-04 21:40:18] [ERROR] [fetcher:284] - Gagal mengambil data EURUSD=X setelah 3 percobaan.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 21:40:18] [WARNING] [mt5_bridge:848] - ❌ Eksekusi MT5 Ditolak: Skor konfluensi 9 Buku PDF (50%) belum tembus batas minimal akurasi (65%). Sinyal tanpa konfluensi 9 PDF dilarang dieksekusi!
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100001 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100002 SELL XAUUSD (0.01 lot) @ 2760.0 (TP: 2740.0, SL: 2770.0) sukses dieksekusi.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100003 BUY XAUUSD (0.05 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100004 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100005 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:801] - Eksekusi MT5 dilewati: Di luar jam aktif trading (19:00-23:00 WIB). Waktu saat ini: 12:00 WIB.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100006 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100007 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.00 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:968] - ⛔ Penumpukan Posisi Dicegah: Sudah ada posisi XAUUSD aktif di area harga ini (jarak harga saat ini $0.50 < minimal grid spacing $1.00 USD). Menjaga modal dari risiko over-exposure di titik harga yang sama.
+[2026-10-04 21:40:18] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:18] [INFO] [scheduler:1456] - 🔄 [REVERSAL FLIP AUTHORIZED] Sinyal pembalikan BUY XAUUSD (Skor: 95.0%) diizinkan melewati Anti-Hedging Guard untuk pembalikan arah (Cut Loss posisi lawan & Masuk BUY)!
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:887] - 🔄 [REVERSAL FLIP 90-100% 9 BUKU PDF] Terdeteksi sinyal pembalikan arah BUY super kuat (Skor: 95.0% >= 90.0%). Menutup posisi lawan [#99999 (SELL @ 2750.0)] untuk cut loss & flip ke BUY!
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100008 BUY XAUUSD (0.08 lot) @ 2755.0 (TP: 2780.0, SL: 2740.0) sukses dieksekusi.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:1022] - 🛡️ [USD STANDARD FILTER] Sinyal XAUUSD BUY adalah sinyal standar/kurang bagus (Skor 70%, Grade A). Sesuai arahan pengguna: Akun Standard USD DILARANG masuk pada sinyal 0.01 standar. HANYA masuk pada sinyal Grade A+ (0.05 lot bagus). Order dilewati demi melindungi modal USD!
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:1029] - 💎 [USD HIGH GRADE] Sinyal Grade A+ (85%) untuk Akun Standard USD: Membuka posisi disiplin 0.01 Lot.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100009 BUY XAUUSD (0.01 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:951] - Batas posisi tercapai (1/1 posisi XAUUSD aktif di MT5). Mode: CENT USC Disiplin (Maks 1 Posisi). Menunggu posisi selesai (TP/SL) sebelum membuka posisi baru.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:1050] - 🤖 [SIMULASI] Order MT5 #100010 BUY XAUUSD (0.08 lot) @ 2750.0 (TP: 2775.0, SL: 2735.0) sukses dieksekusi.
+[2026-10-04 21:40:18] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:175] - ⏸️ Reversal Cooldown MT5 diaktifkan selama 30 menit (sampai 22:10 WIB). Alasan: Uji Coba Reversal
+[2026-10-04 21:40:18] [INFO] [mt5_bridge:205] - 🟢 Reversal Cooldown MT5 dihapus. Trading XAU/USD kembali normal.
+[2026-10-04 21:40:19] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:19] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:19] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:40:19] [INFO] [fetcher:268] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-10-02 s/d 2026-10-02 00:00)
+[2026-10-04 21:40:19] [INFO] [storage:329] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 21:40:19] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:40:19] [INFO] [fetcher:268] - Sukses mengambil 111 bar data untuk BBCA.JK (2026-09-28 s/d 2026-10-02 16:00)
+[2026-10-04 21:40:19] [INFO] [storage:329] - Berhasil menyimpan 111 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 21:40:21] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-10-04 21:40:22] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-10-04 21:40:22] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-10-04 21:40:34] [WARNING] [telegram_bot:79] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-10-04 21:40:34] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 131).
+[2026-10-04 21:40:34] [INFO] [storage:453] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 132).
+[2026-10-04 21:40:34] [INFO] [telegram_bot:244] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:40 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 21:40:34] [INFO] [telegram_bot:244] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:40 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-10-04 21:40:34] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:34] [INFO] [storage:453] - Sinyal BUY untuk DUMMY_1791124834704.JK tersimpan (ID: 636).
+[2026-10-04 21:40:34] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:40:34] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 21:40:34] [INFO] [scheduler:203] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-10-04 21:40:34] [INFO] [scheduler:238] - Memproses BBCA.JK...
+[2026-10-04 21:40:34] [INFO] [fetcher:249] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:40:34] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 21:40:35] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-10-04 21:40:36] [INFO] [scheduler:442] - Sinyal BUY untuk BBCA.JK tidak dinotifikasikan (Candle lampau/telat (2026-10-02 < hari ini 2026-10-04)).
+[2026-10-04 21:40:36] [INFO] [scheduler:238] - Memproses BBRI.JK...
+[2026-10-04 21:40:36] [INFO] [fetcher:249] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-10-04 21:40:36] [INFO] [fetcher:268] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-13 s/d 2026-10-02 16:00)
+[2026-10-04 21:40:36] [INFO] [storage:329] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-10-04 21:40:39] [INFO] [fetcher:118] - Sukses mengambil 101 bar Spot Gold (XAU/USD) dari direct spot feed (2026-10-02 01:45 s/d 2026-10-03 03:45)
+[2026-10-04 21:40:39] [INFO] [storage:329] - Berhasil menyimpan 101 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:40:39] [INFO] [scheduler:613] - === Pipeline Selesai: 2 saham diproses, 1 sinyal aktif, 0 notifikasi terkirim ===
+[2026-10-04 21:40:39] [INFO] [storage:329] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-10-04 21:40:39] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 21:40:39] [INFO] [storage:453] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-10-04 21:40:39] [INFO] [storage:453] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-10-04 21:40:39] [INFO] [storage:608] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-10-04 21:40:39] [INFO] [storage:608] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-10-04 21:40:40] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:40] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:40] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:40] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:40:41] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:41:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:41:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:42:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:42:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:42:57] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:42:57] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:42:59] [INFO] [chart_generator:492] - Berhasil membuat chart visual TradingView: data\charts\chart_XAUUSD_15m_20261004_214258_50.png
+[2026-10-04 21:43:02] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:43:02] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:43:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:43:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:44:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:44:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:45:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:45:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:46:14] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:46:14] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:47:23] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:47:24] [INFO] [main:291] - Git Auto-Puller aktif: memeriksa commit origin/main tiap 5 menit.
+[2026-10-04 21:47:24] [INFO] [main:294] - BackgroundScheduler aktif (interval: 15m, news: 1m, MT5 watcher: 15s LIVE, git auto-pull: 5m).
+[2026-10-04 21:47:24] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:47:24] [INFO] [main:318] - Telegram Bot Polling listener berjalan di main thread...
+[2026-10-04 21:47:24] [INFO] [economic_calendar:123] - Berhasil mengunduh 79 event dari Forex Factory.
+[2026-10-04 21:47:24] [INFO] [economic_calendar:305] - Kalender ekonomi berhasil disinkronisasi: 10 event tersimpan.
+[2026-10-04 21:47:24] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:47:24] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 21:47:24] [INFO] [mt5_bridge:106] - Ditemukan instalasi terminal MT5 di: C:\Program Files\MetaTrader 5\terminal64.exe
+[2026-10-04 21:47:24] [INFO] [mt5_bridge:508] - Koneksi MT5 aktif! Akun #114202389 (HFMarketsGlobal-Live7 - Real | Cent (USC)) | Saldo: 58.87 USC (~ $0.59 USD)
+[2026-10-04 21:47:24] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:47:24] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 21:47:24] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 21:47:50] [INFO] [main:225] - 🔄 Terdeteksi instance bot lama (PID 14552). Menutup instance lama agar proses baru mengambil alih...
+[2026-10-04 21:47:50] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:47:50] [INFO] [main:291] - Git Auto-Puller aktif: memeriksa commit origin/main tiap 5 menit.
+[2026-10-04 21:47:50] [INFO] [main:294] - BackgroundScheduler aktif (interval: 15m, news: 1m, MT5 watcher: 15s LIVE, git auto-pull: 5m).
+[2026-10-04 21:47:50] [INFO] [economic_calendar:123] - Berhasil mengunduh 79 event dari Forex Factory.
+[2026-10-04 21:47:50] [INFO] [economic_calendar:305] - Kalender ekonomi berhasil disinkronisasi: 10 event tersimpan.
+[2026-10-04 21:47:50] [INFO] [scheduler:174] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-10-04 21:47:50] [INFO] [mt5_bridge:91] - MT5Bridge diinisialisasi. Enabled: True, Hours: all, Platform: win32, Lib Available: True
+[2026-10-04 21:47:50] [INFO] [mt5_bridge:106] - Ditemukan instalasi terminal MT5 di: C:\Program Files\MetaTrader 5\terminal64.exe
+[2026-10-04 21:47:51] [INFO] [mt5_bridge:508] - Koneksi MT5 aktif! Akun #114202389 (HFMarketsGlobal-Live7 - Real | Cent (USC)) | Saldo: 58.87 USC (~ $0.59 USD)
+[2026-10-04 21:47:51] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:47:51] [INFO] [main:318] - Telegram Bot Polling listener berjalan di main thread...
+[2026-10-04 21:47:51] [INFO] [scheduler:182] - Status Pasar: IDX=TUTUP | GOLD=TUTUP
+[2026-10-04 21:47:51] [INFO] [scheduler:185] - Melewatkan pipeline karena seluruh pasar sedang tutup.
+[2026-10-04 21:47:51] [INFO] [telegram_bot:84] - Telegram Notifier siap dalam mode Live.
+[2026-10-04 21:48:24] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:48:24] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:48:51] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:48:51] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:49:50] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:49:50] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:50:50] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:50:50] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:51:50] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:51:50] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:52:50] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:52:50] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:53:50] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:53:50] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:54:50] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:54:50] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:55:50] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:55:51] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:56:50] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:56:51] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-04 21:57:50] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-04 21:57:50] [INFO] [storage:329] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).

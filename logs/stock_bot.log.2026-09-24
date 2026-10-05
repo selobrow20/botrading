@@ -1,0 +1,602 @@
+[2026-09-24 11:33:07] [INFO] [storage:287] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 11:33:07] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 11:33:07] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 11:33:07] [INFO] [storage:409] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-09-24 11:33:07] [INFO] [storage:547] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-09-24 11:33:07] [INFO] [storage:547] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-09-24 11:53:18] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 11:53:19] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_XAUUSD_15m_20260924_115318_94.png
+[2026-09-24 11:53:19] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_BBCA_JK_1d_20260924_115319_52.png
+[2026-09-24 11:53:20] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-09-24 11:53:20] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-09-24 11:53:20] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 11:53:21] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 11:53:21] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 11:53:21] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 11:53:25] [INFO] [fetcher:150] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 11:53:25] [INFO] [storage:287] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 11:53:25] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 11:53:25] [INFO] [fetcher:150] - Sukses mengambil 99 bar data untuk BBCA.JK (2026-09-18 s/d 2026-09-24 11:30)
+[2026-09-24 11:53:25] [INFO] [storage:287] - Berhasil menyimpan 99 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 11:53:26] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=2y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 11:53:26] [INFO] [fetcher:150] - Sukses mengambil 475 bar data untuk BBCA.JK (2024-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 11:53:26] [INFO] [storage:287] - Berhasil menyimpan 475 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 11:53:26] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-09-24 11:53:26] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-09-24 11:53:27] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-09-24 11:53:28] [WARNING] [telegram_bot:66] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-09-24 11:53:28] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 224).
+[2026-09-24 11:53:28] [INFO] [storage:409] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 225).
+[2026-09-24 11:53:28] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>11:53 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 11:53:28] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>11:53 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 11:53:28] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 11:53:28] [INFO] [storage:409] - Sinyal BUY untuk DUMMY_1790225608737.JK tersimpan (ID: 226).
+[2026-09-24 11:53:28] [INFO] [scheduler:166] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-09-24 11:53:28] [INFO] [scheduler:171] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-09-24 11:53:28] [INFO] [scheduler:189] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-09-24 11:53:28] [INFO] [scheduler:216] - Memproses BBCA.JK...
+[2026-09-24 11:53:28] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 11:53:28] [INFO] [fetcher:150] - Sukses mengambil 1274 bar data untuk BBCA.JK (2026-07-03 s/d 2026-09-24 11:30)
+[2026-09-24 11:53:28] [INFO] [storage:287] - Berhasil menyimpan 1274 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 11:53:28] [INFO] [storage:409] - Sinyal HOLD untuk BBCA.JK tersimpan (ID: 227).
+[2026-09-24 11:53:28] [INFO] [scheduler:216] - Memproses BBRI.JK...
+[2026-09-24 11:53:28] [INFO] [fetcher:131] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 11:53:29] [INFO] [fetcher:150] - Sukses mengambil 1274 bar data untuk BBRI.JK (2026-07-03 s/d 2026-09-24 11:30)
+[2026-09-24 11:53:29] [INFO] [storage:287] - Berhasil menyimpan 1274 baris data OHLCV untuk BBRI.JK (15m).
+[2026-09-24 11:53:29] [INFO] [storage:409] - Sinyal HOLD untuk BBRI.JK tersimpan (ID: 228).
+[2026-09-24 11:53:29] [INFO] [scheduler:314] - === Pipeline Selesai: 2 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-09-24 11:53:29] [INFO] [storage:287] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 11:53:29] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 11:53:29] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 11:53:29] [INFO] [storage:409] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-09-24 11:53:29] [INFO] [storage:547] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-09-24 11:53:29] [INFO] [storage:547] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-09-24 11:53:29] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 11:53:29] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 11:53:29] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:31:43] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:31:44] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_XAUUSD_15m_20260924_123143_60.png
+[2026-09-24 12:31:44] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_BBCA_JK_1d_20260924_123144_20.png
+[2026-09-24 12:31:45] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-09-24 12:31:45] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-09-24 12:31:45] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:31:45] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:31:45] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:31:45] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 12:31:46] [INFO] [fetcher:150] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 12:31:46] [INFO] [storage:287] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 12:31:46] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 12:31:46] [INFO] [fetcher:150] - Sukses mengambil 100 bar data untuk BBCA.JK (2026-09-18 s/d 2026-09-24 11:45)
+[2026-09-24 12:31:46] [INFO] [storage:287] - Berhasil menyimpan 100 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 12:31:46] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=2y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 12:31:46] [INFO] [fetcher:150] - Sukses mengambil 475 bar data untuk BBCA.JK (2024-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 12:31:46] [INFO] [storage:287] - Berhasil menyimpan 475 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 12:31:47] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-09-24 12:31:47] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-09-24 12:31:47] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-09-24 12:31:49] [WARNING] [telegram_bot:66] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-09-24 12:31:49] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 229).
+[2026-09-24 12:31:49] [INFO] [storage:409] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 230).
+[2026-09-24 12:31:49] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>12:31 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 12:31:49] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>12:31 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 12:31:49] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:31:49] [INFO] [storage:409] - Sinyal BUY untuk DUMMY_1790227909522.JK tersimpan (ID: 231).
+[2026-09-24 12:31:49] [INFO] [scheduler:166] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-09-24 12:31:49] [INFO] [scheduler:171] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-09-24 12:31:49] [INFO] [scheduler:189] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-09-24 12:31:49] [INFO] [scheduler:216] - Memproses BBCA.JK...
+[2026-09-24 12:31:49] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 12:31:49] [INFO] [fetcher:150] - Sukses mengambil 1275 bar data untuk BBCA.JK (2026-07-03 s/d 2026-09-24 11:45)
+[2026-09-24 12:31:49] [INFO] [storage:287] - Berhasil menyimpan 1275 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 12:31:49] [INFO] [storage:409] - Sinyal HOLD untuk BBCA.JK tersimpan (ID: 232).
+[2026-09-24 12:31:49] [INFO] [scheduler:216] - Memproses BBRI.JK...
+[2026-09-24 12:31:49] [INFO] [fetcher:131] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 12:31:49] [INFO] [fetcher:150] - Sukses mengambil 1275 bar data untuk BBRI.JK (2026-07-03 s/d 2026-09-24 11:45)
+[2026-09-24 12:31:49] [INFO] [storage:287] - Berhasil menyimpan 1275 baris data OHLCV untuk BBRI.JK (15m).
+[2026-09-24 12:31:49] [INFO] [storage:409] - Sinyal HOLD untuk BBRI.JK tersimpan (ID: 233).
+[2026-09-24 12:31:50] [INFO] [scheduler:314] - === Pipeline Selesai: 2 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-09-24 12:31:50] [INFO] [storage:287] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 12:31:50] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 12:31:50] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 12:31:50] [INFO] [storage:409] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-09-24 12:31:50] [INFO] [storage:547] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-09-24 12:31:50] [INFO] [storage:547] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-09-24 12:31:50] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:31:50] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:31:50] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:49:35] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:49:36] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_XAUUSD_15m_20260924_124935_90.png
+[2026-09-24 12:49:36] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_BBCA_JK_1d_20260924_124936_45.png
+[2026-09-24 12:49:37] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-09-24 12:49:37] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-09-24 12:49:37] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:49:37] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:49:38] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:49:38] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 12:49:38] [INFO] [fetcher:150] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 12:49:38] [INFO] [storage:287] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 12:49:38] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 12:49:38] [INFO] [fetcher:150] - Sukses mengambil 100 bar data untuk BBCA.JK (2026-09-18 s/d 2026-09-24 11:45)
+[2026-09-24 12:49:38] [INFO] [storage:287] - Berhasil menyimpan 100 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 12:49:38] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=2y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 12:49:38] [INFO] [fetcher:150] - Sukses mengambil 475 bar data untuk BBCA.JK (2024-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 12:49:38] [INFO] [storage:287] - Berhasil menyimpan 475 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 12:49:39] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-09-24 12:49:39] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-09-24 12:49:39] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-09-24 12:49:41] [WARNING] [telegram_bot:66] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-09-24 12:49:41] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 234).
+[2026-09-24 12:49:41] [INFO] [storage:409] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 235).
+[2026-09-24 12:49:41] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>12:49 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 12:49:41] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>12:49 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 12:49:41] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:49:41] [INFO] [storage:409] - Sinyal BUY untuk DUMMY_1790228981404.JK tersimpan (ID: 236).
+[2026-09-24 12:49:41] [INFO] [scheduler:166] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-09-24 12:49:41] [INFO] [scheduler:171] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-09-24 12:49:41] [INFO] [scheduler:189] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-09-24 12:49:41] [INFO] [scheduler:216] - Memproses BBCA.JK...
+[2026-09-24 12:49:41] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 12:49:41] [INFO] [fetcher:150] - Sukses mengambil 1275 bar data untuk BBCA.JK (2026-07-03 s/d 2026-09-24 11:45)
+[2026-09-24 12:49:41] [INFO] [storage:287] - Berhasil menyimpan 1275 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 12:49:41] [INFO] [storage:409] - Sinyal HOLD untuk BBCA.JK tersimpan (ID: 237).
+[2026-09-24 12:49:41] [INFO] [scheduler:216] - Memproses BBRI.JK...
+[2026-09-24 12:49:41] [INFO] [fetcher:131] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 12:49:41] [INFO] [fetcher:150] - Sukses mengambil 1275 bar data untuk BBRI.JK (2026-07-03 s/d 2026-09-24 11:45)
+[2026-09-24 12:49:41] [INFO] [storage:287] - Berhasil menyimpan 1275 baris data OHLCV untuk BBRI.JK (15m).
+[2026-09-24 12:49:41] [INFO] [storage:409] - Sinyal HOLD untuk BBRI.JK tersimpan (ID: 238).
+[2026-09-24 12:49:41] [INFO] [scheduler:314] - === Pipeline Selesai: 2 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-09-24 12:49:41] [INFO] [storage:287] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 12:49:41] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 12:49:41] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 12:49:41] [INFO] [storage:409] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-09-24 12:49:41] [INFO] [storage:547] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-09-24 12:49:41] [INFO] [storage:547] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-09-24 12:49:42] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:49:42] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 12:49:42] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 13:08:27] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 13:08:28] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_XAUUSD_15m_20260924_130827_54.png
+[2026-09-24 13:08:28] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_BBCA_JK_1d_20260924_130828_14.png
+[2026-09-24 13:08:29] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-09-24 13:08:29] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-09-24 13:08:29] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 13:08:29] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 13:08:29] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 13:08:29] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 13:08:30] [INFO] [fetcher:150] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 13:08:30] [INFO] [storage:287] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 13:08:30] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 13:08:30] [INFO] [fetcher:150] - Sukses mengambil 100 bar data untuk BBCA.JK (2026-09-18 s/d 2026-09-24 11:45)
+[2026-09-24 13:08:30] [INFO] [storage:287] - Berhasil menyimpan 100 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 13:08:30] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=2y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 13:08:30] [INFO] [fetcher:150] - Sukses mengambil 475 bar data untuk BBCA.JK (2024-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 13:08:30] [INFO] [storage:287] - Berhasil menyimpan 475 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 13:08:31] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-09-24 13:08:31] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-09-24 13:08:31] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-09-24 13:08:33] [WARNING] [telegram_bot:66] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-09-24 13:08:33] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 239).
+[2026-09-24 13:08:33] [INFO] [storage:409] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 240).
+[2026-09-24 13:08:33] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>13:08 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 13:08:33] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>13:08 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 13:08:33] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 13:08:33] [INFO] [storage:409] - Sinyal BUY untuk DUMMY_1790230113370.JK tersimpan (ID: 241).
+[2026-09-24 13:08:33] [INFO] [scheduler:166] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-09-24 13:08:33] [INFO] [scheduler:171] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-09-24 13:08:33] [INFO] [scheduler:189] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-09-24 13:08:33] [INFO] [scheduler:216] - Memproses BBCA.JK...
+[2026-09-24 13:08:33] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 13:08:33] [INFO] [fetcher:150] - Sukses mengambil 1275 bar data untuk BBCA.JK (2026-07-03 s/d 2026-09-24 11:45)
+[2026-09-24 13:08:33] [INFO] [storage:287] - Berhasil menyimpan 1275 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 13:08:33] [INFO] [scheduler:216] - Memproses BBRI.JK...
+[2026-09-24 13:08:33] [INFO] [fetcher:131] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 13:08:33] [INFO] [fetcher:150] - Sukses mengambil 1275 bar data untuk BBRI.JK (2026-07-03 s/d 2026-09-24 11:45)
+[2026-09-24 13:08:33] [INFO] [storage:287] - Berhasil menyimpan 1275 baris data OHLCV untuk BBRI.JK (15m).
+[2026-09-24 13:08:33] [INFO] [scheduler:316] - === Pipeline Selesai: 2 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-09-24 13:08:33] [INFO] [storage:287] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 13:08:34] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 13:08:34] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 13:08:34] [INFO] [storage:409] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-09-24 13:08:34] [INFO] [storage:547] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-09-24 13:08:34] [INFO] [storage:547] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-09-24 13:08:34] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 13:08:34] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 13:08:34] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:30:02] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:30:02] [INFO] [scheduler:166] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-09-24 21:30:02] [INFO] [scheduler:171] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-09-24 21:30:02] [INFO] [scheduler:189] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 28)
+[2026-09-24 21:30:02] [INFO] [scheduler:216] - Memproses BBCA.JK...
+[2026-09-24 21:30:02] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:07] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:07] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 21:30:07] [INFO] [storage:409] - Sinyal SELL untuk BBCA.JK tersimpan (ID: 242).
+[2026-09-24 21:30:07] [INFO] [scheduler:298] - Sinyal SELL untuk BBCA.JK tidak dinotifikasikan (Candle kedaluwarsa (330m lalu > batas 45m)).
+[2026-09-24 21:30:07] [INFO] [scheduler:216] - Memproses BBRI.JK...
+[2026-09-24 21:30:07] [INFO] [fetcher:131] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:07] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:07] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-09-24 21:30:07] [INFO] [scheduler:216] - Memproses BMRI.JK...
+[2026-09-24 21:30:07] [INFO] [fetcher:131] - Mengambil data BMRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:07] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BMRI.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:07] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BMRI.JK (15m).
+[2026-09-24 21:30:07] [INFO] [scheduler:216] - Memproses BBNI.JK...
+[2026-09-24 21:30:07] [INFO] [fetcher:131] - Mengambil data BBNI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:07] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BBNI.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:08] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BBNI.JK (15m).
+[2026-09-24 21:30:08] [INFO] [scheduler:216] - Memproses BRIS.JK...
+[2026-09-24 21:30:08] [INFO] [fetcher:131] - Mengambil data BRIS.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:08] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BRIS.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:08] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BRIS.JK (15m).
+[2026-09-24 21:30:08] [INFO] [scheduler:216] - Memproses ASII.JK...
+[2026-09-24 21:30:08] [INFO] [fetcher:131] - Mengambil data ASII.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:08] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk ASII.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:08] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk ASII.JK (15m).
+[2026-09-24 21:30:08] [INFO] [scheduler:216] - Memproses TLKM.JK...
+[2026-09-24 21:30:08] [INFO] [fetcher:131] - Mengambil data TLKM.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:08] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk TLKM.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:08] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk TLKM.JK (15m).
+[2026-09-24 21:30:08] [INFO] [scheduler:216] - Memproses ADRO.JK...
+[2026-09-24 21:30:08] [INFO] [fetcher:131] - Mengambil data ADRO.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:08] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk ADRO.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:09] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk ADRO.JK (15m).
+[2026-09-24 21:30:09] [INFO] [storage:409] - Sinyal SELL untuk ADRO.JK tersimpan (ID: 243).
+[2026-09-24 21:30:09] [INFO] [scheduler:298] - Sinyal SELL untuk ADRO.JK tidak dinotifikasikan (Candle kedaluwarsa (330m lalu > batas 45m)).
+[2026-09-24 21:30:09] [INFO] [scheduler:216] - Memproses MEDC.JK...
+[2026-09-24 21:30:09] [INFO] [fetcher:131] - Mengambil data MEDC.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:09] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk MEDC.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:09] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk MEDC.JK (15m).
+[2026-09-24 21:30:09] [INFO] [scheduler:216] - Memproses PTBA.JK...
+[2026-09-24 21:30:09] [INFO] [fetcher:131] - Mengambil data PTBA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:09] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk PTBA.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:09] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk PTBA.JK (15m).
+[2026-09-24 21:30:09] [INFO] [scheduler:216] - Memproses AKRA.JK...
+[2026-09-24 21:30:09] [INFO] [fetcher:131] - Mengambil data AKRA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:10] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk AKRA.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:10] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk AKRA.JK (15m).
+[2026-09-24 21:30:10] [INFO] [scheduler:216] - Memproses PGAS.JK...
+[2026-09-24 21:30:10] [INFO] [fetcher:131] - Mengambil data PGAS.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:10] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk PGAS.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:10] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk PGAS.JK (15m).
+[2026-09-24 21:30:10] [INFO] [scheduler:216] - Memproses ANTM.JK...
+[2026-09-24 21:30:10] [INFO] [fetcher:131] - Mengambil data ANTM.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:10] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk ANTM.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:10] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk ANTM.JK (15m).
+[2026-09-24 21:30:10] [INFO] [scheduler:216] - Memproses MDKA.JK...
+[2026-09-24 21:30:10] [INFO] [fetcher:131] - Mengambil data MDKA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:10] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk MDKA.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:10] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk MDKA.JK (15m).
+[2026-09-24 21:30:11] [INFO] [storage:409] - Sinyal SELL untuk MDKA.JK tersimpan (ID: 244).
+[2026-09-24 21:30:11] [INFO] [scheduler:298] - Sinyal SELL untuk MDKA.JK tidak dinotifikasikan (Candle kedaluwarsa (330m lalu > batas 45m)).
+[2026-09-24 21:30:11] [INFO] [scheduler:216] - Memproses INCO.JK...
+[2026-09-24 21:30:11] [INFO] [fetcher:131] - Mengambil data INCO.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:11] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk INCO.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:11] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk INCO.JK (15m).
+[2026-09-24 21:30:11] [INFO] [scheduler:216] - Memproses TINS.JK...
+[2026-09-24 21:30:11] [INFO] [fetcher:131] - Mengambil data TINS.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:11] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk TINS.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:11] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk TINS.JK (15m).
+[2026-09-24 21:30:11] [INFO] [scheduler:216] - Memproses BRMS.JK...
+[2026-09-24 21:30:11] [INFO] [fetcher:131] - Mengambil data BRMS.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:11] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BRMS.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:11] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BRMS.JK (15m).
+[2026-09-24 21:30:11] [INFO] [scheduler:216] - Memproses BREN.JK...
+[2026-09-24 21:30:11] [INFO] [fetcher:131] - Mengambil data BREN.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:11] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BREN.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:11] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BREN.JK (15m).
+[2026-09-24 21:30:11] [INFO] [scheduler:216] - Memproses BRPT.JK...
+[2026-09-24 21:30:11] [INFO] [fetcher:131] - Mengambil data BRPT.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:12] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BRPT.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:12] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BRPT.JK (15m).
+[2026-09-24 21:30:12] [INFO] [scheduler:216] - Memproses AMMN.JK...
+[2026-09-24 21:30:12] [INFO] [fetcher:131] - Mengambil data AMMN.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:12] [INFO] [fetcher:150] - Sukses mengambil 1287 bar data untuk AMMN.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:12] [INFO] [storage:287] - Berhasil menyimpan 1287 baris data OHLCV untuk AMMN.JK (15m).
+[2026-09-24 21:30:12] [INFO] [scheduler:216] - Memproses CUAN.JK...
+[2026-09-24 21:30:12] [INFO] [fetcher:131] - Mengambil data CUAN.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:12] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk CUAN.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:12] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk CUAN.JK (15m).
+[2026-09-24 21:30:12] [INFO] [storage:409] - Sinyal SELL untuk CUAN.JK tersimpan (ID: 245).
+[2026-09-24 21:30:12] [INFO] [scheduler:298] - Sinyal SELL untuk CUAN.JK tidak dinotifikasikan (Candle kedaluwarsa (330m lalu > batas 45m)).
+[2026-09-24 21:30:12] [INFO] [scheduler:216] - Memproses ICBP.JK...
+[2026-09-24 21:30:12] [INFO] [fetcher:131] - Mengambil data ICBP.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:12] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk ICBP.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:12] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk ICBP.JK (15m).
+[2026-09-24 21:30:12] [INFO] [scheduler:216] - Memproses AMRT.JK...
+[2026-09-24 21:30:12] [INFO] [fetcher:131] - Mengambil data AMRT.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:13] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk AMRT.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:13] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk AMRT.JK (15m).
+[2026-09-24 21:30:13] [INFO] [storage:547] - 🎯 Sinyal #120 SELL AMRT.JK terselesaikan: WIN @ 1277.0 (PnL: +2.52%) pada 2026-09-24 13:45:00
+[2026-09-24 21:30:13] [INFO] [scheduler:235] - 🎯 Laporan TP/SL: AMRT.JK SELL -> WIN (+2.52%)
+[2026-09-24 21:30:13] [INFO] [storage:409] - Sinyal SELL untuk AMRT.JK tersimpan (ID: 246).
+[2026-09-24 21:30:13] [INFO] [scheduler:298] - Sinyal SELL untuk AMRT.JK tidak dinotifikasikan (Candle kedaluwarsa (330m lalu > batas 45m)).
+[2026-09-24 21:30:13] [INFO] [scheduler:216] - Memproses MYOR.JK...
+[2026-09-24 21:30:13] [INFO] [fetcher:131] - Mengambil data MYOR.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:13] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk MYOR.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:13] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk MYOR.JK (15m).
+[2026-09-24 21:30:13] [INFO] [scheduler:216] - Memproses ACES.JK...
+[2026-09-24 21:30:13] [INFO] [fetcher:131] - Mengambil data ACES.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:13] [INFO] [fetcher:150] - Sukses mengambil 1285 bar data untuk ACES.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:13] [INFO] [storage:287] - Berhasil menyimpan 1285 baris data OHLCV untuk ACES.JK (15m).
+[2026-09-24 21:30:13] [INFO] [scheduler:216] - Memproses GOTO.JK...
+[2026-09-24 21:30:13] [INFO] [fetcher:131] - Mengambil data GOTO.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:13] [INFO] [fetcher:150] - Sukses mengambil 1285 bar data untuk GOTO.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:14] [INFO] [storage:287] - Berhasil menyimpan 1285 baris data OHLCV untuk GOTO.JK (15m).
+[2026-09-24 21:30:14] [INFO] [scheduler:216] - Memproses ARTO.JK...
+[2026-09-24 21:30:14] [INFO] [fetcher:131] - Mengambil data ARTO.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:30:14] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk ARTO.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:30:14] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk ARTO.JK (15m).
+[2026-09-24 21:30:14] [INFO] [scheduler:216] - Memproses XAUUSD...
+[2026-09-24 21:30:19] [INFO] [fetcher:78] - Sukses mengambil 101 bar Spot Gold (XAU/USD) dari direct spot feed (2026-09-23 19:30 s/d 2026-09-24 21:30)
+[2026-09-24 21:30:19] [INFO] [storage:287] - Berhasil menyimpan 101 baris data OHLCV untuk XAUUSD (15m).
+[2026-09-24 21:30:20] [INFO] [scheduler:316] - === Pipeline Selesai: 28 saham diproses, 5 sinyal aktif, 0 notifikasi terkirim ===
+[2026-09-24 21:34:12] [INFO] [storage:409] - Sinyal BUY untuk XAUUSD tersimpan (ID: 247).
+[2026-09-24 21:34:38] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:34:39] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_XAUUSD_15m_20260924_213438_58.png
+[2026-09-24 21:34:40] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_BBCA_JK_1d_20260924_213439_48.png
+[2026-09-24 21:34:40] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-09-24 21:34:41] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-09-24 21:34:41] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:34:41] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:34:42] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:34:42] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:34:42] [INFO] [fetcher:150] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 21:34:42] [INFO] [storage:287] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 21:34:42] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:34:42] [INFO] [fetcher:150] - Sukses mengambil 111 bar data untuk BBCA.JK (2026-09-18 s/d 2026-09-24 16:00)
+[2026-09-24 21:34:42] [INFO] [storage:287] - Berhasil menyimpan 111 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 21:34:43] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=2y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:34:43] [INFO] [fetcher:150] - Sukses mengambil 475 bar data untuk BBCA.JK (2024-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 21:34:43] [INFO] [storage:287] - Berhasil menyimpan 475 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 21:34:43] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-09-24 21:34:44] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-09-24 21:34:44] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-09-24 21:34:46] [WARNING] [telegram_bot:66] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-09-24 21:34:46] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 248).
+[2026-09-24 21:34:46] [INFO] [storage:409] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 249).
+[2026-09-24 21:34:46] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:34 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 21:34:46] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:34 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 21:34:46] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:34:46] [INFO] [storage:409] - Sinyal BUY untuk DUMMY_1790260486781.JK tersimpan (ID: 250).
+[2026-09-24 21:34:46] [INFO] [scheduler:166] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-09-24 21:34:46] [INFO] [scheduler:171] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-09-24 21:34:46] [INFO] [scheduler:189] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-09-24 21:34:46] [INFO] [scheduler:216] - Memproses BBCA.JK...
+[2026-09-24 21:34:46] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:34:46] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:34:46] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 21:34:47] [INFO] [storage:409] - Sinyal SELL untuk BBCA.JK tersimpan (ID: 251).
+[2026-09-24 21:34:47] [INFO] [scheduler:298] - Sinyal SELL untuk BBCA.JK tidak dinotifikasikan (Candle kedaluwarsa (334m lalu > batas 45m)).
+[2026-09-24 21:34:47] [INFO] [scheduler:216] - Memproses BBRI.JK...
+[2026-09-24 21:34:47] [INFO] [fetcher:131] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:34:47] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:34:47] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-09-24 21:34:50] [INFO] [fetcher:78] - Sukses mengambil 101 bar Spot Gold (XAU/USD) dari direct spot feed (2026-09-23 19:30 s/d 2026-09-24 21:30)
+[2026-09-24 21:34:50] [INFO] [storage:287] - Berhasil menyimpan 101 baris data OHLCV untuk XAUUSD (15m).
+[2026-09-24 21:34:50] [INFO] [scheduler:316] - === Pipeline Selesai: 2 saham diproses, 1 sinyal aktif, 0 notifikasi terkirim ===
+[2026-09-24 21:34:50] [INFO] [storage:287] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 21:34:50] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 21:34:50] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 21:34:50] [INFO] [storage:409] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-09-24 21:34:50] [INFO] [storage:564] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-09-24 21:34:50] [INFO] [storage:564] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-09-24 21:34:50] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:34:50] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:34:50] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:35:29] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:35:30] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_XAUUSD_15m_20260924_213529_97.png
+[2026-09-24 21:35:31] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_BBCA_JK_1d_20260924_213530_74.png
+[2026-09-24 21:35:31] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-09-24 21:35:32] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-09-24 21:35:32] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:35:32] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:35:33] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:35:33] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:35:33] [INFO] [fetcher:150] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 21:35:33] [INFO] [storage:287] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 21:35:33] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:35:33] [INFO] [fetcher:150] - Sukses mengambil 111 bar data untuk BBCA.JK (2026-09-18 s/d 2026-09-24 16:00)
+[2026-09-24 21:35:33] [INFO] [storage:287] - Berhasil menyimpan 111 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 21:35:34] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=2y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:35:34] [INFO] [fetcher:150] - Sukses mengambil 475 bar data untuk BBCA.JK (2024-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 21:35:34] [INFO] [storage:287] - Berhasil menyimpan 475 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 21:35:34] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-09-24 21:35:35] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-09-24 21:35:35] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-09-24 21:35:37] [WARNING] [telegram_bot:66] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-09-24 21:35:37] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 252).
+[2026-09-24 21:35:37] [INFO] [storage:409] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 253).
+[2026-09-24 21:35:37] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:35 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 21:35:37] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:35 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 21:35:37] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:35:37] [INFO] [storage:409] - Sinyal BUY untuk DUMMY_1790260537867.JK tersimpan (ID: 254).
+[2026-09-24 21:35:37] [INFO] [scheduler:166] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-09-24 21:35:37] [INFO] [scheduler:171] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-09-24 21:35:37] [INFO] [scheduler:189] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-09-24 21:35:37] [INFO] [scheduler:216] - Memproses BBCA.JK...
+[2026-09-24 21:35:37] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:35:37] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:35:38] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 21:35:38] [INFO] [storage:409] - Sinyal SELL untuk BBCA.JK tersimpan (ID: 255).
+[2026-09-24 21:35:38] [INFO] [scheduler:298] - Sinyal SELL untuk BBCA.JK tidak dinotifikasikan (Candle kedaluwarsa (335m lalu > batas 45m)).
+[2026-09-24 21:35:38] [INFO] [scheduler:216] - Memproses BBRI.JK...
+[2026-09-24 21:35:38] [INFO] [fetcher:131] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:35:38] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:35:38] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-09-24 21:35:42] [INFO] [fetcher:78] - Sukses mengambil 101 bar Spot Gold (XAU/USD) dari direct spot feed (2026-09-23 19:30 s/d 2026-09-24 21:30)
+[2026-09-24 21:35:42] [INFO] [storage:287] - Berhasil menyimpan 101 baris data OHLCV untuk XAUUSD (15m).
+[2026-09-24 21:35:42] [INFO] [scheduler:316] - === Pipeline Selesai: 2 saham diproses, 1 sinyal aktif, 0 notifikasi terkirim ===
+[2026-09-24 21:35:42] [INFO] [storage:287] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 21:35:42] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 21:35:42] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 21:35:42] [INFO] [storage:409] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-09-24 21:35:42] [INFO] [storage:564] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-09-24 21:35:42] [INFO] [storage:564] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-09-24 21:35:42] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:35:42] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:35:42] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:45:31] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:45:32] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_XAUUSD_15m_20260924_214532_07.png
+[2026-09-24 21:45:33] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_BBCA_JK_1d_20260924_214532_89.png
+[2026-09-24 21:45:34] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-09-24 21:45:34] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-09-24 21:45:34] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:45:35] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:45:35] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:45:35] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:45:35] [INFO] [fetcher:150] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 21:45:35] [INFO] [storage:287] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 21:45:35] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:45:35] [INFO] [fetcher:150] - Sukses mengambil 111 bar data untuk BBCA.JK (2026-09-18 s/d 2026-09-24 16:00)
+[2026-09-24 21:45:35] [INFO] [storage:287] - Berhasil menyimpan 111 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 21:45:36] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=2y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:45:36] [INFO] [fetcher:150] - Sukses mengambil 475 bar data untuk BBCA.JK (2024-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 21:45:36] [INFO] [storage:287] - Berhasil menyimpan 475 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 21:45:36] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-09-24 21:45:37] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-09-24 21:45:37] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-09-24 21:45:39] [WARNING] [telegram_bot:66] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-09-24 21:45:39] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 256).
+[2026-09-24 21:45:39] [INFO] [storage:409] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 257).
+[2026-09-24 21:45:39] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:45 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 21:45:39] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:45 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 21:45:39] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:45:39] [INFO] [storage:409] - Sinyal BUY untuk DUMMY_1790261139849.JK tersimpan (ID: 258).
+[2026-09-24 21:45:39] [INFO] [scheduler:166] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-09-24 21:45:39] [INFO] [scheduler:171] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-09-24 21:45:39] [INFO] [scheduler:189] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-09-24 21:45:39] [INFO] [scheduler:216] - Memproses BBCA.JK...
+[2026-09-24 21:45:39] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:45:39] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:45:40] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 21:45:40] [INFO] [scheduler:216] - Memproses BBRI.JK...
+[2026-09-24 21:45:40] [INFO] [fetcher:131] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:45:40] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:45:40] [INFO] [storage:287] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-09-24 21:45:44] [INFO] [fetcher:78] - Sukses mengambil 101 bar Spot Gold (XAU/USD) dari direct spot feed (2026-09-23 19:45 s/d 2026-09-24 21:45)
+[2026-09-24 21:45:44] [INFO] [storage:287] - Berhasil menyimpan 101 baris data OHLCV untuk XAUUSD (15m).
+[2026-09-24 21:45:44] [INFO] [scheduler:321] - === Pipeline Selesai: 2 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-09-24 21:45:44] [INFO] [storage:287] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 21:45:44] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 21:45:44] [INFO] [storage:409] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 21:45:44] [INFO] [storage:409] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-09-24 21:45:44] [INFO] [storage:564] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-09-24 21:45:44] [INFO] [storage:564] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-09-24 21:45:44] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:45:44] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:45:44] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:52:56] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:54:45] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:54:46] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_XAUUSD_15m_20260924_215445_61.png
+[2026-09-24 21:54:46] [INFO] [chart_generator:331] - Berhasil membuat chart visual: data\charts\chart_BBCA_JK_1d_20260924_215446_40.png
+[2026-09-24 21:54:47] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_DayTrading_Intraday_Momentum.png
+[2026-09-24 21:54:48] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Daily_Swing_Pullback.png
+[2026-09-24 21:54:48] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:54:48] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:54:48] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:54:48] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=1y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:54:49] [INFO] [fetcher:150] - Sukses mengambil 240 bar data untuk BBCA.JK (2025-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 21:54:49] [INFO] [storage:322] - Berhasil menyimpan 240 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 21:54:49] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=5d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:54:49] [INFO] [fetcher:150] - Sukses mengambil 111 bar data untuk BBCA.JK (2026-09-18 s/d 2026-09-24 16:00)
+[2026-09-24 21:54:49] [INFO] [storage:322] - Berhasil menyimpan 111 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 21:54:49] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=1d, period=2y, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:54:49] [INFO] [fetcher:150] - Sukses mengambil 475 bar data untuk BBCA.JK (2024-09-24 s/d 2026-09-24 00:00)
+[2026-09-24 21:54:49] [INFO] [storage:322] - Berhasil menyimpan 475 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 21:54:50] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_Default_RSI_EMA_Volume.png
+[2026-09-24 21:54:50] [INFO] [backtester:382] - Grafik equity curve tersimpan di: D:\bot saham\reports\backtest_BBCA_EMA_Golden_Cross.png
+[2026-09-24 21:54:50] [INFO] [backtester:398] - Memulai parameter sweep untuk BBCA.JK...
+[2026-09-24 21:54:53] [WARNING] [telegram_bot:66] - Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. Berjalan dalam mode Simulasi (Mock Mode) - pesan akan dicetak ke log.
+[2026-09-24 21:54:53] [INFO] [storage:444] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 262).
+[2026-09-24 21:54:53] [INFO] [storage:444] - Sinyal SELL untuk BBRI.JK tersimpan (ID: 263).
+[2026-09-24 21:54:53] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:54 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 21:54:53] [INFO] [telegram_bot:206] - [SIMULASI TELEGRAM]
+🟢 <b>SINYAL ENTRY (MASUK / BUY): BBCA</b>
+📍 <b>Harga Entry:</b> <code>Rp 6,275</code>
+⏱️ <b>21:54 WIB</b> | RSI: <b>28.4</b> | Vol: <b>1.8x</b>
+💡 <i>RSI Oversold</i>
+[2026-09-24 21:54:53] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:54:53] [INFO] [storage:444] - Sinyal BUY untuk DUMMY_1790261693368.JK tersimpan (ID: 264).
+[2026-09-24 21:54:53] [INFO] [scheduler:166] - === Memulai Siklus Pipeline Analisis Saham & Komoditas ===
+[2026-09-24 21:54:53] [INFO] [scheduler:171] - Status Pasar: IDX=TUTUP | GOLD=BUKA
+[2026-09-24 21:54:53] [INFO] [scheduler:189] - Mode Trading: INTRADAY (Interval: 15m, Watchlist: 2)
+[2026-09-24 21:54:53] [INFO] [scheduler:216] - Memproses BBCA.JK...
+[2026-09-24 21:54:53] [INFO] [fetcher:131] - Mengambil data BBCA.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:54:53] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BBCA.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:54:53] [INFO] [storage:322] - Berhasil menyimpan 1286 baris data OHLCV untuk BBCA.JK (15m).
+[2026-09-24 21:54:53] [INFO] [scheduler:216] - Memproses BBRI.JK...
+[2026-09-24 21:54:53] [INFO] [fetcher:131] - Mengambil data BBRI.JK (interval=15m, period=60d, start=None, end=None) - Percobaan 1/3
+[2026-09-24 21:54:53] [INFO] [fetcher:150] - Sukses mengambil 1286 bar data untuk BBRI.JK (2026-07-03 s/d 2026-09-24 16:00)
+[2026-09-24 21:54:53] [INFO] [storage:322] - Berhasil menyimpan 1286 baris data OHLCV untuk BBRI.JK (15m).
+[2026-09-24 21:54:56] [INFO] [fetcher:78] - Sukses mengambil 101 bar Spot Gold (XAU/USD) dari direct spot feed (2026-09-23 19:45 s/d 2026-09-24 21:45)
+[2026-09-24 21:54:56] [INFO] [storage:322] - Berhasil menyimpan 101 baris data OHLCV untuk XAUUSD (15m).
+[2026-09-24 21:54:56] [INFO] [scheduler:321] - === Pipeline Selesai: 2 saham diproses, 0 sinyal aktif, 0 notifikasi terkirim ===
+[2026-09-24 21:54:56] [INFO] [storage:322] - Berhasil menyimpan 5 baris data OHLCV untuk BBCA.JK (1d).
+[2026-09-24 21:54:56] [INFO] [storage:444] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 21:54:56] [INFO] [storage:444] - Sinyal BUY untuk BBCA.JK tersimpan (ID: 1).
+[2026-09-24 21:54:56] [INFO] [storage:444] - Sinyal SELL untuk GC=F tersimpan (ID: 2).
+[2026-09-24 21:54:56] [INFO] [storage:599] - 🎯 Sinyal #1 BUY BBCA.JK terselesaikan: WIN @ 105.0 (PnL: +5.00%) pada 2026-01-01 12:00:00
+[2026-09-24 21:54:56] [INFO] [storage:599] - 🎯 Sinyal #2 SELL GC=F terselesaikan: WIN @ 2680.0 (PnL: +0.74%) pada 2026-01-01 12:00:00
+[2026-09-24 21:54:56] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:54:56] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
+[2026-09-24 21:54:56] [INFO] [telegram_bot:71] - Telegram Notifier siap dalam mode Live.
