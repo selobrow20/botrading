@@ -27,12 +27,12 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.3.4"
+CLIENT_COPIER_VERSION = "2.3.5"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
 def parse_version(v_str: str) -> tuple:
-    """Parse string versi '2.3.4' menjadi tuple (2, 3, 4) untuk perbandingan semver akurat."""
+    """Parse string versi '2.3.5' menjadi tuple (2, 3, 5) untuk perbandingan semver akurat."""
     try:
         nums = re.findall(r"\d+", str(v_str))
         return tuple(map(int, nums)) if nums else (0, 0, 0)
@@ -41,17 +41,42 @@ def parse_version(v_str: str) -> tuple:
 
 def restart_copier():
     """
-    Me-restart copier secara mulus di console yang sama persis.
-    Member TIDAK PERLU lagi buka-tutup jendela console saat ada update!
+    Me-restart copier secara otomatis dan MEMBUKA KEMBALI jendela aplikasi seketika.
+    Member TIDAK PERLU lagi buka-tutup manual!
     """
     try:
         sys.stdout.flush()
         sys.stderr.flush()
     except Exception:
         pass
-    # Exit code 42 ditangkap oleh loop supervisor (baik START_COPIER.bat maupun runner Python)
-    # untuk me-reload kodingan terbaru di jendela console yang sama tanpa berkedip/buka-tutup.
-    os._exit(42)
+
+    try:
+        import subprocess
+        script_file = Path(__file__).resolve()
+        copier_dir = script_file.parent
+        bat_file = copier_dir / "START_COPIER.bat"
+
+        # Spawn jendela copier baru secara independen agar otomatis terbuka kembali
+        if sys.platform == "win32":
+            if bat_file.exists():
+                try:
+                    os.startfile(str(bat_file))
+                except Exception:
+                    subprocess.Popen(f'start "" "{bat_file}"', cwd=str(copier_dir), shell=True)
+            else:
+                subprocess.Popen(
+                    [sys.executable, str(script_file)],
+                    cwd=str(copier_dir),
+                    creationflags=subprocess.CREATE_NEW_CONSOLE
+                )
+        else:
+            subprocess.Popen([sys.executable, str(script_file)], cwd=str(copier_dir))
+    except Exception as e:
+        print(f"⚠️ Gagal spawn jendela baru: {e}")
+
+    # Beri jeda 0.5s agar proses baru berhasil di-spawn oleh OS sebelum proses lama keluar
+    time.sleep(0.5)
+    os._exit(0)
 
 def apply_zip_update(zip_path_or_bytes, preserve_config: bool = True):
     """

@@ -417,18 +417,18 @@ class TelegramNotifier:
             return {"success": False, "sent_count": 0, "recipients": [], "error": f"File {p} tidak ditemukan."}
 
         caption = custom_caption or (
-            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.3.4 (VIP 9 BUKU PDF)</b> 🚀\n"
+            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.3.5 (VIP 9 BUKU PDF)</b> 🚀\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5 v2.3.4.\n\n"
-            "✨ <b>FITUR & LOGIKA TERBARU (v2.3.4):</b>\n"
-            "1. 🔄 <b>Zero-Touch In-App Hot Reload:</b> Copier otomatis memperbarui diri dan reload di jendela console yang sama tanpa member perlu buka-tutup aplikasi!\n"
+            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5 v2.3.5.\n\n"
+            "✨ <b>FITUR & LOGIKA TERBARU (v2.3.5):</b>\n"
+            "1. 🔄 <b>Auto-Spawn Reopen:</b> Jendela copier baru otomatis terbuka seketika setelah update, member tidak perlu buka manual!\n"
             "2. ⚡ <b>Instant OTA Cache-Buster:</b> Deteksi update Cloud langsung aktif tanpa tertahan cache GitHub.\n"
             "3. 🏛️ <b>Proteksi Sesi London (12:00 - 16:00 WIB):</b> Filter ketat Judas Swing & konfirmasi H1 jam 12 s/d jam 4 sore.\n"
             "4. 📦 <b>Batas Akun Cent USC (Max 3 Posisi):</b> Diizinkan menampung hingga 3 posisi aktif dengan grid $1.00 USD.\n"
             "5. 🎯 <b>USD Standard Mode Sniper:</b> Otomatis masuk sinyal Grade A+ (>=80%) dengan lot disiplin 0.01.\n"
             "6. 🛡️ <b>Preserve User Config:</b> Pengaturan akun dan lot kustom member tetap aman 100%.\n\n"
             "🔄 <b>FITUR AUTO-UPDATE OTOMATIS:</b>\n"
-            "Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & me-reload sendiri (bebas repot timpa ZIP atau buka-tutup)!\n"
+            "Bagi member yang aplikasinya sedang berjalan, sistem otomatis mengunduh & membuka kembali jendela baru sendiri!\n"
             "━━━━━━━━━━━━━━━━━━━━━━"
         )
 
@@ -2078,10 +2078,10 @@ class TelegramBotCommands:
 
         status_msg = await update.message.reply_html("⏳ <b>Menyiapkan dan mengirim file paket Auto-Copier MT5 (VIP 9 Buku PDF)...</b>")
         caption_text = (
-            "🚀 <b>PAKET AUTO-COPIER MT5 v2.3.4 (VIP 9 BUKU PDF)</b>\n"
+            "🚀 <b>PAKET AUTO-COPIER MT5 v2.3.5 (VIP 9 BUKU PDF)</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "✨ <b>FITUR & LOGIKA TERBARU:</b>\n"
-            "• 🔄 <b>Zero-Touch Hot Reload:</b> Auto-update langsung di jendela console tanpa perlu buka-tutup.\n"
+            "• 🔄 <b>Auto-Spawn Reopen:</b> Jendela copier baru otomatis terbuka seketika setelah update.\n"
             "• 🏛️ <b>Proteksi London (12:00 - 16:00 WIB):</b> Filter ketat Judas Swing & candle H1 jam 12 s/d jam 4 sore.\n"
             "• 📦 <b>Akun Cent USC (Max 3 Posisi):</b> Diizinkan menampung s/d 3 posisi aktif grid $1.00 USD.\n"
             "• 🎯 <b>USD Mode Sniper:</b> Hanya eksekusi sinyal Grade A+ (>=80%) lot 0.01.\n"

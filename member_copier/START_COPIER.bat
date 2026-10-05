@@ -41,5 +41,8 @@ if "%COPIER_EXIT_CODE%"=="100" (
     goto run_loop
 )
 
+:: Jika proses keluar dengan kode 0 (telah membuka jendela copier baru otomatis via startfile), tutup jendela lama
+if "%COPIER_EXIT_CODE%"=="0" exit /b 0
+
 echo.
 pause
