@@ -7,6 +7,8 @@
   "default_lot": 0.05,
   "usd_only_high_grade": true,
   "cent_only_high_grade": true,
+  "enable_limit_orders": true,
+  "limit_order_expiry_mins": 120,
   "max_positions_standard": 1,
   "max_positions_cent": 3,
   "us_session_max_positions": 3,

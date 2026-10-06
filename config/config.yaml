@@ -59,6 +59,11 @@ mt5:
   us_session_aggressive_lot: 0.08   # Khusus Sesi US (19:00 - 24:00 WIB) akun USC: 0.08 Lot untuk momen bagus/agresif
   high_confidence_threshold: 80.0
   cent_only_high_grade: true        # Akun Cent (USC) HANYA masuk sinyal Grade A+ (0.05 Lot). Sinyal standar (< 80%) di-skip demi akurasi sniper
+  enable_limit_orders: true         # Mengaktifkan Pending Limit Order (Buy Limit & Sell Limit) anti-kejar lilin Bob Volman
+  limit_order_expiry_mins: 120      # Masa berlaku pending order: 120 menit (2 jam / 8 candle M15). Auto-cancel jika tidak tersentuh
+  limit_order_lot: 0.05             # Ukuran lot khusus pending limit order Grade A+ (0.05 Lot)
+  max_pending_orders_per_symbol: 1  # Maksimal 1 pending order aktif per simbol untuk mencegah penumpukan
+  min_limit_distance_pips: 15.0     # Jarak minimal harga limit dari harga pasar saat ini: 15 pips ($1.50 USD)
   risk_percent: 1.0
   max_slippage: 20
   gold_symbol: XAUUSDc

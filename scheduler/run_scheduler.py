@@ -185,6 +185,16 @@ class PipelineRunner:
             logger.info("Melewatkan pipeline karena seluruh pasar sedang tutup.")
             return {"status": "skipped", "reason": f"IDX: {idx_reason} | Gold: {gold_reason}"}
 
+        # Bersihkan pending order MT5 yang sudah kadaluarsa (> 120 menit / 2 jam)
+        if gold_open or force_run:
+            try:
+                from trading.mt5_bridge import MT5Bridge
+                _bridge = MT5Bridge()
+                if _bridge.enabled:
+                    _bridge.cancel_stale_pending_orders(max_age_minutes=120)
+            except Exception as _ex_stale:
+                logger.debug(f"Pembersihan pending order kadaluarsa: {_ex_stale}")
+
         # 2. Baca Konfigurasi Trading & Watchlist
         if watchlist is None:
             watchlist = self.config.get("watchlist", ["BBCA.JK"])
@@ -339,9 +349,9 @@ class PipelineRunner:
                     dup_reason = f"Candle {sig_result.candle_time} adalah baseline saat bot baru aktif. Menunggu candle baru berikutnya selesai."
                     should_notify = False
                 else:
-                    should_notify = (sig_result.signal in ["BUY", "SELL"]) and (not is_duplicate) and is_fresh
+                    should_notify = (sig_result.signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]) and (not is_duplicate) and is_fresh
 
-                if sig_result.signal in ["BUY", "SELL"]:
+                if sig_result.signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]:
                     results["signals_triggered"] += 1
 
                 # Simpan ke Database HANYA jika sinyal segar, bukan duplikat, dan valid dinotifikasikan
@@ -452,7 +462,7 @@ class PipelineRunner:
                     else:
                         self.notifier.send_signal(sig_result, photo_path=chart_path)
                         results["signals_notified"] += 1
-                elif not is_fresh and (sig_result.signal in ["BUY", "SELL"]):
+                elif not is_fresh and (sig_result.signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]):
                     logger.info(f"Sinyal {sig_result.signal} untuk {ticker} tidak dinotifikasikan ({fresh_reason}).")
                 elif is_duplicate:
                     logger.debug(f"Sinyal {sig_result.signal} untuk {ticker} dilewati (Duplikat: {dup_reason}).")

@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.3.7"
+CLIENT_COPIER_VERSION = "2.3.8"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -291,14 +291,27 @@ def parse_signal(text: str) -> dict:
         return {}
 
     action = None
-    if any(k in text_upper for k in ["SINYAL ENTRY (MASUK / BUY)", "SINYAL ENTRY BUY", "BUY (LONG)", "BUY / LONG", "AKSI SINYAL: BUY", "AKSI ORDER: BUY"]):
+    is_limit_order = False
+    if any(k in text_upper for k in ["BUY LIMIT", "BUY_LIMIT", "LIMIT ORDER: BUY", "ORDER: BUY LIMIT", "AKSI ORDER: BUY LIMIT"]):
+        action = "BUY_LIMIT"
+        is_limit_order = True
+    elif any(k in text_upper for k in ["SELL LIMIT", "SELL_LIMIT", "LIMIT ORDER: SELL", "ORDER: SELL LIMIT", "AKSI ORDER: SELL LIMIT"]):
+        action = "SELL_LIMIT"
+        is_limit_order = True
+    elif any(k in text_upper for k in ["SINYAL ENTRY (MASUK / BUY)", "SINYAL ENTRY BUY", "BUY (LONG)", "BUY / LONG", "AKSI SINYAL: BUY", "AKSI ORDER: BUY"]):
         action = "BUY"
     elif any(k in text_upper for k in ["SINYAL ENTRY SHORT", "SINYAL ENTRY (MASUK / SELL)", "SINYAL ENTRY SELL", "SELL (SHORT)", "SELL / SHORT", "AKSI SINYAL: SELL", "AKSI ORDER: SELL"]):
         action = "SELL"
     else:
-        # Hanya cocokkan kata BUY/SELL mandiri jika ada kata "ENTRY" atau "HARGA" di dalam pesan
-        if "ENTRY" in text_upper or "MASUK" in text_upper:
-            if re.search(r"\bBUY\b", text_upper):
+        # Hanya cocokkan kata BUY/SELL mandiri jika ada kata "ENTRY" atau "HARGA" atau "LIMIT" di dalam pesan
+        if "ENTRY" in text_upper or "MASUK" in text_upper or "LIMIT" in text_upper:
+            if re.search(r"\bBUY\s+LIMIT\b", text_upper):
+                action = "BUY_LIMIT"
+                is_limit_order = True
+            elif re.search(r"\bSELL\s+LIMIT\b", text_upper):
+                action = "SELL_LIMIT"
+                is_limit_order = True
+            elif re.search(r"\bBUY\b", text_upper):
                 action = "BUY"
             elif re.search(r"\bSELL\b", text_upper):
                 action = "SELL"
@@ -318,7 +331,7 @@ def parse_signal(text: str) -> dict:
     sl_price = 0.0
 
     m_entry = re.search(
-        r"(?:Harga Entry(?: Short)?|Harga Masuk|Area Entry|\bEntry\b|Harga)\s*[:=]?\s*\$?([\d,]+(?:\.\d+)?)",
+        r"(?:Harga Pasang Limit|Harga Limit|Harga Entry(?: Short)?|Harga Masuk|Area Entry|\bEntry\b|Harga)\s*[:=]?\s*\$?([\d,]+(?:\.\d+)?)",
         clean_text,
         re.IGNORECASE,
     )
@@ -368,11 +381,13 @@ def parse_signal(text: str) -> dict:
 
     # Deteksi Sinyal Grade A+ (0.05 lot bagus) vs Standar (0.01 lot)
     is_high_grade = False
-    if any(k in text_upper for k in ["MOMEN BAGUS BANGET", "0.05 LOT", "0,05 LOT", "GRADE A+", "GRADE: A+"]):
+    if any(k in text_upper for k in ["MOMEN BAGUS BANGET", "0.05 LOT", "0,05 LOT", "GRADE A+", "GRADE: A+", "PENDING ORDER SNIPER"]):
         is_high_grade = True
     elif pdf_score >= 80.0:
         is_high_grade = True
     elif master_lot >= 0.05:
+        is_high_grade = True
+    elif is_limit_order:
         is_high_grade = True
 
     return {
@@ -385,6 +400,7 @@ def parse_signal(text: str) -> dict:
         "pdf_confluence_score": pdf_score,
         "master_lot": master_lot,
         "is_high_grade": is_high_grade,
+        "is_limit_order": is_limit_order,
         "raw_text": text,
     }
 
@@ -691,12 +707,266 @@ class MT5MemberBridge:
                         modified.append({"ticket": p.ticket, "action": pos_act, "success": False, "err": err_msg})
         return modified
 
+    def get_pending_orders(self, symbol: str = None) -> list:
+        """Mengambil daftar Pending Limit Order yang aktif di MT5."""
+        if not self.ensure_connected():
+            return []
+        sym = symbol or self.find_broker_symbol()
+        orders = self.mt5.orders_get(symbol=sym) or []
+        res = []
+        for o in orders:
+            order_type_str = ""
+            if o.type == self.mt5.ORDER_TYPE_BUY_LIMIT:
+                order_type_str = "BUY_LIMIT"
+            elif o.type == self.mt5.ORDER_TYPE_SELL_LIMIT:
+                order_type_str = "SELL_LIMIT"
+            elif o.type == self.mt5.ORDER_TYPE_BUY_STOP:
+                order_type_str = "BUY_STOP"
+            elif o.type == self.mt5.ORDER_TYPE_SELL_STOP:
+                order_type_str = "SELL_STOP"
+            else:
+                continue
+
+            res.append({
+                "ticket": o.ticket,
+                "symbol": o.symbol,
+                "type": order_type_str,
+                "type_raw": o.type,
+                "volume": o.volume_current,
+                "price": o.price_open,
+                "sl": o.sl,
+                "tp": o.tp,
+                "time_setup": getattr(o, "time_setup", 0),
+                "comment": getattr(o, "comment", ""),
+            })
+        return res
+
+    def cancel_pending_order(self, ticket: int) -> dict:
+        """Membatalkan sebuah Pending Order di MT5 berdasarkan tiket."""
+        if not self.ensure_connected():
+            return {"success": False, "message": "MT5 tidak terhubung"}
+        req = {
+            "action": self.mt5.TRADE_ACTION_REMOVE,
+            "order": ticket,
+        }
+        res = self.mt5.order_send(req)
+        if res and res.retcode == self.mt5.TRADE_RETCODE_DONE:
+            return {"success": True, "ticket": ticket, "message": f"Pending order #{ticket} berhasil dibatalkan"}
+        err = res.comment if res else "No response"
+        return {"success": False, "ticket": ticket, "message": f"Gagal batalkan pending order #{ticket}: {err}"}
+
+    def cancel_stale_pending_orders(self, symbol: str = None, max_age_minutes: int = 120) -> list:
+        """
+        Membatalkan pending limit order yang sudah basi (melebihi batas usia, default 120 menit).
+        Kaidah Bob Volman: Jika pasar tidak pullback menjemput limit dalam rentang waktu terukur,
+        setup teknikal sudah kedaluwarsa.
+        """
+        pending_orders = self.get_pending_orders(symbol=symbol)
+        now_ts = time.time()
+        cancelled = []
+        for po in pending_orders:
+            setup_time = po.get("time_setup", 0)
+            if setup_time > 0:
+                age_min = (now_ts - setup_time) / 60.0
+                if age_min >= max_age_minutes:
+                    t_id = po.get("ticket")
+                    print(f"⏳ [STALE PENDING] Membatalkan pending order #{t_id} ({po.get('type')} @ {po.get('price')}) karena sudah {age_min:.0f} menit (> {max_age_minutes}m)!")
+                    res = self.cancel_pending_order(t_id)
+                    if res.get("success"):
+                        cancelled.append(t_id)
+        return cancelled
+
+    def cancel_opposite_pending_orders(self, symbol: str, new_direction: str = None) -> list:
+        """
+        Membatalkan pending limit order yang berlawanan arah dengan arah order/sinyal baru.
+        Misal: Ada order BUY baru -> Batalkan pending order SELL_LIMIT yang aktif.
+        """
+        if symbol and symbol.upper() in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"] and (not new_direction or new_direction.upper() not in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]):
+            new_direction, symbol = symbol, new_direction
+        if not new_direction:
+            new_direction = "BUY"
+
+        opp_type = "SELL_LIMIT" if new_direction.upper() in ["BUY", "BUY_LIMIT"] else "BUY_LIMIT"
+        cancelled = []
+        pending_orders = self.get_pending_orders(symbol=symbol)
+        for po in pending_orders:
+            if po.get("type") == opp_type:
+                t_id = po.get("ticket")
+                print(f"🔄 [REVERSAL CLEANUP] Membatalkan pending order lawan #{t_id} ({opp_type} @ {po.get('price')}) karena ada order baru {new_direction.upper()}!")
+                res = self.cancel_pending_order(t_id)
+                if res.get("success"):
+                    cancelled.append(t_id)
+        return cancelled
+
+    def execute_limit_order(self, sig: dict) -> dict:
+        """
+        Mengeksekusi Pending Limit Order (BUY_LIMIT atau SELL_LIMIT) ke MetaTrader 5 Member:
+        1. Wajib memenuhi skor konfluensi Grade A+ (>=80%).
+        2. Validasi harga limit:
+           - BUY_LIMIT wajib berada di bawah harga Ask live pasar.
+           - SELL_LIMIT wajib berada di atas harga Bid live pasar.
+        3. Memasang TP & SL minimal 60 pips (1:1).
+        4. Mengirim request dengan action TRADE_ACTION_PENDING.
+        """
+        if not self.ensure_connected():
+            return {"success": False, "message": "MetaTrader 5 tidak aktif atau gagal terhubung."}
+
+        enable_limit = bool(self.cfg.get("enable_limit_orders", True))
+        if not enable_limit:
+            return {"success": False, "message": "Pending Limit Order dinonaktifkan di config member."}
+
+        action = sig.get("action", "").upper()
+        if action not in ["BUY_LIMIT", "SELL_LIMIT"]:
+            return {"success": False, "message": f"Aksi {action} bukan Pending Limit Order."}
+
+        sym = self.find_broker_symbol()
+        # Bersihkan order basi terlebih dahulu
+        self.cancel_stale_pending_orders(symbol=sym, max_age_minutes=int(self.cfg.get("limit_order_expiry_mins", 120)))
+
+        # Bersihkan pending order lawan
+        self.cancel_opposite_pending_orders(sym, action)
+
+        s_info = self.mt5.symbol_info(sym)
+        if not s_info:
+            return {"success": False, "message": f"Simbol {sym} tidak ditemukan di MT5 member."}
+
+        tick = self.mt5.symbol_info_tick(sym)
+        if not tick:
+            return {"success": False, "message": f"Gagal membaca tick pasar {sym}."}
+
+        limit_price = float(sig.get("entry_price", 0.0) or 0.0)
+        tp_raw = float(sig.get("tp_price", 0.0) or 0.0)
+        sl_raw = float(sig.get("sl_price", 0.0) or 0.0)
+
+        if limit_price <= 0 or tp_raw <= 0 or sl_raw <= 0:
+            return {"success": False, "message": f"Harga limit (${limit_price:.2f}), TP (${tp_raw:.2f}), atau SL (${sl_raw:.2f}) tidak valid."}
+
+        # Validasi mekanik broker MT5:
+        # BUY_LIMIT wajib < Ask
+        # SELL_LIMIT wajib > Bid
+        if action == "BUY_LIMIT" and limit_price >= tick.ask:
+            return {
+                "success": False,
+                "message": f"Harga BUY LIMIT (${limit_price:,.2f}) harus lebih rendah dari harga Ask live (${tick.ask:,.2f})."
+            }
+        elif action == "SELL_LIMIT" and limit_price <= tick.bid:
+            return {
+                "success": False,
+                "message": f"Harga SELL LIMIT (${limit_price:,.2f}) harus lebih tinggi dari harga Bid live (${tick.bid:,.2f})."
+            }
+
+        # Cek batas pending order per simbol
+        active_pending = self.get_pending_orders(symbol=sym)
+        max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 1))
+        if len(active_pending) >= max_pending:
+            for po in active_pending:
+                if po.get("type") == action:
+                    p_diff = abs(po.get("price", 0.0) - limit_price)
+                    if p_diff < 2.0:
+                        return {
+                            "success": False,
+                            "message": f"Sudah ada pending order #{po.get('ticket')} {action} @ {po.get('price')} di area yang sama."
+                        }
+
+        # Jarak TP & SL Floor Minimal 60 Pips ($6.00 USD)
+        MIN_GOLD_USD = 6.00
+        tp_dist = max(MIN_GOLD_USD, round(abs(tp_raw - limit_price), 2))
+        sl_dist = max(MIN_GOLD_USD, round(abs(limit_price - sl_raw), 2))
+        if sl_dist > tp_dist:
+            sl_dist = tp_dist
+
+        digits = int(getattr(s_info, "digits", 2) or 2)
+        if action == "BUY_LIMIT":
+            tp_val = round(limit_price + tp_dist, digits)
+            sl_val = round(limit_price - sl_dist, digits)
+            order_raw_type = self.mt5.ORDER_TYPE_BUY_LIMIT
+        else:
+            tp_val = round(limit_price - tp_dist, digits)
+            sl_val = round(limit_price + sl_dist, digits)
+            order_raw_type = self.mt5.ORDER_TYPE_SELL_LIMIT
+
+        # Hitung ukuran lot
+        is_cent = self.is_cent_account()
+        is_high_grade = sig.get("is_high_grade", True)
+        master_lot = float(sig.get("master_lot", 0.0) or 0.0)
+
+        if not is_cent:
+            usd_only_high = self.cfg.get("usd_only_high_grade", True)
+            if usd_only_high and not is_high_grade and master_lot < 0.05:
+                return {"success": False, "message": "Pending Limit dilewati: Akun Standard USD hanya untuk sinyal Grade A+ (0.05 lot)."}
+            trade_lot, lot_lbl = self.calculate_lot_size(sig, is_cent=False)
+            print(f"   💎 [USD HIGH GRADE PENDING] BUY/SELL LIMIT {trade_lot} Lot di Akun Standard USD ({lot_lbl}).")
+        else:
+            trade_lot, lot_lbl = self.calculate_lot_size(sig, is_cent=True)
+            print(f"   🎯 [CENT USC PENDING] BUY/SELL LIMIT {trade_lot} Lot ({lot_lbl}).")
+
+        vol_step = float(getattr(s_info, "volume_step", 0.01) or 0.01)
+        if vol_step > 0:
+            trade_lot = round(round(trade_lot / vol_step) * vol_step, 2)
+        vol_min = float(getattr(s_info, "volume_min", 0.01) or 0.01)
+        vol_max = float(getattr(s_info, "volume_max", 100.0) or 100.0)
+        trade_lot = max(vol_min, min(vol_max, trade_lot))
+
+        # Filling mode
+        filling_mode = int(s_info.filling_mode or 0)
+        candidates = []
+        if filling_mode & 1:
+            candidates.append(self.mt5.ORDER_FILLING_FOK)
+        if filling_mode & 2:
+            candidates.append(self.mt5.ORDER_FILLING_IOC)
+        candidates.extend([self.mt5.ORDER_FILLING_FOK, self.mt5.ORDER_FILLING_IOC, self.mt5.ORDER_FILLING_RETURN])
+        seen = set()
+        fill_types = [f for f in candidates if not (f in seen or seen.add(f))]
+
+        req = {
+            "action": self.mt5.TRADE_ACTION_PENDING,
+            "symbol": sym,
+            "volume": trade_lot,
+            "type": order_raw_type,
+            "price": limit_price,
+            "sl": sl_val,
+            "tp": tp_val,
+            "deviation": self.slippage,
+            "magic": self.magic,
+            "comment": "VIP-9PDF-Limit",
+            "type_time": self.mt5.ORDER_TIME_GTC,
+        }
+
+        last_res = None
+        for ft in fill_types:
+            req["type_filling"] = ft
+            res = self.mt5.order_send(req)
+            last_res = res
+            if res and res.retcode == self.mt5.TRADE_RETCODE_DONE:
+                return {
+                    "success": True,
+                    "ticket": res.order,
+                    "price": limit_price,
+                    "volume": trade_lot,
+                    "symbol": sym,
+                    "action": action,
+                }
+            if res and res.retcode != 10030:
+                break
+
+        res = last_res
+        err_code = res.retcode if res else "No response"
+        err_comment = res.comment if res else self.mt5.last_error()[1]
+        return {"success": False, "message": f"RetCode: {err_code} - {err_comment}"}
+
     def execute_order(self, sig: dict) -> dict:
         if not self.ensure_connected():
             return {"success": False, "message": "MetaTrader 5 tidak aktif atau gagal terhubung."}
 
         action = sig.get("action", "BUY")
         sym = self.find_broker_symbol()
+
+        # Bersihkan order limit basi sebelum eksekusi order
+        self.cancel_stale_pending_orders(symbol=sym, max_age_minutes=int(self.cfg.get("limit_order_expiry_mins", 120)))
+
+        # Delegasikan ke Pending Limit jika tipe aksi BUY_LIMIT / SELL_LIMIT
+        if action in ["BUY_LIMIT", "SELL_LIMIT"] or sig.get("is_limit_order"):
+            return self.execute_limit_order(sig)
 
         # Proteksi Anti-Tabrakan & Anti-Hedging Disiplin (Kaidah 9 Buku PDF):
         # Jika ada posisi yang berlawanan arah (misal ada BUY aktif, lalu muncul sinyal SELL):
@@ -920,6 +1190,7 @@ class MT5MemberBridge:
             res = self.mt5.order_send(req)
             last_res = res
             if res and res.retcode == self.mt5.TRADE_RETCODE_DONE:
+                self.cancel_opposite_pending_orders(sym, action)
                 return {
                     "success": True,
                     "ticket": res.order,

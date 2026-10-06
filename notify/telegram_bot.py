@@ -200,6 +200,39 @@ class TelegramNotifier:
                 clean_reason = sig.reasons[0].split("(")[0].strip()
                 lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
 
+        elif sig.signal in ["BUY_LIMIT", "SELL_LIMIT"] and is_gold:
+            lim_label = "BUY LIMIT" if sig.signal == "BUY_LIMIT" else "SELL LIMIT"
+            lim_icon = "🟢" if sig.signal == "BUY_LIMIT" else "🔴"
+            lines.append(f"🟡 <b>SINYAL PENDING ORDER SNIPER: {lim_label} ({display_ticker})</b>")
+            lines.append(f"🎯 <b>Metode Entry:</b> 🛡️ <b>Pending Limit Anti-Kejar Lilin (Bob Volman)</b>")
+            lines.append(f"📍 <b>Harga Pasang Limit:</b> <code>{price_str}</code> (Retest 20 EMA)")
+            if sig.take_profit_price and sig.stop_loss_price:
+                tp_str = format_currency(sig.take_profit_price, sig.ticker)
+                sl_str = format_currency(sig.stop_loss_price, sig.ticker)
+                rrr = sig.risk_reward_ratio or 2.0
+                lines.append(f"🎯 <b>Take Profit (TP):</b> <code>{tp_str}</code>")
+                lines.append(f"🛑 <b>Stop Loss (SL):</b> <code>{sl_str}</code>")
+                lines.append(f"⚖️ <b>Risk/Reward Ratio:</b> 1 : {rrr}")
+                lines.append(f"⏳ <b>Masa Berlaku:</b> <code>2 Jam</code> (Auto-Cancel jika tidak terjemput)")
+
+            lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
+            if wr_badge:
+                lines.append(wr_badge)
+
+            pdf_details = getattr(sig, "pdf_confluence_details", [])
+            if pdf_details:
+                grade_str, score_val = _get_grade_and_score()
+                lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+                lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val}%):</b>")
+                for chk in pdf_details[:5]:
+                    lines.append(f"• {html.escape(chk)}")
+                pred = getattr(sig, "market_direction_prediction", "")
+                if pred:
+                    lines.append(f"🎯 <b>Prediksi Arah:</b> <i>{html.escape(pred)}</i>")
+            elif sig.reasons:
+                clean_reason = sig.reasons[0].split("(")[0].strip()
+                lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
+
         else:
             # SELL Saham IDX / Exit
             lines.append(f"🔴 <b>SINYAL EXIT / JUAL: {display_ticker}</b> @ <b>{price_str}</b>")
@@ -684,23 +717,34 @@ class TelegramNotifier:
         sl = float(order_info.get("sl", 0.0))
         score = float(order_info.get("score", 0.0))
         grade = str(order_info.get("grade", "Grade A"))
+        is_limit = action in ["BUY_LIMIT", "SELL_LIMIT"]
         lot_badge = "🔥 <b>MOMEN BAGUS BANGET (0.05 LOT)</b>" if volume >= 0.05 else "🛡️ <b>STANDAR / PENGAMAN (0.01 LOT)</b>"
-        action_icon = "🟢" if action == "BUY" else "🔴"
-        action_label = "BUY / LONG" if action == "BUY" else "SELL / SHORT"
+        action_icon = "🟢" if "BUY" in action else "🔴"
+
+        if is_limit:
+            title_text = "🟡 <b>[PENDING ORDER] LIMIT ORDER MT5 TERPASANG!</b> ⚡"
+            action_label = "BUY LIMIT (Retest 20 EMA)" if action == "BUY_LIMIT" else "SELL LIMIT (Retest 20 EMA)"
+            price_label = "Harga Pasang Limit"
+            footer_note = "🛡️ <i>Pending limit order diproteksi SL & TP otomatis. Terisi saat harga pullback retest!</i>"
+        else:
+            title_text = "🤖 <b>[LAPORAN EKSEKUSI] ORDER MT5 TERPASANG!</b> ⚡"
+            action_label = "BUY / LONG" if action == "BUY" else "SELL / SHORT"
+            price_label = "Harga Masuk"
+            footer_note = "🛡️ <i>Order diproteksi SL & TP otomatis. Terhubung langsung ke MT5 akun Anda!</i>"
 
         lines = [
-            "🤖 <b>[LAPORAN EKSEKUSI] ORDER MT5 TERPASANG!</b> ⚡",
+            title_text,
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"🎫 <b>Ticket ID:</b> <code>#{ticket}</code>",
             f"📊 <b>Instrumen:</b> <code>{symbol} (Gold)</code>",
             f"{action_icon} <b>Aksi Order:</b> <b>{action_label}</b>",
             f"📦 <b>Volume:</b> <code>{volume:.2f} Lot</code> ({lot_badge})",
-            f"💵 <b>Harga Masuk:</b> <code>${price:,.2f}</code>",
+            f"💵 <b>{price_label}:</b> <code>${price:,.2f}</code>",
             f"🎯 <b>Take Profit (TP):</b> <code>${tp:,.2f}</code>",
             f"🛑 <b>Stop Loss (SL):</b> <code>${sl:,.2f}</code>",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"⭐ <b>Konfluensi 9 PDF:</b> {score:.0f}% ({grade})",
-            "🛡️ <i>Order diproteksi SL & TP otomatis. Terhubung langsung ke MT5 akun Anda!</i>",
+            footer_note,
         ]
         return "\n".join(lines)
 

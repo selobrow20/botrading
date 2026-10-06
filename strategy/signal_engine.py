@@ -37,6 +37,11 @@ class SignalResult:
     # Metode Retest & Pullback Terkonfirmasi 9 Buku
     is_retest_entry: bool = False
     retest_details: str = ""
+    # Fitur Pending Limit Order Sniper (Buy Limit & Sell Limit)
+    is_limit_order: bool = False
+    limit_order_type: Optional[str] = None  # 'BUY_LIMIT' atau 'SELL_LIMIT'
+    limit_price: Optional[float] = None
+    limit_expiry_minutes: int = 120
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -60,6 +65,10 @@ class SignalResult:
             "module_scores": self.module_scores,
             "is_retest_entry": self.is_retest_entry,
             "retest_details": self.retest_details,
+            "is_limit_order": self.is_limit_order,
+            "limit_order_type": self.limit_order_type,
+            "limit_price": self.limit_price,
+            "limit_expiry_minutes": self.limit_expiry_minutes,
         }
 
 
@@ -1240,6 +1249,9 @@ class SignalEngine:
         module_scores = getattr(pdf_res, "module_scores", {})
         is_retest_sig = getattr(pdf_res, "is_retest_entry", False)
         retest_details_sig = getattr(pdf_res, "retest_details", "")
+        limit_price_val: Optional[float] = None
+        is_limit_order_sig: bool = False
+        limit_order_type_val: Optional[str] = None
 
         # 5. Hitung Manajemen Risiko Trading Harian (TP / SL / RRR)
         # Sesuai Arahan Mutlak Pengguna:
@@ -1506,8 +1518,40 @@ class SignalEngine:
                 signal = "HOLD"
                 reasons = [rsi_extreme_reason]
             elif ema_overextended_reject:
-                signal = "HOLD"
-                reasons = [ema_overextended_reason]
+                enable_limit_orders = bool(self.config.get("mt5", {}).get("enable_limit_orders", True))
+                min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
+                min_limit_dist = min_limit_pips / 10.0
+                can_place_buy_limit = (
+                    enable_limit_orders
+                    and is_gold
+                    and apply_pdf_filter
+                    and pdf_approved
+                    and pdf_score >= 80.0
+                    and not macro_blocked
+                    and h1_ok
+                    and not judas_trap
+                    and not rsi_extreme_reject
+                )
+                ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
+                if can_place_buy_limit and ema20_lvl <= round(curr_price - min_limit_dist, 2):
+                    signal = "BUY_LIMIT"
+                    limit_price_val = ema20_lvl
+                    is_limit_order_sig = True
+                    limit_order_type_val = "BUY_LIMIT"
+                    sl_dist_lim = max(6.00, sl_distance)
+                    tp_dist_lim = max(6.00, max(sl_dist_lim, tp_distance))
+                    sl_price = round(limit_price_val - sl_dist_lim, 2)
+                    tp_price = round(limit_price_val + tp_dist_lim, 2)
+                    rrr = round(tp_dist_lim / sl_dist_lim, 2)
+                    reasons = [
+                        f"🟡 [PENDING ORDER SNIPER] BUY LIMIT dipasang di ${limit_price_val:,.2f} (Retest 20 EMA Support)",
+                        f"🛡️ Kaidah Anti-Kejar Lilin Bob Volman: Harga live (${curr_price:,.2f}) overextended. Order limit dipasang di bawah menjemput pullback retest!",
+                        f"Lapis 1 (Otak Utama H4): {macro_bias}",
+                        f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)",
+                    ]
+                else:
+                    signal = "HOLD"
+                    reasons = [ema_overextended_reason]
             elif apply_pdf_filter and not pdf_approved:
                 # Sinyal BUY ditahan jika konfluensi 9 buku belum tembus Grade A (65%)
                 signal = "HOLD"
@@ -1553,8 +1597,40 @@ class SignalEngine:
                 signal = "HOLD"
                 reasons = [rsi_extreme_reason]
             elif ema_overextended_reject:
-                signal = "HOLD"
-                reasons = [ema_overextended_reason]
+                enable_limit_orders = bool(self.config.get("mt5", {}).get("enable_limit_orders", True))
+                min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
+                min_limit_dist = min_limit_pips / 10.0
+                can_place_sell_limit = (
+                    enable_limit_orders
+                    and is_gold
+                    and apply_pdf_filter
+                    and pdf_approved
+                    and pdf_score >= 80.0
+                    and not macro_blocked
+                    and h1_ok
+                    and not judas_trap
+                    and not rsi_extreme_reject
+                )
+                ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
+                if can_place_sell_limit and ema20_lvl >= round(curr_price + min_limit_dist, 2):
+                    signal = "SELL_LIMIT"
+                    limit_price_val = ema20_lvl
+                    is_limit_order_sig = True
+                    limit_order_type_val = "SELL_LIMIT"
+                    sl_dist_lim = max(6.00, sl_distance)
+                    tp_dist_lim = max(6.00, max(sl_dist_lim, tp_distance))
+                    sl_price = round(limit_price_val + sl_dist_lim, 2)
+                    tp_price = round(limit_price_val - tp_dist_lim, 2)
+                    rrr = round(tp_dist_lim / sl_dist_lim, 2)
+                    reasons = [
+                        f"🟡 [PENDING ORDER SNIPER] SELL LIMIT dipasang di ${limit_price_val:,.2f} (Retest 20 EMA Resistance)",
+                        f"🛡️ Kaidah Anti-Kejar Lilin Bob Volman: Harga live (${curr_price:,.2f}) overextended. Order limit dipasang di atas menjemput pullback retest!",
+                        f"Lapis 1 (Otak Utama H4): {macro_bias}",
+                        f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)",
+                    ]
+                else:
+                    signal = "HOLD"
+                    reasons = [ema_overextended_reason]
             elif apply_pdf_filter and not pdf_approved and is_gold:
                 # Sinyal Short Gold ditahan jika konfluensi sell belum tembus Grade A (65%)
                 signal = "HOLD"
@@ -1626,6 +1702,45 @@ class SignalEngine:
                         f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
                         f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
                     ]
+            elif ema_overextended_reject and is_gold and bool(self.config.get("mt5", {}).get("enable_limit_orders", True)) and apply_pdf_filter and pdf_approved and pdf_score >= 80.0 and not macro_blocked and h1_ok and not judas_trap and not rsi_extreme_reject:
+                min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
+                min_limit_dist = min_limit_pips / 10.0
+                ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
+                if target_sig_type == "SELL" and ema20_lvl >= round(curr_price + min_limit_dist, 2):
+                    signal = "SELL_LIMIT"
+                    limit_price_val = ema20_lvl
+                    is_limit_order_sig = True
+                    limit_order_type_val = "SELL_LIMIT"
+                    sl_dist_lim = max(6.00, sl_distance)
+                    tp_dist_lim = max(6.00, max(sl_dist_lim, tp_distance))
+                    sl_price = round(limit_price_val + sl_dist_lim, 2)
+                    tp_price = round(limit_price_val - tp_dist_lim, 2)
+                    rrr = round(tp_dist_lim / sl_dist_lim, 2)
+                    reasons = [
+                        f"🟡 [PENDING ORDER SNIPER] SELL LIMIT dipasang di ${limit_price_val:,.2f} (Retest 20 EMA Resistance)",
+                        f"🛡️ Kaidah Anti-Kejar Lilin Bob Volman: Harga live (${curr_price:,.2f}) overextended. Order limit dipasang di atas menjemput pullback retest!",
+                        f"Lapis 1 (Otak Utama H4): {macro_bias}",
+                        f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)",
+                    ]
+                elif target_sig_type == "BUY" and ema20_lvl <= round(curr_price - min_limit_dist, 2):
+                    signal = "BUY_LIMIT"
+                    limit_price_val = ema20_lvl
+                    is_limit_order_sig = True
+                    limit_order_type_val = "BUY_LIMIT"
+                    sl_dist_lim = max(6.00, sl_distance)
+                    tp_dist_lim = max(6.00, max(sl_dist_lim, tp_distance))
+                    sl_price = round(limit_price_val - sl_dist_lim, 2)
+                    tp_price = round(limit_price_val + tp_dist_lim, 2)
+                    rrr = round(tp_dist_lim / sl_dist_lim, 2)
+                    reasons = [
+                        f"🟡 [PENDING ORDER SNIPER] BUY LIMIT dipasang di ${limit_price_val:,.2f} (Retest 20 EMA Support)",
+                        f"🛡️ Kaidah Anti-Kejar Lilin Bob Volman: Harga live (${curr_price:,.2f}) overextended. Order limit dipasang di bawah menjemput pullback retest!",
+                        f"Lapis 1 (Otak Utama H4): {macro_bias}",
+                        f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)",
+                    ]
+                else:
+                    signal = "HOLD"
+                    reasons = [ema_overextended_reason]
             else:
                 signal = "HOLD"
                 reasons = [
@@ -1640,25 +1755,29 @@ class SignalEngine:
                     )
                 ]
 
-        if signal in ["BUY", "SELL"] and market_regime:
+        is_limit_type = signal in ["BUY_LIMIT", "SELL_LIMIT"]
+        is_actionable = signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]
+        final_price = limit_price_val if is_limit_type and limit_price_val is not None else curr_price
+
+        if is_actionable and market_regime:
             reasons.append(f"Regime Pasar: {market_regime}")
 
         logger.debug(
             f"Evaluasi {ticker} ({target_strategy.name}) @ {candle_time}: "
-            f"Signal={signal}, Price={curr_price}, Reasons={reasons}"
+            f"Signal={signal}, Price={final_price}, Reasons={reasons}"
         )
 
         return SignalResult(
             ticker=ticker,
             strategy_name=target_strategy.name,
             signal=signal,
-            price=curr_price,
+            price=final_price,
             candle_time=candle_time,
             reasons=reasons,
             indicators_snapshot=snapshot,
-            take_profit_price=tp_price if signal in ["BUY", "SELL"] else None,
-            stop_loss_price=sl_price if signal in ["BUY", "SELL"] else None,
-            risk_reward_ratio=rrr if signal in ["BUY", "SELL"] else None,
+            take_profit_price=tp_price if is_actionable else None,
+            stop_loss_price=sl_price if is_actionable else None,
+            risk_reward_ratio=rrr if is_actionable else None,
             pdf_confluence_score=pdf_score,
             setup_grade=setup_grade,
             pdf_confluence_details=pdf_checks,
@@ -1669,6 +1788,10 @@ class SignalEngine:
             module_scores=module_scores,
             is_retest_entry=is_retest_sig,
             retest_details=retest_details_sig,
+            is_limit_order=is_limit_type,
+            limit_order_type=signal if is_limit_type else None,
+            limit_price=limit_price_val if is_limit_type else None,
+            limit_expiry_minutes=int(self.config.get("mt5", {}).get("limit_order_expiry_mins", 120)),
         )
 
     def evaluate_all_strategies(
