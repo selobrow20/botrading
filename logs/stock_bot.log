@@ -12737,3 +12737,10 @@ Test
 [2026-10-06 17:09:22] [INFO] [storage:331] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
 [2026-10-06 17:10:22] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
 [2026-10-06 17:10:22] [INFO] [storage:331] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-06 17:11:22] [INFO] [fetcher:179] - Sukses mengambil 100 bar Spot Gold langsung dari terminal MT5 (XAUUSDc).
+[2026-10-06 17:11:22] [INFO] [storage:331] - Berhasil menyimpan 100 baris data OHLCV untuk XAUUSD (15m).
+[2026-10-06 17:11:30] [INFO] [telegram_bot:85] - Telegram Notifier siap dalam mode Live.
+[2026-10-06 17:11:30] [INFO] [telegram_bot:445] - Paket member_copier.zip diperbarui otomatis: 29650 bytes
+[2026-10-06 17:11:33] [INFO] [telegram_bot:397] - Dokumen D:\bot saham\member_copier.zip berhasil terkirim ke Telegram (8754997836).
+[2026-10-06 17:11:36] [INFO] [telegram_bot:397] - Dokumen D:\bot saham\member_copier.zip berhasil terkirim ke Telegram (8301678027).
+[2026-10-06 17:11:39] [INFO] [telegram_bot:397] - Dokumen D:\bot saham\member_copier.zip berhasil terkirim ke Telegram (7170889507).
