@@ -83,8 +83,8 @@ def test_mt5_order_lifecycle_and_positions():
         candle_time="2026-09-25T08:00:00",
         take_profit_price=2740.0,
         stop_loss_price=2770.0,
-        pdf_confluence_score=75.0,
-        setup_grade="Grade A",
+        pdf_confluence_score=85.0,
+        setup_grade="Grade A+",
     )
     res = bridge.execute_signal(sell_sig)
     assert res["success"] is True
@@ -149,7 +149,7 @@ def test_mt5_dynamic_lot_sizing_by_confluence():
     assert res_super["success"] is True
     assert res_super["volume"] == 0.05
 
-    # 2. Momen Standar / Masih Riskan (Grade A 65% - 79%) -> 0.01 lot
+    # 2. Momen Standar / Masih Riskan (Grade A 65% - 79%) -> Ditolak / diskip jika cent_only_high_grade=True
     bridge._simulated_positions.clear()
     standard_sig = SignalResult(
         ticker="XAUUSD",
@@ -162,9 +162,18 @@ def test_mt5_dynamic_lot_sizing_by_confluence():
         pdf_confluence_score=70.0,
         setup_grade="Grade A",
     )
-    res_standard = bridge.execute_signal(standard_sig)
-    assert res_standard["success"] is True
-    assert res_standard["volume"] == 0.01
+    # Default (cent_only_high_grade=True) -> skip
+    res_skip = bridge.execute_signal(standard_sig)
+    assert res_skip["success"] is False
+    assert res_skip["status"] in ("cent_skip_standard_grade", "pdf_rejected")
+
+    # Jika cent_only_high_grade dimatikan -> baru masuk 0.01 lot (backward compatibility test)
+    bridge.cent_only_high_grade = False
+    with patch.dict(bridge.config.get("mt5", {}), {"cent_only_high_grade": False, "min_confluence_score": 65.0}):
+        res_standard = bridge.execute_signal(standard_sig)
+        assert res_standard["success"] is True
+        assert res_standard["volume"] == 0.01
+    bridge.cent_only_high_grade = True
 
     # 3. Khusus Sesi US (19:00 - 24:00 WIB) Akun Cent -> 0.08 lot
     bridge.is_us_session_window = lambda: True

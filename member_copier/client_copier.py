@@ -859,7 +859,20 @@ class MT5MemberBridge:
             trade_lot, lot_lbl = self.calculate_lot_size(sig, is_cent=False)
             print(f"   💎 [USD HIGH GRADE] Sinyal Grade A+ (Momen Bagus 0.05 Lot). Membuka posisi disiplin {trade_lot} Lot di Akun Standard USD ({lot_lbl}).")
         else:
-            # Akun Cent (USC): Sesuai sesi pasar & pengaturan lot member (0.05 lot / 0.08 lot Sesi US)
+            # Akun Cent (USC): Sesuai arahan pengguna: HANYA Grade A+ (0.05 lot)
+            cent_only_high = self.cfg.get("cent_only_high_grade", True)
+            if cent_only_high and not is_high_grade and master_lot < 0.05:
+                skip_msg = (
+                    f"🛡️ [CENT HIGH GRADE FILTER] Sinyal ini adalah sinyal standar/kurang bagus (skor < 80% / sinyal standar). "
+                    f"Sesuai arahan pengguna: MT5 HANYA mengeksekusi sinyal Grade A+ (0.05 Lot). "
+                    f"Sinyal standar dilewati demi menjaga akurasi sniper!"
+                )
+                print(f"\n{skip_msg}\n")
+                return {
+                    "success": False,
+                    "status": "cent_skip_standard_grade",
+                    "message": skip_msg,
+                }
             trade_lot, lot_lbl = self.calculate_lot_size(sig, is_cent=True)
             print(f"   🎯 [CENT USC ORDER] Membuka posisi {trade_lot} Lot ({lot_lbl}).")
 

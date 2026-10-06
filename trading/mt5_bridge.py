@@ -71,6 +71,8 @@ class MT5Bridge:
         self.default_lot: float = float(mt5_cfg.get("default_lot", 0.01))
         self.high_confidence_lot: float = float(mt5_cfg.get("high_confidence_lot", 0.05))
         self.high_confidence_threshold: float = float(mt5_cfg.get("high_confidence_threshold", 80.0))
+        self.cent_only_high_grade: bool = bool(mt5_cfg.get("cent_only_high_grade", True))
+
         self.use_dynamic_lot: bool = bool(mt5_cfg.get("use_dynamic_lot", False))
         self.risk_percent: float = float(mt5_cfg.get("risk_percent", 1.0))
         self.max_slippage: int = int(mt5_cfg.get("max_slippage", 20))
@@ -1016,6 +1018,7 @@ class MT5Bridge:
             or "A+" in str(grade).upper()
         )
         usd_only_high = cfg_mt5.get("usd_only_high_grade", True)
+        cent_only_high = cfg_mt5.get("cent_only_high_grade", getattr(self, "cent_only_high_grade", True))
 
         if not is_cent:
             if usd_only_high and not is_high_conviction:
@@ -1033,6 +1036,18 @@ class MT5Bridge:
             lot = float(cfg_mt5.get("usd_execution_lot", 0.01))
             logger.info(f"💎 [USD HIGH GRADE] Sinyal Grade A+ ({score:.0f}%) untuk Akun Standard USD: Membuka posisi disiplin {lot} Lot.")
         else:
+            if cent_only_high and not is_high_conviction:
+                msg = (
+                    f"🛡️ [CENT HIGH GRADE FILTER] Sinyal {ticker} {sig_type} adalah sinyal standar/kurang bagus (Skor {score:.0f}%, {grade}). "
+                    f"Sesuai arahan pengguna: Akun Cent USC DILARANG masuk pada sinyal standar (< 80%). "
+                    f"HANYA masuk pada sinyal Grade A+ (≥80% / 0.05 lot sniper). Order dilewati demi menjaga akurasi trading!"
+                )
+                logger.info(msg)
+                return {
+                    "success": False,
+                    "status": "cent_skip_standard_grade",
+                    "message": msg,
+                }
             lot = self.calculate_lot_size(ticker, price, sl, confluence_score=score, setup_grade=grade)
 
         # Mode Simulasi (Dry-Run untuk Unit Testing)
