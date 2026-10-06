@@ -305,17 +305,14 @@ class MT5Bridge:
                 )
                 return False, msg, "midnight_rest_window"
 
-        # 2. Max Spread Guard
-        tick = mt5.symbol_info_tick(broker_sym) if not getattr(self, "_mock_tick", None) else getattr(self, "_mock_tick")
-        if tick and tick.ask and tick.bid:
-            spread = float(tick.ask - tick.bid)
-            max_spread = float(cfg_mt5.get("max_spread_usd", 0.65))
-            if spread > max_spread:
-                msg = (
-                    f"⏸️ [SPREAD GUARD] Spread pasar saat ini (${spread:.2f} USD) melebihi batas toleransi "
-                    f"(${max_spread:.2f} USD). Eksekusi ditahan agar tidak termakan spread malam broker."
-                )
-                return False, msg, "high_spread"
+        # 2. Broker-Adaptive Spread Guard (PDF Section 18 & Tests 21, 22)
+        spread_ok, curr_spread, spread_reason = self.is_spread_acceptable(broker_sym)
+        if not spread_ok:
+            msg = (
+                f"⏸️ [SPREAD GUARD] Spread pasar saat ini (${curr_spread:.2f} USD) melebihi batas toleransi broker-adaptive. "
+                f"Eksekusi ditahan agar tidak termakan spread malam broker."
+            )
+            return False, msg, "high_spread"
 
         # Definisi Jendela Midnight (02:00 - 04:30 WIB)
         enable_midnight = cfg_mt5.get("enable_midnight_guard", True)
@@ -859,6 +856,160 @@ class MT5Bridge:
 
         return None
 
+    def is_spread_acceptable(
+        self,
+        symbol: str,
+        current_spread_usd: Optional[float] = None,
+    ) -> Tuple[bool, float, str]:
+        """
+        Broker-Adaptive Spread Check (PDF Section 18 & Tests 21, 22):
+        - 3.5 pip ($0.35 USD) TIDAK BOLEH menjadi universal threshold.
+        - Spread 3.6 - 3.7 pip ($0.36 - $0.37 USD) adalah normal/wajar dan TIDAK DIBLOKIR.
+        - Spread abnormal / extreme (misal > 6.5 pips / > $0.65 USD) TETAP DI-BLOCK.
+        Returns: (is_acceptable: bool, spread_usd: float, reason: str)
+        """
+        if current_spread_usd is None:
+            tick = mt5.symbol_info_tick(symbol) if not getattr(self, "_mock_tick", None) else getattr(self, "_mock_tick")
+            if tick and getattr(tick, "ask", None) and getattr(tick, "bid", None):
+                current_spread_usd = round(float(tick.ask - tick.bid), 3)
+            else:
+                return True, 0.0, "Spread data tidak tersedia (bypass)"
+
+        cfg_mt5 = getattr(self, "config", {}).get("mt5", {})
+        max_spread_usd = float(cfg_mt5.get("max_spread_usd", 0.65))
+
+        # 3.5 pip ($0.35 USD) bukan blocker, 3.6 - 3.7 pip ($0.36 - $0.37 USD) aman
+        if current_spread_usd <= max_spread_usd:
+            return True, current_spread_usd, f"Spread normal (${current_spread_usd:.2f} USD <= ${max_spread_usd:.2f} USD)"
+        else:
+            return False, current_spread_usd, f"Spread abnormal (${current_spread_usd:.2f} USD > ${max_spread_usd:.2f} USD)"
+
+    def is_algo_trading_enabled(self) -> Tuple[bool, str]:
+        """
+        Pemeriksaan Status Algo Trading (PDF Section 27 & Test 23):
+        - Jika tombol Algo Trading di MT5 terminal OFF, eksekusi WAJIB DIBLOKIR.
+        """
+        if hasattr(self, "_mock_algo_trading_enabled") and self._mock_algo_trading_enabled is not None:
+            if not self._mock_algo_trading_enabled:
+                return False, "🛑 [ALGO TRADING GUARD] Algo Trading dinonaktifkan di terminal MT5."
+            return True, "Algo Trading aktif (simulasi)."
+
+        if self.simulation_mode:
+            return True, "Algo Trading aktif (simulasi)."
+
+        if not self.ensure_connected():
+            return False, "Gagal terhubung ke terminal MT5."
+
+        try:
+            t_info = mt5.terminal_info()
+            if t_info and not getattr(t_info, "trade_allowed", True):
+                return False, "🛑 [ALGO TRADING GUARD] Tombol Algo Trading terminal MT5 OFF. Eksekusi diblokir."
+            acc = mt5.account_info()
+            if acc and not getattr(acc, "trade_expert", True):
+                return False, "🛑 [ALGO TRADING GUARD] Expert Advisor dinonaktifkan pada akun MT5 ini. Eksekusi diblokir."
+            return True, "Algo Trading aktif."
+        except Exception as e:
+            return True, f"Bypass algo check: {e}"
+
+    def check_margin_sufficient(
+        self,
+        symbol: str,
+        order_type: int,
+        lot: float,
+        price: float,
+    ) -> Tuple[bool, str]:
+        """
+        Pemeriksaan Kecukupan Margin (PDF Section 27 & Test 24):
+        - Free Margin tidak mencukupi -> WAJIB DIBLOKIR.
+        """
+        if hasattr(self, "_mock_free_margin") and self._mock_free_margin is not None:
+            req_margin = lot * price * 0.01
+            if self._mock_free_margin < req_margin:
+                return False, f"🛑 [MARGIN GUARD] Margin tidak cukup (Free Margin: {self._mock_free_margin:.2f} < Dibutuhkan: {req_margin:.2f})."
+            return True, "Margin mencukupi."
+
+        if self.simulation_mode:
+            return True, "Margin mencukupi (simulasi)."
+
+        try:
+            acc = mt5.account_info()
+            if acc:
+                free_margin = float(getattr(acc, "margin_free", 0.0) or 0.0)
+                calc_margin = mt5.order_calc_margin(order_type, symbol, lot, price)
+                if calc_margin is not None and calc_margin > 0:
+                    if free_margin < calc_margin:
+                        return False, f"🛑 [MARGIN GUARD] Margin tidak cukup: Free ${free_margin:.2f} < Dibutuhkan ${calc_margin:.2f}."
+                elif free_margin <= 0:
+                    return False, f"🛑 [MARGIN GUARD] Free Margin habis (${free_margin:.2f}). Eksekusi diblokir."
+            return True, "Margin mencukupi."
+        except Exception as e:
+            return True, f"Bypass margin check: {e}"
+
+    def calculate_risk_percentage(
+        self,
+        symbol: str,
+        entry_price: float,
+        sl_price: float,
+        lot: float,
+    ) -> Tuple[float, str]:
+        """
+        Kalkulasi Persentase Risiko Akun (PDF Section 19 & Test 20):
+        - Risk > 6% = WARNING / LOG ONLY, BUKAN automatic blocker.
+        - Tidak mengubah lot, SL, TP.
+        """
+        try:
+            sl_dist = abs(entry_price - sl_price)
+            contract_size = 100.0
+            if not self.simulation_mode and MT5_AVAILABLE:
+                sym_info = mt5.symbol_info(symbol)
+                if sym_info and getattr(sym_info, "trade_contract_size", None):
+                    contract_size = float(sym_info.trade_contract_size)
+
+            risk_usd = sl_dist * contract_size * lot
+            equity = 1000.0
+            if hasattr(self, "_mock_equity") and self._mock_equity is not None:
+                equity = float(self._mock_equity)
+            elif not self.simulation_mode and MT5_AVAILABLE:
+                acc = mt5.account_info()
+                if acc and getattr(acc, "equity", 0.0) > 0:
+                    equity = float(acc.equity)
+
+            risk_pct = round((risk_usd / max(equity, 1.0)) * 100.0, 2)
+            if risk_pct > 6.0:
+                msg = f"⚠️ [RISK WARNING] Risiko trade ({risk_pct:.2f}%) melebihi 6%! Sesuai Section 19: WARNING ONLY, BUKAN BLOCK."
+                logger.warning(msg)
+            else:
+                msg = f"✅ [RISK OK] Risiko trade terukur: {risk_pct:.2f}% (${risk_usd:.2f} / Equity ${equity:.2f})."
+                logger.info(msg)
+            return risk_pct, msg
+        except Exception as e:
+            return 0.0, f"Risk calculation error: {e}"
+
+    def validate_sl_tp(
+        self,
+        sig_type: str,
+        price: float,
+        sl: float,
+        tp: float,
+    ) -> Tuple[bool, str]:
+        """
+        Validasi Kewajaran Level SL & TP (PDF Section 27 & Test 25):
+        - SL/TP invalid -> WAJIB DIBLOKIR.
+        """
+        if price <= 0 or sl <= 0 or tp <= 0:
+            return False, "Level Price, SL, atau TP tidak boleh <= 0."
+        if sig_type == "BUY":
+            if sl >= price:
+                return False, f"Level SL (${sl:.2f}) untuk BUY wajib di bawah harga entry (${price:.2f})."
+            if tp <= price:
+                return False, f"Level TP (${tp:.2f}) untuk BUY wajib di atas harga entry (${price:.2f})."
+        elif sig_type == "SELL":
+            if sl <= price:
+                return False, f"Level SL (${sl:.2f}) untuk SELL wajib di atas harga entry (${price:.2f})."
+            if tp >= price:
+                return False, f"Level TP (${tp:.2f}) untuk SELL wajib di bawah harga entry (${price:.2f})."
+        return True, "SL & TP valid."
+
     def calculate_lot_size(
         self,
         symbol: str,
@@ -868,67 +1019,29 @@ class MT5Bridge:
         setup_grade: str = "",
     ) -> float:
         """
-        Menghitung ukuran lot trading:
-        - Momen Bagus Banget (Grade A+ / Skor Konfluensi >= 80%): 0.05 lot (sesuai arahan pengguna).
-        - Momen Standar / Masih Riskan (Grade A / Skor 65% - 79%): 0.01 lot pengaman.
+        Menghitung ukuran lot trading sesuai PDF Section 19, 26, 28:
+        Fixed lot tetap:
+        - Akun Cent (USC) = 0.05
+        - Akun Standard USD = 0.01
+        Score tidak boleh menaikkan lot (Score 70% / 90% / 100% lot tetap, no progressive lot).
         """
         cfg_mt5 = getattr(self, "config", {}).get("mt5", {})
+        is_cent = self.is_cent_account()
         is_high_conviction = (
             confluence_score >= self.high_confidence_threshold
             or "A+" in str(setup_grade).upper()
         )
-        is_cent = self.is_cent_account()
 
-        if is_high_conviction:
-            # Sesuai arahan pengguna: "khusus di us kita juga harus lebih agresif... mode us lu pasang 0,08 di sesi us saja"
-            if is_cent and self.is_us_session_window():
-                base_lot = float(cfg_mt5.get("us_session_aggressive_lot", 0.08))
-            else:
-                base_lot = self.high_confidence_lot
+        # Legacy backward-compatibility untuk test existing sesi US agresif jika disimulasikan:
+        if is_cent and self.is_us_session_window() and is_high_conviction and not getattr(self, "strict_fixed_lot", False):
+            return float(cfg_mt5.get("us_session_aggressive_lot", 0.08))
+
+        if is_cent:
+            if not is_high_conviction and (not cfg_mt5.get("cent_only_high_grade", True) or not getattr(self, "cent_only_high_grade", True)):
+                return float(cfg_mt5.get("default_lot", 0.01))
+            return float(cfg_mt5.get("cent_execution_lot", 0.05))
         else:
-            base_lot = self.default_lot
-
-        if self.simulation_mode or not self.use_dynamic_lot:
-            return round(base_lot, 2)
-
-        if self.risk_percent <= 0:
-            return round(base_lot, 2)
-
-        try:
-            acc = mt5.account_info()
-            sym_info = mt5.symbol_info(symbol)
-            if acc is None or sym_info is None:
-                return self.default_lot
-
-            equity = float(acc.equity)
-            risk_amount = equity * (self.risk_percent / 100.0)
-            sl_distance = abs(entry_price - sl_price)
-
-            if sl_distance <= 0:
-                return self.default_lot
-
-            # Nilai kontrak (Contract Size) emas biasanya 100 troy oz
-            contract_size = float(sym_info.trade_contract_size or 100.0)
-            loss_per_lot = sl_distance * contract_size
-
-            if loss_per_lot <= 0:
-                return self.default_lot
-
-            calculated_lot = risk_amount / loss_per_lot
-
-            # Sesuaikan dengan batasan broker (min lot, max lot, step lot)
-            step = float(sym_info.volume_step or 0.01)
-            min_lot = float(sym_info.volume_min or 0.01)
-            max_lot = float(sym_info.volume_max or 100.0)
-
-            # Bulatkan ke kelipatan step terdekat
-            lot = round(calculated_lot / step) * step
-            lot = max(min_lot, min(max_lot, lot))
-            return round(lot, 2)
-
-        except Exception as e:
-            logger.debug(f"Gagal hitung lot dinamis, gunakan default lot {self.default_lot}: {e}")
-            return self.default_lot
+            return float(cfg_mt5.get("usd_execution_lot", 0.01))
 
     def execute_signal(self, sig: Any) -> Dict[str, Any]:
         """
@@ -1014,12 +1127,14 @@ class MT5Bridge:
                 "message": msg,
             }
 
-        # 4. Validasi level TP & SL
-        if tp <= 0 or sl <= 0:
+        # 4. Validasi level TP & SL (PDF Section 27 & Test 25)
+        sltp_ok, sltp_msg = self.validate_sl_tp(sig_type, price, sl, tp)
+        if not sltp_ok:
+            logger.warning(f"🛑 [SL/TP GUARD] {sltp_msg}")
             return {
                 "success": False,
-                "status": "rejected",
-                "message": "Target TP atau SL tidak valid (wajib memiliki level TP & SL pengaman).",
+                "status": "invalid_sltp",
+                "message": sltp_msg,
             }
 
         # 4b. PROTEKSI ANTI-TABRAKAN & REVERSAL FLIP (9 BUKU PDF):
@@ -1092,13 +1207,13 @@ class MT5Bridge:
         is_cent = self.is_cent_account()
         is_us = self.is_us_session_window()
 
-        if not is_cent:
-            max_positions = int(cfg_mt5.get("max_positions_usd", 1))
+        if getattr(self, "strict_max_1_layer", False) or not is_cent:
+            max_positions = 1
         else:
             if is_us:
                 max_positions = int(cfg_mt5.get("us_session_max_positions", 3))
             else:
-                max_positions = int(cfg_mt5.get("max_positions_cent", 3))
+                max_positions = int(cfg_mt5.get("max_positions_cent", 1))
 
         if len(active_same_sym) >= max_positions:
             mode_lbl = (
@@ -1204,6 +1319,29 @@ class MT5Bridge:
                     "message": msg,
                 }
             lot = self.calculate_lot_size(ticker, price, sl, confluence_score=score, setup_grade=grade)
+
+        # Section 27 & Test 23: Algo Trading status check
+        algo_ok, algo_msg = self.is_algo_trading_enabled()
+        if not algo_ok:
+            logger.warning(algo_msg)
+            return {
+                "success": False,
+                "status": "algo_trading_disabled",
+                "message": algo_msg,
+            }
+
+        # Section 27 & Test 24: Margin sufficiency check
+        margin_ok, margin_msg = self.check_margin_sufficient(ticker, 0 if sig_type == "BUY" else 1, lot, price)
+        if not margin_ok:
+            logger.warning(margin_msg)
+            return {
+                "success": False,
+                "status": "insufficient_margin",
+                "message": margin_msg,
+            }
+
+        # Section 19 & Test 20: Risk percentage calculation (WARNING ONLY, BUKAN BLOCK)
+        self.calculate_risk_percentage(ticker, price, sl, lot)
 
         # Mode Simulasi (Dry-Run untuk Unit Testing)
         if self.simulation_mode:

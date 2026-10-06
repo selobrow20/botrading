@@ -12,12 +12,14 @@ logger = setup_logger("signal_engine")
 
 @dataclass
 class SignalResult:
-    """Hasil evaluasi sinyal trading untuk satu saham."""
+    """Hasil evaluasi sinyal trading untuk satu saham / komoditas (Arsitektur Hermes 3D)."""
     ticker: str
     strategy_name: str
-    signal: str           # 'BUY', 'SELL', 'HOLD'
+    signal: str           # 'BUY', 'SELL', 'HOLD' (arah eksekusi / kompatibilitas backward)
     price: float
-    candle_time: str
+    candle_time: str = ""
+    trade_type: str = "SHORT"  # 'SHORT' (Scalping / Short-term) atau 'LONG' (Intraday / Swing)
+    direction: str = "HOLD"    # 'BUY', 'SELL', atau 'HOLD' (Arah posisi terpisah dari trade_type)
     reasons: List[str] = field(default_factory=list)
     indicators_snapshot: Dict[str, float] = field(default_factory=dict)
     # Target Profit & Stop Loss untuk Trading Harian
@@ -43,11 +45,20 @@ class SignalResult:
     limit_price: Optional[float] = None
     limit_expiry_minutes: int = 120
 
+    def __post_init__(self):
+        # Sinkronisasi direction dan signal agar selalu konsisten namun terpisah dari trade_type
+        if self.direction == "HOLD" and self.signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]:
+            self.direction = "BUY" if "BUY" in self.signal else "SELL"
+        elif self.direction in ["BUY", "SELL"] and self.signal not in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]:
+            self.signal = self.direction
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "ticker": self.ticker,
             "strategy_name": self.strategy_name,
             "signal": self.signal,
+            "trade_type": self.trade_type,
+            "direction": self.direction,
             "price": self.price,
             "candle_time": self.candle_time,
             "reasons": self.reasons,
@@ -1202,6 +1213,7 @@ class SignalEngine:
         apply_pdf_filter: bool = True,
         df_h1: Optional[pd.DataFrame] = None,
         df_h4: Optional[pd.DataFrame] = None,
+        preferred_trade_type: Optional[str] = None,
     ) -> SignalResult:
         """
         Mengevaluasi bar/candle tertentu (default candle terkini -1) terhadap strategi.
@@ -1324,6 +1336,7 @@ class SignalEngine:
         # Sesuai Arahan Mutlak Pengguna:
         # "sl tp minimal 1:1 60 pips, di mix aja kalo yang bagus di sebelumnya gpp dipakai tapi sl tp minimal 60 pips 1:1 dilarang dibawah itu"
         market_regime = ""
+        trade_type = preferred_trade_type or "SHORT"
 
         if is_gold:
             MIN_GOLD_SL_USD = 6.00  # 60 pips mutlak ($6.00 USD)
@@ -1368,61 +1381,63 @@ class SignalEngine:
             elif target_sig_type == "SELL" and not (curr_price <= ema50_val):
                 is_good_long_momentum = False
 
-            if is_good_long_momentum:
-                # Mode Momentum Tren Jauh: Rasio wajib tepat 3:1 (TP 3, SL 1)
-                # SL: min 60 pips ($6.00 USD), max 120 pips ($12.00 USD)
-                # TP: TEPAT 3x SL (min 180 pips / $18.00 USD, Rasio 3:1 mutlak)
+            # ─────────────────────────────────────────────────────────────
+            # RESTRUCTURE LOGIKA DUA TIPE TRADE (BoTrading / Hermes 3D):
+            # 1. SHORT = SCALPING / SHORT-TERM TRADE (Quick in/quick out, SL/TP ~60 pips)
+            # 2. LONG  = INTRADAY / SWING TRADE (Dynamic SL/TP, R:R 3:1, BE trigger +60 pips)
+            # !!! JANGAN SALAH ARTIKAN: SHORT != SELL, LONG != BUY !!!
+            # SHORT dan LONG adalah KLASIFIKASI DURASI / KARAKTER TRADE, BUKAN ARAH!
+            # ─────────────────────────────────────────────────────────────
+            if preferred_trade_type in ["SHORT", "LONG"]:
+                trade_type = preferred_trade_type
+            elif is_good_long_momentum and macro_bias in ["BULLISH", "BEARISH"] and (
+                (macro_bias == "BULLISH" and target_sig_type == "BUY") or
+                (macro_bias == "BEARISH" and target_sig_type == "SELL")
+            ):
+                trade_type = "LONG"
+            elif is_good_long_momentum and pdf_score >= 90.0:
+                trade_type = "LONG"
+            else:
+                trade_type = "SHORT"
+
+            if trade_type == "SHORT":
+                # SHORT ENGINE — SCALPING (Karakter Cepat 60/60 Pips)
+                # Quick in / quick out: SL 60 pips ($6.00 USD), TP 60 pips ($6.00 USD), R:R 1:1
+                sl_distance = MIN_GOLD_SL_USD
+                tp_distance = MIN_GOLD_TP_USD
+                eff_rr = 1.0
+                market_regime = f"{session_name} SHORT Scalping Cepat (TP 60 Pips & SL 60 Pips, R:R 1:1)"
+            else:
+                # LONG ENGINE — INTRADAY / SWING TRADE (Dynamic SL/TP & R:R 3:1)
                 sl_distance_atr = round(atr_safe * 1.3, 2)
                 sl_distance = round(max(MIN_GOLD_SL_USD, max(long_sl_usd, min(12.00, sl_distance_atr))), 2)
+
+                # Anchor SL ke swing struktural 15 bar terakhir
+                n_rows = len(df_with_ind)
+                curr_pos = bar_idx if bar_idx >= 0 else (n_rows + bar_idx)
+                start_pos = max(0, curr_pos - 15)
+                recent_slice = df_with_ind.iloc[start_pos:curr_pos]
+
+                if target_sig_type == "BUY":
+                    swing_low = float(recent_slice["Low"].min()) if not recent_slice.empty else float(curr_row.get("Low", curr_price))
+                    curr_low = float(curr_row.get("Low", curr_price))
+                    structural_support = min(swing_low, curr_low)
+                    sl_dist_structural = round(curr_price - (structural_support - 1.20), 2)
+                    sl_distance = max(sl_distance, sl_dist_structural)
+                elif target_sig_type == "SELL":
+                    swing_high = float(recent_slice["High"].max()) if not recent_slice.empty else float(curr_row.get("High", curr_price))
+                    curr_high = float(curr_row.get("High", curr_price))
+                    structural_resistance = max(swing_high, curr_high)
+                    sl_dist_structural = round((structural_resistance + 1.20) - curr_price, 2)
+                    sl_distance = max(sl_distance, sl_dist_structural)
+
+                sl_distance = min(12.00, max(MIN_GOLD_SL_USD, sl_distance))
                 tp_distance = round(sl_distance * 3.0, 2)
-                market_regime = (
-                    f"{session_name} Momentum Tren Jauh (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R 3:1)"
-                    + (" [HIGH-VOL]" if is_high_vol else "")
-                )
-            else:
-                # Mode Cepat / Normal: Minimal 1:1, SL minimal 60 pips ($6.00 USD), TP minimal 60 pips (TP >= SL)
-                sl_distance_atr = round(atr_safe * sl_atr_mult, 2)
-                sl_distance = round(max(MIN_GOLD_SL_USD, max(short_sl_usd, min(9.50, sl_distance_atr))), 2)
-                tp_atr = round(atr_safe * 1.8, 2)
-                tp_distance = round(min(12.00, max(MIN_GOLD_TP_USD, max(short_tp_usd, sl_distance, tp_atr))), 2)
                 eff_rr = round(tp_distance / max(sl_distance, 0.01), 1)
                 market_regime = (
-                    f"{session_name} Momen Cepat ATR-Adaptive (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R {eff_rr}:1)"
+                    f"{session_name} LONG Intraday/Swing Momentum (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R {eff_rr}:1, BE +60p)"
                     + (" [HIGH-VOL]" if is_high_vol else "")
                 )
-
-            # ============================================================
-            # STRUCTURAL SWING SL ANCHORING (9 Buku PDF: SMC & Bob Volman)
-            # Stop loss wajib bersembunyi di balik Swing Low / High 15-bar terakhir
-            # Dilarang menaruh SL di area hampa / no-man's land yang rawan liquidity sweep!
-            # ============================================================
-            n_rows = len(df_with_ind)
-            curr_pos = bar_idx if bar_idx >= 0 else (n_rows + bar_idx)
-            start_pos = max(0, curr_pos - 15)
-            recent_slice = df_with_ind.iloc[start_pos:curr_pos]
-
-            if target_sig_type == "BUY":
-                swing_low = float(recent_slice["Low"].min()) if not recent_slice.empty else float(curr_row.get("Low", curr_price))
-                curr_low = float(curr_row.get("Low", curr_price))
-                structural_support = min(swing_low, curr_low)
-                # Buffer 1.20 USD (12 pips) di bawah support struktural
-                sl_dist_structural = round(curr_price - (structural_support - 1.20), 2)
-                sl_distance = max(sl_distance, sl_dist_structural)
-            elif target_sig_type == "SELL":
-                swing_high = float(recent_slice["High"].max()) if not recent_slice.empty else float(curr_row.get("High", curr_price))
-                curr_high = float(curr_row.get("High", curr_price))
-                structural_resistance = max(swing_high, curr_high)
-                # Buffer 1.20 USD (12 pips) di atas resistance struktural
-                sl_dist_structural = round((structural_resistance + 1.20) - curr_price, 2)
-                sl_distance = max(sl_distance, sl_dist_structural)
-
-            # Cap batas atas SL Gold di 12.00 USD (120 pips) agar risiko tetap terukur & TP 3:1 maksimal 36.00 USD (360 pips)
-            sl_distance = min(12.00, max(MIN_GOLD_SL_USD, sl_distance))
-
-            if is_good_long_momentum:
-                tp_distance = round(sl_distance * 3.0, 2)
-            else:
-                tp_distance = min(12.00, max(MIN_GOLD_TP_USD, max(sl_distance, tp_distance)))
 
             # HARD FLOOR CONSTRAINT MUTLAK PENGGUNA:
             # DILARANG KERAS SL ATAU TP DI BAWAH 60 PIPS (6.00 USD) & R:R MINIMAL 1:1
@@ -1572,28 +1587,28 @@ class SignalEngine:
 
         # ═══════════════════════════════════════════════════════════════════════
         # LAPIS 1: OTAK UTAMA (BIAS DAN IZIN H4) - Murphy, Ichimoku, Pring
+        # Kaidah PDF Section 2, 3, 4, 5, 25:
+        # H4 adalah CONTEXT, BUKAN penentu langsung arah BUY/SELL.
+        # - SHORT (Scalping): Selalu diizinkan mencari setup BUY maupun SELL
+        #   baik saat H4 Bullish, Bearish, maupun Neutral / Sideways.
+        # - LONG (Intraday/Swing): Boleh mencari BUY maupun SELL jika setup valid.
+        #   Namun pada H4 Neutral / Sideways, LONG DEFAULT WAITING sampai
+        #   terdapat setup yang sangat kuat (score >= 90).
         # ═══════════════════════════════════════════════════════════════════════
         macro_blocked = False
         macro_block_reason = ""
         if is_gold and apply_pdf_filter:
-            if macro_bias == "NETRAL":
-                macro_blocked = True
-                macro_block_reason = (
-                    f"🛑 [LAPIS 1: OTAK UTAMA H4] Izin Masuk Ditolak: Bias Makro NETRAL ({macro_reason}). "
-                    f"Kaidah 3 Lapis: Jika Otak Utama Netral/Chop, bot hanya memantau dan dilarang membuka posisi baru."
-                )
-            elif macro_bias == "BULLISH" and target_sig_type == "SELL":
-                macro_blocked = True
-                macro_block_reason = (
-                    f"🛑 [LAPIS 1: OTAK UTAMA H4] Sinyal SELL Ditolak: Bias Makro H4 BULLISH ({macro_reason}). "
-                    f"Kaidah 3 Lapis: Dilarang membuka posisi SELL melawan tren institusi."
-                )
-            elif macro_bias == "BEARISH" and target_sig_type == "BUY":
-                macro_blocked = True
-                macro_block_reason = (
-                    f"🛑 [LAPIS 1: OTAK UTAMA H4] Sinyal BUY Ditolak: Bias Makro H4 BEARISH ({macro_reason}). "
-                    f"Kaidah 3 Lapis: Dilarang membuka posisi BUY melawan tren institusi."
-                )
+            if trade_type == "LONG":
+                if macro_bias == "NETRAL":
+                    if pdf_score < 90.0:
+                        macro_blocked = True
+                        macro_block_reason = (
+                            f"🛑 [LAPIS 1: OTAK UTAMA H4] LONG Setup WAITING: Bias Makro NETRAL/SIDEWAYS ({macro_reason}). "
+                            f"Kaidah Section 5: H4 Neutral membuat LONG default WAITING sampai terdapat setup memadai."
+                        )
+            elif trade_type == "SHORT":
+                # SHORT scalping diizinkan di H4 Bullish, Bearish, maupun Neutral
+                macro_blocked = False
 
         if is_buy:
             if macro_blocked:
@@ -1856,6 +1871,8 @@ class SignalEngine:
             ticker=ticker,
             strategy_name=target_strategy.name,
             signal=signal,
+            trade_type=trade_type,
+            direction=target_sig_type if is_actionable else "HOLD",
             price=final_price,
             candle_time=candle_time,
             reasons=reasons,

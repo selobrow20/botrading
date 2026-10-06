@@ -131,6 +131,15 @@ class TelegramNotifier:
 
         if sig.signal == "BUY":
             lines.append(f"🟢 <b>SINYAL ENTRY (MASUK / BUY): {display_ticker}</b>")
+            if is_gold:
+                trade_type_val = getattr(sig, "trade_type", "SHORT") or "SHORT"
+                direction_val = getattr(sig, "direction", "BUY") or "BUY"
+                macro_h4 = getattr(sig, "macro_bias_h4", "") or "NEUTRAL / SIDEWAYS"
+                lines.append(f"🌐 <b>Market:</b> H4 = <code>{macro_h4}</code>")
+                lines.append(f"⚡ <b>Trade Type:</b> <code>{trade_type_val} — {'SCALPING' if trade_type_val == 'SHORT' else 'INTRADAY/SWING'}</code>")
+                lines.append(f"🧭 <b>Direction:</b> <code>{direction_val}</code>")
+                if trade_type_val == "LONG":
+                    lines.append("🛡️ <b>Break Even:</b> <code>+60 pips</code>")
             if getattr(sig, "is_retest_entry", False):
                 r_det = getattr(sig, "retest_details", "") or "Area Support"
                 lines.append(f"🎯 <b>Metode Entry:</b> 🔄 <b>Retest Diskon (Bawah)</b> - <code>{html.escape(r_det)}</code>")
@@ -166,8 +175,15 @@ class TelegramNotifier:
                 lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
 
         elif sig.signal == "SELL" and is_gold:
-            # Short Gold
-            lines.append(f"🔴 <b>SINYAL ENTRY SHORT (SELL): {display_ticker}</b>")
+            lines.append(f"🔴 <b>SINYAL ENTRY (SELL): {display_ticker}</b>")
+            trade_type_val = getattr(sig, "trade_type", "SHORT") or "SHORT"
+            direction_val = getattr(sig, "direction", "SELL") or "SELL"
+            macro_h4 = getattr(sig, "macro_bias_h4", "") or "NEUTRAL / SIDEWAYS"
+            lines.append(f"🌐 <b>Market:</b> H4 = <code>{macro_h4}</code>")
+            lines.append(f"⚡ <b>Trade Type:</b> <code>{trade_type_val} — {'SCALPING' if trade_type_val == 'SHORT' else 'INTRADAY/SWING'}</code>")
+            lines.append(f"🧭 <b>Direction:</b> <code>{direction_val}</code>")
+            if trade_type_val == "LONG":
+                lines.append("🛡️ <b>Break Even:</b> <code>+60 pips</code>")
             if getattr(sig, "is_retest_entry", False):
                 r_det = getattr(sig, "retest_details", "") or "Area Resisten"
                 lines.append(f"🎯 <b>Metode Entry:</b> 🔄 <b>Retest Premium (Atas)</b> - <code>{html.escape(r_det)}</code>")
@@ -3367,6 +3383,14 @@ class TelegramBotCommands:
             f"🎯 <b>Target TP:</b> <code>{tp_str}</code>",
             f"🛑 <b>Batas SL:</b> <code>{sl_str}</code>",
         ])
+        t_type = getattr(sig, "trade_type", "SHORT") or "SHORT"
+        dir_type = getattr(sig, "direction", sig.signal) or sig.signal
+        if dir_type in ["BUY", "SELL"]:
+            setup_desc = f"{t_type} {dir_type} ({'Scalping' if t_type == 'SHORT' else 'Intraday/Swing'} {dir_type} setup)"
+        else:
+            setup_desc = "WAITING"
+        caption_lines.append(f"⚡ <b>TRADE TYPE:</b> <code>{t_type}</code>")
+        caption_lines.append(f"🧭 <b>DIRECTION:</b> <code>{dir_type}</code> ({setup_desc})")
         if sig.setup_grade:
             clean_g = re.sub(r"^(Grade\s*)+", "", str(sig.setup_grade).strip(), flags=re.IGNORECASE).strip()
             grade_str = f"Grade {clean_g}" if clean_g else ""

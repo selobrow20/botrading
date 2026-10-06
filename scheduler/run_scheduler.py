@@ -1190,8 +1190,8 @@ class PipelineRunner:
 
             # Konfigurasi parameter BEP:
             # - Sinyal Cepat: Otomatis BEP saat floating profit +20 pips ($2.00 USD)
-            # - Sinyal Long / TP Jauh: Otomatis BEP saat floating profit +35 pips ($3.50 USD)
-            bep_long_threshold = float(cfg_mt5.get("break_even_long_pips", 35.0)) / 10.0
+            # - Sinyal Long / TP Jauh (PDF Section 11): Otomatis BEP saat floating profit +60 pips ($6.00 USD)
+            bep_long_threshold = float(cfg_mt5.get("break_even_long_pips", 60.0)) / 10.0
             bep_quick_threshold = float(cfg_mt5.get("break_even_quick_pips", 20.0)) / 10.0
             bep_offset = float(cfg_mt5.get("break_even_buffer_pips", 2.0)) / 10.0          # 2 pips = $0.20 USD
 
