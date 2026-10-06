@@ -13,13 +13,13 @@ from member_copier.client_copier import (
 
 
 def test_copier_version_exists():
-    assert CLIENT_COPIER_VERSION == "2.3.8"
+    assert CLIENT_COPIER_VERSION == "2.4.0"
     v_file = Path("member_copier/version.json")
     assert v_file.exists()
     data = json.loads(v_file.read_text(encoding="utf-8"))
-    assert data["version"] == "2.3.8"
-    assert parse_version("2.3.8") > parse_version("2.3.7")
-    assert parse_version("2.4.0") > parse_version("2.3.10")
+    assert data["version"] == "2.4.0"
+    assert parse_version("2.4.0") > parse_version("2.3.8")
+    assert parse_version("2.4.1") > parse_version("2.4.0")
 
 
 def test_apply_zip_update_preserves_user_config(tmp_path, monkeypatch):
@@ -119,4 +119,71 @@ def test_usd_vs_cent_account_detection():
     # Test 4: Manual override to USC
     bridge.cfg = {"account_type": "usc", "cent_lot": 0.05}
     assert bridge.is_cent_account() is True
+
+
+def test_parse_signal_short_long_and_limits():
+    from member_copier.client_copier import parse_signal
+
+    # Test 1: Sinyal SHORT BUY (Scalping)
+    msg_short_buy = (
+        "🟢 <b>SINYAL ENTRY (MASUK / BUY): XAU/USD (Gold)</b>\n"
+        "🌐 <b>Market:</b> H4 = <code>BULLISH</code>\n"
+        "⚡ <b>Trade Type:</b> <code>SHORT — SCALPING</code>\n"
+        "🧭 <b>Direction:</b> <code>BUY</code>\n"
+        "📍 <b>Harga Entry:</b> <code>$4,150.00</code>\n"
+        "🎯 <b>Take Profit (TP):</b> <code>$4,156.00</code>\n"
+        "🛑 <b>Stop Loss (SL):</b> <code>$4,144.00</code>\n"
+    )
+    sig1 = parse_signal(msg_short_buy)
+    assert sig1["action"] == "BUY"
+    assert sig1["trade_type"] == "SHORT"
+    assert sig1["entry_price"] == 4150.0
+    assert sig1["tp_price"] == 4156.0
+    assert sig1["sl_price"] == 4144.0
+
+    # Test 2: Sinyal SHORT SELL (Scalping)
+    msg_short_sell = (
+        "🔴 <b>SINYAL ENTRY (SELL): XAU/USD (Gold)</b>\n"
+        "🌐 <b>Market:</b> H4 = <code>BEARISH</code>\n"
+        "⚡ <b>Trade Type:</b> <code>SHORT — SCALPING</code>\n"
+        "🧭 <b>Direction:</b> <code>SELL</code>\n"
+        "📍 <b>Harga Entry Short:</b> <code>$4,150.00</code>\n"
+        "🎯 <b>Take Profit (TP):</b> <code>$4,144.00</code>\n"
+        "🛑 <b>Stop Loss (SL):</b> <code>$4,156.00</code>\n"
+    )
+    sig2 = parse_signal(msg_short_sell)
+    assert sig2["action"] == "SELL"
+    assert sig2["trade_type"] == "SHORT"
+    assert sig2["entry_price"] == 4150.0
+
+    # Test 3: Sinyal LONG BUY (Swing 3:1)
+    msg_long_buy = (
+        "🟢 <b>SINYAL ENTRY (MASUK / BUY): XAU/USD (Gold)</b>\n"
+        "🌐 <b>Market:</b> H4 = <code>BULLISH</code>\n"
+        "⚡ <b>Trade Type:</b> <code>LONG — INTRADAY/SWING</code>\n"
+        "🧭 <b>Direction:</b> <code>BUY</code>\n"
+        "🛡️ <b>Break Even:</b> <code>+60 pips</code>\n"
+        "📍 <b>Harga Entry:</b> <code>$4,150.00</code>\n"
+        "🎯 <b>Take Profit (TP):</b> <code>$4,174.00</code>\n"
+        "🛑 <b>Stop Loss (SL):</b> <code>$4,142.00</code>\n"
+    )
+    sig3 = parse_signal(msg_long_buy)
+    assert sig3["action"] == "BUY"
+    assert sig3["trade_type"] == "LONG"
+
+    # Test 4: Sinyal LONG SELL (Swing 3:1)
+    msg_long_sell = (
+        "🔴 <b>SINYAL ENTRY (SELL): XAU/USD (Gold)</b>\n"
+        "🌐 <b>Market:</b> H4 = <code>BEARISH</code>\n"
+        "⚡ <b>Trade Type:</b> <code>LONG — INTRADAY/SWING</code>\n"
+        "🧭 <b>Direction:</b> <code>SELL</code>\n"
+        "🛡️ <b>Break Even:</b> <code>+60 pips</code>\n"
+        "📍 <b>Harga Entry Short:</b> <code>$4,150.00</code>\n"
+        "🎯 <b>Take Profit (TP):</b> <code>$4,126.00</code>\n"
+        "🛑 <b>Stop Loss (SL):</b> <code>$4,158.00</code>\n"
+    )
+    sig4 = parse_signal(msg_long_sell)
+    assert sig4["action"] == "SELL"
+    assert sig4["trade_type"] == "LONG"
+
 

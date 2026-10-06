@@ -1,23 +1,23 @@
 {
-  "version": "2.3.8",
-  "name": "MT5 VIP Auto-Copier (9 Buku PDF Confluence)",
+  "version": "2.4.0",
+  "name": "MT5 VIP Auto-Copier (Hermes 3D SHORT & LONG)",
   "released_at": "2026-10-06",
   "min_python": "3.10",
-  "changelog": "Pembaruan v2.3.8: Eksekusi Sniper Pending Limit Order (BUY_LIMIT & SELL_LIMIT) di 20 EMA, Auto-Cancel 120 Menit Stale Orders, dan Pembersihan Reversal Bersih.",
+  "changelog": "Pembaruan v2.4.0: Integrasi Penuh Sinyal Hermes 3D SHORT (Scalping 60 Pips, R:R 1:1) dan LONG (Intraday Swing 15-Bar Structure, R:R 3:1, Auto-BEP +60 Pips), Broker-Adaptive Spread Guard, dan Max 1 Layer Disiplin.",
   "features": [
-    "Sniper Buy Limit & Sell Limit: Otomatis pasang pending limit order di area 20 EMA untuk sinyal Grade A+",
+    "Restrukturisasi SHORT & LONG Sinyal: Dukungan penuh sinyal SHORT (Scalping 60 pips R:R 1:1) dan LONG (Intraday Swing 15-bar structure R:R 3:1)",
+    "Pemisahan Total Direction (BUY/SELL) dari Trade Type (SHORT/LONG): Memproses sinyal dengan presisi tanpa bias arah",
+    "Auto-BEP +60 Pips untuk LONG Swing: Mengunci Break Even otomatis saat profit mencapai +60 pips ($6.00 USD) tanpa menutup posisi",
+    "Broker-Adaptive Spread Protection: Eksekusi cerdas toleransi spread normal broker 3.6 - 3.7 pips, proteksi keras hanya saat spread ekstrem >6.5 pips",
+    "Max 1 Layer Strict Lock: Menjaga akun disiplin maksimal 1 posisi aktif, anti-martingale dan anti-layering liar",
+    "Sniper Buy Limit & Sell Limit di 20 EMA: Eksekusi pending limit order retest untuk sinyal Grade A+",
     "Kaidah Anti-Kejar Lilin Bob Volman: Menjemput pullback retest tanpa mengejar lilin pucuk/dasar",
     "Auto-Cancel 120 Menit: Pending limit order otomatis dibatalkan jika tidak terjemput dalam 2 jam",
     "Auto-Reversal Cleanup: Pembatalan otomatis pending order lawan saat terjadi perubahan tren/order baru",
     "SOP Presisi 9 Buku PDF: Sinkronisasi aturan entry Diskon/Bawah & Premium/Atas",
-    "Auto-BEP Profit Riil: Otomatis kunci +15 pips saat floating profit +45 pips (75% ke target TP)",
-    "Bebas Cambukan Reversal: Cut loss prematur 22 pips dihapus, posisi bernapas ke Hard TP/SL 60 pips",
     "Auto-Spawn Reopen: Jendela copier baru otomatis terbuka kembali saat update diterapkan",
     "Zero-Touch Hot Reload: Transisi mulus tanpa member perlu buka-tutup manual",
     "Instant OTA Cache-Buster: Pembaruan Cloud terdeteksi seketika tanpa tertahan CDN cache GitHub",
-    "London Session Protection (12:00 - 16:00 WIB): Filter anti-manipulasi likuiditas jam 12 s/d jam 4 sore",
-    "Batas Posisi Cent Diperluas: Akun Cent (USC) diizinkan hingga maksimal 3 posisi aktif di MT5",
-    "Eksekusi Cerdas USD Standard: Akun USD otomatis masuk pada sinyal Grade A+ (0.01 Lot)",
     "Preserve Config: Pengaturan akun & lot kustom member tetap aman 100%"
   ]
 }

@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.3.8"
+CLIENT_COPIER_VERSION = "2.4.0"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -298,19 +298,27 @@ def parse_signal(text: str) -> dict:
     elif any(k in text_upper for k in ["SELL LIMIT", "SELL_LIMIT", "LIMIT ORDER: SELL", "ORDER: SELL LIMIT", "AKSI ORDER: SELL LIMIT"]):
         action = "SELL_LIMIT"
         is_limit_order = True
-    elif any(k in text_upper for k in ["SINYAL ENTRY (MASUK / BUY)", "SINYAL ENTRY BUY", "BUY (LONG)", "BUY / LONG", "AKSI SINYAL: BUY", "AKSI ORDER: BUY"]):
-        action = "BUY"
-    elif any(k in text_upper for k in ["SINYAL ENTRY SHORT", "SINYAL ENTRY (MASUK / SELL)", "SINYAL ENTRY SELL", "SELL (SHORT)", "SELL / SHORT", "AKSI SINYAL: SELL", "AKSI ORDER: SELL"]):
-        action = "SELL"
     else:
-        # Hanya cocokkan kata BUY/SELL mandiri jika ada kata "ENTRY" atau "HARGA" atau "LIMIT" di dalam pesan
-        if "ENTRY" in text_upper or "MASUK" in text_upper or "LIMIT" in text_upper:
+        # Prioritaskan deteksi eksplisit Direction / Arah
+        m_dir = re.search(r"(?:DIRECTION|ARAH|AKSI SINYAL|AKSI ORDER)\s*[:=]?\s*(BUY|SELL)", clean_text, re.IGNORECASE)
+        if m_dir:
+            dir_val = m_dir.group(1).upper()
+            action = f"{dir_val}_LIMIT" if is_limit_order else dir_val
+        elif any(k in text_upper for k in ["SINYAL ENTRY (MASUK / BUY)", "SINYAL ENTRY BUY", "BUY (LONG)", "BUY / LONG"]):
+            action = "BUY"
+        elif any(k in text_upper for k in ["SINYAL ENTRY SHORT", "SINYAL ENTRY (MASUK / SELL)", "SINYAL ENTRY (SELL)", "SINYAL ENTRY SELL", "SELL (SHORT)", "SELL / SHORT"]):
+            action = "SELL"
+        elif "ENTRY" in text_upper or "MASUK" in text_upper or "LIMIT" in text_upper:
             if re.search(r"\bBUY\s+LIMIT\b", text_upper):
                 action = "BUY_LIMIT"
                 is_limit_order = True
             elif re.search(r"\bSELL\s+LIMIT\b", text_upper):
                 action = "SELL_LIMIT"
                 is_limit_order = True
+            elif re.search(r"\bDIRECTION:\s*BUY\b", text_upper):
+                action = "BUY"
+            elif re.search(r"\bDIRECTION:\s*SELL\b", text_upper):
+                action = "SELL"
             elif re.search(r"\bBUY\b", text_upper):
                 action = "BUY"
             elif re.search(r"\bSELL\b", text_upper):
@@ -390,9 +398,14 @@ def parse_signal(text: str) -> dict:
     elif is_limit_order:
         is_high_grade = True
 
+    # Ekstrak Trade Type: SHORT (Scalping) vs LONG (Intraday Swing)
+    m_tt = re.search(r"Trade Type\s*[:=]?\s*(SHORT|LONG)", clean_text, re.IGNORECASE)
+    trade_type = m_tt.group(1).upper() if m_tt else ("SHORT" if (tp_price and entry_price and abs(tp_price - entry_price) <= 10.0) else "LONG")
+
     return {
         "symbol": "XAUUSD",
         "action": action,
+        "trade_type": trade_type,
         "entry_price": entry_price,
         "tp_price": tp_price,
         "sl_price": sl_price,
@@ -1763,9 +1776,9 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
         if not cfg.get("enable_break_even", True):
             return
 
-        bep_pips = float(cfg.get("break_even_long_pips", 100.0))
+        bep_pips = float(cfg.get("break_even_long_pips", 60.0))
         buffer_pips = float(cfg.get("break_even_buffer_pips", 3.0))
-        bep_dist = bep_pips / 10.0      # 100 pips = $10.00 USD
+        bep_dist = bep_pips / 10.0      # 60 pips = $6.00 USD
         bep_offset = buffer_pips / 10.0  # 3 pips = $0.30 USD
 
         while True:
@@ -1790,7 +1803,7 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
                     if pos_type == "BUY":
                         profit_dist = price_curr - price_open
                         tp_dist = (tp_curr - price_open) if tp_curr > 0 else 999.0
-                        if (tp_dist >= 8.5 or tp_curr == 0.0) and profit_dist >= bep_dist:
+                        if (tp_dist >= 6.0 or tp_curr == 0.0) and profit_dist >= bep_dist:
                             target_bep = round(price_open + bep_offset, 2)
                             if sl_curr < target_bep:
                                 req = {
@@ -1809,7 +1822,7 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
                     elif pos_type == "SELL":
                         profit_dist = price_open - price_curr
                         tp_dist = (price_open - tp_curr) if tp_curr > 0 else 999.0
-                        if (tp_dist >= 8.5 or tp_curr == 0.0) and profit_dist >= bep_dist:
+                        if (tp_dist >= 6.0 or tp_curr == 0.0) and profit_dist >= bep_dist:
                             target_bep = round(price_open - bep_offset, 2)
                             if sl_curr == 0.0 or sl_curr > target_bep:
                                 req = {

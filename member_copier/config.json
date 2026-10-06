@@ -22,6 +22,6 @@
   "enable_reversal_auto_close": true,
   "enable_break_even": true,
   "break_even_quick_pips": 20.0,
-  "break_even_long_pips": 35.0,
+  "break_even_long_pips": 60.0,
   "break_even_buffer_pips": 2.0
 }
