@@ -415,17 +415,30 @@ class SignalEngine:
                 checks.append("⚠️ Ichimoku: Candlestick masih berada di bawah Awan Kumo")
 
             # 6. John J. Murphy & Anna Coulling: Konfirmasi Volume Buyer (VPA)
-            if vol_ratio >= 1.10:
-                score += 15.0
-                checks.append(f"🛡️ John Murphy & Anna Coulling: Volume Buyer Mengonfirmasi Breakout ({vol_ratio:.1f}x)")
-            elif vol_ratio >= 0.95:
-                score += 10.0
-                checks.append(f"ℹ️ John Murphy: Volume Relatif Sehat ({vol_ratio:.1f}x)")
-            elif vol_ratio < 0.70:
-                score -= 10.0
-                checks.append(f"⚠️ VPA (Anna Coulling): Volume Sangat Rendah ({vol_ratio:.1f}x), Waspada Fakeout Smart Money")
+            is_buyer_candle = (close >= open_p) or (wick_ratio >= 0.35)
+            is_seller_dump = (close < open_p) and (wick_ratio < 0.25)
+            if is_buyer_candle:
+                if vol_ratio >= 1.10:
+                    score += 15.0
+                    checks.append(f"🛡️ John Murphy & Anna Coulling: Volume Buyer Mengonfirmasi Breakout ({vol_ratio:.1f}x)")
+                elif vol_ratio >= 0.95:
+                    score += 10.0
+                    checks.append(f"ℹ️ John Murphy: Volume Relatif Sehat ({vol_ratio:.1f}x)")
+                elif vol_ratio < 0.70:
+                    score -= 10.0
+                    checks.append(f"⚠️ VPA (Anna Coulling): Volume Sangat Rendah ({vol_ratio:.1f}x), Waspada Fakeout Smart Money")
+                else:
+                    checks.append(f"⚠️ John Murphy: Volume Rendah ({vol_ratio:.1f}x), Waspada Fakeout")
+            elif is_seller_dump:
+                if vol_ratio >= 1.10:
+                    score -= 15.0
+                    checks.append(f"⚠️ VPA (Anna Coulling & Murphy): Volume Seller Tinggi ({vol_ratio:.1f}x) pada Lilin Merah Dump! Distribusi institusi, dilarang beli pisau jatuh.")
+                else:
+                    score -= 5.0
+                    checks.append(f"⚠️ John Murphy: Tekanan Jual Dominan ({vol_ratio:.1f}x) pada Lilin Merah.")
             else:
-                checks.append(f"⚠️ John Murphy: Volume Rendah ({vol_ratio:.1f}x), Waspada Fakeout")
+                score += 5.0
+                checks.append(f"ℹ️ John Murphy: Volume Moderat ({vol_ratio:.1f}x)")
 
             # 7. Wave Principle & RSI Momentum
             if 40.0 <= rsi <= 62.0:
@@ -488,7 +501,7 @@ class SignalEngine:
                 or (volman_pb and wick_ratio >= 0.25)
                 or (fib_gz and wick_ratio >= 0.25)
             )
-            is_retest_confirmed_buy = is_retest_buy and (pinbar or engulfing or wick_ratio >= 0.25 or (close >= open_p))
+            is_retest_confirmed_buy = is_retest_buy and (pinbar or engulfing or wick_ratio >= 0.25)
             if is_retest_confirmed_buy:
                 if retest_ob_bull or ob_bull:
                     retest_zone_buy = "Order Block Demand Zone"
@@ -563,13 +576,26 @@ class SignalEngine:
                 checks.append("⚠️ Ichimoku: Candlestick masih berada di atas Awan Kumo")
 
             # 6. John Murphy & Anna Coulling: Volume Seller (VPA)
-            if vol_ratio >= 1.05:
-                score += 15.0
-                checks.append(f"🛡️ John Murphy & Anna Coulling: Volume Seller Meningkat ({vol_ratio:.1f}x)")
-            elif vol_ratio < 0.70:
-                score -= 10.0
-                checks.append(f"⚠️ VPA (Anna Coulling): Volume Sell Sangat Rendah ({vol_ratio:.1f}x), Dorongan Seller Rapuh")
+            is_seller_candle = (close <= open_p) or (upper_wick_ratio >= 0.35)
+            is_buyer_rally = (close > open_p) and (upper_wick_ratio < 0.25)
+            if is_seller_candle:
+                if vol_ratio >= 1.05:
+                    score += 15.0
+                    checks.append(f"🛡️ John Murphy & Anna Coulling: Volume Seller Meningkat ({vol_ratio:.1f}x)")
+                elif vol_ratio < 0.70:
+                    score -= 10.0
+                    checks.append(f"⚠️ VPA (Anna Coulling): Volume Sell Sangat Rendah ({vol_ratio:.1f}x), Dorongan Seller Rapuh")
+                else:
+                    checks.append(f"ℹ️ John Murphy: Volume Seller Standar ({vol_ratio:.1f}x)")
+            elif is_buyer_rally:
+                if vol_ratio >= 1.10:
+                    score -= 15.0
+                    checks.append(f"⚠️ VPA (Anna Coulling & Murphy): Volume Buyer Sangat Tinggi ({vol_ratio:.1f}x) pada Lilin Hijau Naik! Melawan roket buyer rawan tersapu.")
+                else:
+                    score -= 5.0
+                    checks.append(f"⚠️ John Murphy: Dorongan Beli Dominan ({vol_ratio:.1f}x) pada Lilin Hijau.")
             else:
+                score += 5.0
                 checks.append(f"ℹ️ John Murphy: Volume Seller Standar ({vol_ratio:.1f}x)")
 
             # 7. Wave Principle: Siklus Koreksi Impulsif
@@ -630,7 +656,7 @@ class SignalEngine:
                 or is_retest_sell_ind
                 or (shooting_star and dist_ema20_pct <= 2.0)
             )
-            is_retest_confirmed_sell = is_retest_sell and (shooting_star or upper_wick_ratio >= 0.25 or (close <= open_p))
+            is_retest_confirmed_sell = is_retest_sell and (shooting_star or upper_wick_ratio >= 0.25)
             if is_retest_confirmed_sell:
                 if retest_ob_bear or ob_bear:
                     retest_zone_sell = "Order Block Supply Zone"
@@ -682,14 +708,21 @@ class SignalEngine:
                 module_scores["Pring"] = 30.0
 
             # 3. Murphy (John J. Murphy)
-            if vol_ratio >= 1.20 and close >= ema50:
-                module_scores["Murphy"] = 90.0
-            elif vol_ratio >= 1.10:
-                module_scores["Murphy"] = 80.0
-            elif vol_ratio >= 0.95:
-                module_scores["Murphy"] = 65.0
+            is_buyer_candle = (close >= open_p) or (wick_ratio >= 0.35)
+            is_seller_dump = (close < open_p) and (wick_ratio < 0.25)
+            if is_buyer_candle:
+                if vol_ratio >= 1.20 and close >= ema50:
+                    module_scores["Murphy"] = 90.0
+                elif vol_ratio >= 1.10:
+                    module_scores["Murphy"] = 80.0
+                elif vol_ratio >= 0.95:
+                    module_scores["Murphy"] = 65.0
+                else:
+                    module_scores["Murphy"] = 35.0
+            elif is_seller_dump:
+                module_scores["Murphy"] = 20.0
             else:
-                module_scores["Murphy"] = 35.0
+                module_scores["Murphy"] = 40.0
 
             # 4. Trading Alchemist (Rizki Aditama - SMC)
             if bos_bull and ob_bull:
@@ -773,14 +806,21 @@ class SignalEngine:
                 module_scores["Pring"] = 30.0
 
             # 3. Murphy (John J. Murphy)
-            if vol_ratio >= 1.15 and close <= ema50:
-                module_scores["Murphy"] = 90.0
-            elif vol_ratio >= 1.05:
-                module_scores["Murphy"] = 80.0
-            elif vol_ratio >= 0.95:
-                module_scores["Murphy"] = 65.0
+            is_seller_candle = (close <= open_p) or (upper_wick_ratio >= 0.35)
+            is_buyer_rally = (close > open_p) and (upper_wick_ratio < 0.25)
+            if is_seller_candle:
+                if vol_ratio >= 1.15 and close <= ema50:
+                    module_scores["Murphy"] = 90.0
+                elif vol_ratio >= 1.05:
+                    module_scores["Murphy"] = 80.0
+                elif vol_ratio >= 0.95:
+                    module_scores["Murphy"] = 65.0
+                else:
+                    module_scores["Murphy"] = 35.0
+            elif is_buyer_rally:
+                module_scores["Murphy"] = 20.0
             else:
-                module_scores["Murphy"] = 35.0
+                module_scores["Murphy"] = 40.0
 
             # 4. Trading Alchemist (Rizki Aditama - SMC)
             if bos_bear and ob_bear:
@@ -854,6 +894,18 @@ class SignalEngine:
         min_score = 75.0 if (session == "LONDON" or is_counter_trend) else 65.0
 
         # Penentuan Hak Veto Lapis 3 (Risk Guard Mutlak):
+        # 0a. Veto Mutlak Break of Structure (Trading Alchemist / Smart Money Concept)
+        # Jika Smart Money baru saja memecah Swing Low (BOS Bearish), DILARANG KERAS BUY!
+        # Jika Smart Money baru saja memecah Swing High (BOS Bullish), DILARANG KERAS SELL!
+        is_bos_veto = (is_buy and bos_bear) or ((not is_buy) and bos_bull)
+
+        # 0b. Veto Anti-Pisau Jatuh & Anti-Hadang Roket (Bob Volman & Mega Profit)
+        # Dilarang BUY lilin merah dump tanpa penolakan (wick_ratio < 0.30)
+        # Dilarang SELL lilin hijau meroket tanpa penolakan (upper_wick_ratio < 0.30)
+        is_knife_rocket_veto = (is_buy and (close < open_p) and wick_ratio < 0.30) or (
+            (not is_buy) and (close > open_p) and upper_wick_ratio < 0.30
+        )
+
         # 1. Veto Premium vs Discount (Trading Alchemist & Fibonacci)
         is_pos_veto = (is_buy and has_swing and pos_in_range > 0.65) or ((not is_buy) and has_swing and pos_in_range < 0.35)
         # 2. Veto RSI Ekstrem (Martin Pring & Wave Principle)
@@ -869,7 +921,22 @@ class SignalEngine:
         # 6. Veto Reversal Melawan Tren
         is_reversal_veto = (is_counter_trend and 65.0 <= score < 75.0)
 
-        if is_pos_veto:
+        if is_bos_veto:
+            struct_dir = "BOS Bearish (Breakdown Support)" if is_buy else "BOS Bullish (Breakout Resistance)"
+            action_desc = "BUY saat Smart Money Menjebol ke Bawah" if is_buy else "SELL saat Smart Money Menjebol ke Atas"
+            entry_pathway = f"Tertahan (Veto Lapis 3: Smart Money {struct_dir})"
+            setup_grade = "Grade B / C (Melawan Break of Structure ⚠️)"
+            prediction = f"Struktur institusi baru saja tertembus ({struct_dir}). Veto Lapis 3 melarang {action_desc} demi mencegah terseret arus Smart Money."
+            checks.append(f"🛡️ Veto Lapis 3 (Trading Alchemist): Dilarang {action_desc}! Smart money baru saja menembus level struktural.")
+            is_approved = False
+        elif is_knife_rocket_veto:
+            action_desc = "BUY Lilin Merah Dump (Anti-Pisau Jatuh)" if is_buy else "SELL Lilin Hijau Meroket (Anti-Hadang Kereta)"
+            entry_pathway = f"Tertahan (Veto Lapis 3: {action_desc})"
+            setup_grade = "Grade B / C (Ketiadaan Rejection Wick ⚠️)"
+            prediction = "Candlestick belum menunjukkan bukti penolakan harga (rejection). Veto Lapis 3 menahan entry sampai ada bukti penyerapan likuiditas."
+            checks.append(f"🛡️ Veto Lapis 3 (Bob Volman & Mega Profit): Dilarang {action_desc}! Ekor penolakan ({wick_ratio*100:.0f}% < 30%) belum cukup kuat.")
+            is_approved = False
+        elif is_pos_veto:
             zone_desc = "Premium (Pucuk Resisten > 65%)" if is_buy else "Discount (Dasar Support < 35%)"
             action_desc = "BUY di Area Premium" if is_buy else "SELL di Area Discount"
             entry_pathway = f"Tertahan (Veto Lapis 3: Dilarang {action_desc})"
@@ -1324,25 +1391,43 @@ class SignalEngine:
                     + (" [HIGH-VOL]" if is_high_vol else "")
                 )
 
-            # RETEST SL ANCHORING (Presisi di bawah ekor rejection retest):
-            if is_retest_sig:
-                if target_sig_type == "BUY":
-                    retest_low = float(curr_row.get("Low", curr_price))
-                    sl_dist_retest = round(curr_price - (retest_low - 0.50), 2)
-                    sl_distance = max(sl_distance, sl_dist_retest)
-                elif target_sig_type == "SELL":
-                    retest_high = float(curr_row.get("High", curr_price))
-                    sl_dist_retest = round((retest_high + 0.50) - curr_price, 2)
-                    sl_distance = max(sl_distance, sl_dist_retest)
+            # ============================================================
+            # STRUCTURAL SWING SL ANCHORING (9 Buku PDF: SMC & Bob Volman)
+            # Stop loss wajib bersembunyi di balik Swing Low / High 15-bar terakhir
+            # Dilarang menaruh SL di area hampa / no-man's land yang rawan liquidity sweep!
+            # ============================================================
+            n_rows = len(df_with_ind)
+            curr_pos = bar_idx if bar_idx >= 0 else (n_rows + bar_idx)
+            start_pos = max(0, curr_pos - 15)
+            recent_slice = df_with_ind.iloc[start_pos:curr_pos]
+
+            if target_sig_type == "BUY":
+                swing_low = float(recent_slice["Low"].min()) if not recent_slice.empty else float(curr_row.get("Low", curr_price))
+                curr_low = float(curr_row.get("Low", curr_price))
+                structural_support = min(swing_low, curr_low)
+                # Buffer 1.20 USD (12 pips) di bawah support struktural
+                sl_dist_structural = round(curr_price - (structural_support - 1.20), 2)
+                sl_distance = max(sl_distance, sl_dist_structural)
+            elif target_sig_type == "SELL":
+                swing_high = float(recent_slice["High"].max()) if not recent_slice.empty else float(curr_row.get("High", curr_price))
+                curr_high = float(curr_row.get("High", curr_price))
+                structural_resistance = max(swing_high, curr_high)
+                # Buffer 1.20 USD (12 pips) di atas resistance struktural
+                sl_dist_structural = round((structural_resistance + 1.20) - curr_price, 2)
+                sl_distance = max(sl_distance, sl_dist_structural)
+
+            # Cap batas atas SL Gold di 12.00 USD (120 pips) agar risiko tetap terukur & TP 3:1 maksimal 36.00 USD (360 pips)
+            sl_distance = min(12.00, max(MIN_GOLD_SL_USD, sl_distance))
+
+            if is_good_long_momentum:
+                tp_distance = round(sl_distance * 3.0, 2)
+            else:
+                tp_distance = min(12.00, max(MIN_GOLD_TP_USD, max(sl_distance, tp_distance)))
 
             # HARD FLOOR CONSTRAINT MUTLAK PENGGUNA:
             # DILARANG KERAS SL ATAU TP DI BAWAH 60 PIPS (6.00 USD) & R:R MINIMAL 1:1
             sl_distance = max(MIN_GOLD_SL_USD, sl_distance)
-            if not is_good_long_momentum:
-                sl_distance = min(12.00, sl_distance)
-                tp_distance = min(12.00, max(MIN_GOLD_TP_USD, max(sl_distance, tp_distance)))
-            else:
-                tp_distance = max(MIN_GOLD_TP_USD, max(sl_distance, tp_distance))
+            tp_distance = max(MIN_GOLD_TP_USD, max(sl_distance, tp_distance))
 
             if is_retest_sig:
                 retest_badge = "[RETEST DISKON] " if target_sig_type == "BUY" else "[RETEST PREMIUM] "
