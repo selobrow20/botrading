@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import asyncio
 import html
 from datetime import datetime, timezone, timedelta
@@ -611,7 +612,37 @@ class TelegramNotifier:
     def send_tp_sl_report(self, res_sig: Dict[str, Any]) -> bool:
         """
         Mengirimkan kartu laporan hasil TP/SL ke seluruh pengguna Telegram yang disetujui.
+        Dilengkapi Anti-Duplicate & Anti-Stale Guard ketat agar laporan tidak terkirim ganda atau basi.
         """
+        sig_id = res_sig.get("id")
+        ticker = res_sig.get("ticker", "UNKNOWN")
+        outcome = res_sig.get("outcome", "")
+        exit_p = res_sig.get("exit_price", 0.0)
+
+        # 1. Cek status di database jika sig_id valid
+        if sig_id and hasattr(self, "storage") and self.storage:
+            try:
+                if self.storage.is_signal_outcome_notified(sig_id):
+                    logger.info(f"ℹ️ [DEDUP SUPPRESSED] Laporan TP/SL sinyal #{sig_id} ({ticker}) sudah pernah dilaporkan ke Telegram. Dilewati.")
+                    return True
+            except Exception as ex_db:
+                logger.debug(f"Gagal cek status is_outcome_notified: {ex_db}")
+
+        # 2. In-memory deduplication cache (key berbasis ID atau ticker + outcome + exit)
+        dedup_key = f"{sig_id}_{ticker}_{outcome}_{round(float(exit_p or 0), 2)}"
+        now_ts = time.time()
+        if not hasattr(self, "_reported_outcomes_cache"):
+            self._reported_outcomes_cache = {}
+
+        # Bersihkan cache > 24 jam
+        for k in list(self._reported_outcomes_cache.keys()):
+            if now_ts - self._reported_outcomes_cache[k] > 86400:
+                del self._reported_outcomes_cache[k]
+
+        if dedup_key in self._reported_outcomes_cache:
+            logger.info(f"ℹ️ [DEDUP CACHE] Laporan TP/SL '{dedup_key}' sudah dikirim dalam 24 jam terakhir. Dilewati.")
+            return True
+
         msg = self.format_tp_sl_report(res_sig)
         approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
         if not approved_ids:
@@ -621,16 +652,24 @@ class TelegramNotifier:
             InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(res_sig.get("ticker", "XAUUSD")))
         ]])
 
-        success = True
+        success = False
         for cid in approved_ids:
             try:
                 res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
-                if not res:
-                    success = False
+                if res:
+                    success = True
             except Exception as e:
                 logger.error(f"Error saat broadcast laporan TP/SL ke {cid}: {e}")
-                success = False
-        return success
+
+        if success or not self.enabled:
+            self._reported_outcomes_cache[dedup_key] = now_ts
+            if sig_id and hasattr(self, "storage") and self.storage:
+                try:
+                    self.storage.mark_signal_outcome_notified(sig_id)
+                except Exception as ex_m:
+                    logger.debug(f"Gagal tandai is_outcome_notified #{sig_id}: {ex_m}")
+
+        return success or not self.enabled
 
     def format_mt5_execution_report(self, order_info: Dict[str, Any]) -> str:
         """

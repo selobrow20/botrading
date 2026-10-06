@@ -275,6 +275,20 @@ class PipelineRunner:
                     except Exception:
                         pass
 
+                    if (is_gold or res_sig.get("is_gold")) and mt5_bridge_active:
+                        logger.info(
+                            f"ℹ️ TP/SL Gold #{res_sig.get('id')} disinkronkan ke DB; "
+                            f"broadcast Telegram dikawal oleh MT5 real deal watcher."
+                        )
+                        continue
+
+                    if res_sig.get("is_stale"):
+                        logger.info(
+                            f"🚫 [DELAY SUPPRESSED] Laporan TP/SL #{res_sig.get('id')} ({res_sig.get('ticker')}) "
+                            f"sudah lewat ({res_sig.get('age_seconds', 0) // 60}m lalu > batas 30 menit). Push Telegram dilewati."
+                        )
+                        continue
+
                     if is_gold or res_sig.get("is_gold"):
                         try:
                             self.notifier.send_tp_sl_report(res_sig)
@@ -653,6 +667,16 @@ class PipelineRunner:
                     if not res_sig.get("is_notified", 1):
                         continue
 
+                    if mt5_active:
+                        # Jika MT5 aktif, laporan hasil transaksi Gold murni dikawal oleh check_and_report_mt5_deals
+                        continue
+
+                    if res_sig.get("is_stale"):
+                        logger.info(
+                            f"🚫 [DELAY SUPPRESSED] Laporan TP/SL Gold #{res_sig.get('id')} sudah lewat > 30 menit. Push Telegram dilewati."
+                        )
+                        continue
+
                     logger.info(
                         f"🎯 Laporan TP/SL Gold (1m check): {res_sig['ticker']} {res_sig['signal_type']} "
                         f"-> {res_sig['outcome']} ({res_sig['pnl_pct']:+.2f}%)"
@@ -903,7 +927,7 @@ class PipelineRunner:
                             cursor = conn.cursor()
                             cursor.execute("""
                                 UPDATE signals
-                                SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?
+                                SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?, is_outcome_notified = 1
                                 WHERE id = ?
                             """, (outcome, exit_price, exit_time_wib, pnl_pct, note, entry_sig["id"]))
                             conn.commit()
@@ -912,6 +936,8 @@ class PipelineRunner:
 
                 # 2. Tandai deal MT5 sudah dicatat di database
                 self.storage.mark_mt5_deal_reported(deal_ticket, pos_id, outcome, pnl_pct)
+                if entry_sig and entry_sig.get("id"):
+                    self.storage.mark_signal_outcome_notified(entry_sig["id"])
 
                 # 2b. Set Directional Cooldown pada bridge jika SL — Anti-Revenge Re-entry
                 # Setelah kena SL BUY → lock arah BUY selama N menit (arah SELL tetap bebas).
@@ -1042,7 +1068,7 @@ class PipelineRunner:
                                 c = conn.cursor()
                                 c.execute("""
                                     UPDATE signals
-                                    SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?
+                                    SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?, is_outcome_notified = 1
                                     WHERE id = ?
                                 """, (hit_outcome, hit_exit_price, now_wib_str, pnl_pct, hit_note, sig_id))
                                 conn.commit()

@@ -133,7 +133,8 @@ class StockStorage:
                     exit_price REAL,
                     exit_time TEXT,
                     pnl_pct REAL,
-                    outcome_note TEXT
+                    outcome_note TEXT,
+                    is_outcome_notified INTEGER DEFAULT 0
                 );
             """)
             cursor.execute("""
@@ -151,6 +152,7 @@ class StockStorage:
                 ("pnl_pct", "REAL"),
                 ("outcome_note", "TEXT"),
                 ("mt5_ticket", "INTEGER"),
+                ("is_outcome_notified", "INTEGER DEFAULT 0"),
             ]:
                 try:
                     cursor.execute(f"ALTER TABLE signals ADD COLUMN {col_name} {col_def};")
@@ -557,6 +559,15 @@ class StockStorage:
                     if outcome:
                         exit_time_str = bar_time.strftime("%Y-%m-%d %H:%M:%S")
 
+                        # Hitung usia event resolusi (dalam detik) untuk mencegah broadcast laporan basi
+                        import time as _t
+                        try:
+                            bar_ts = bar_time.timestamp() if hasattr(bar_time, "timestamp") else pd.to_datetime(bar_time).timestamp()
+                            age_seconds = max(0, int(_t.time() - bar_ts))
+                        except Exception:
+                            age_seconds = 0
+                        is_stale = age_seconds > 1800  # Lebih dari 30 menit = basi
+
                         # Generate keterangan evaluasi hasil
                         if outcome == "WIN":
                             if is_gold:
@@ -583,9 +594,10 @@ class StockStorage:
 
                         cursor.execute("""
                             UPDATE signals
-                            SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?
+                            SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?,
+                                is_outcome_notified = CASE WHEN ? = 1 THEN 1 ELSE is_outcome_notified END
                             WHERE id = ?
-                        """, (outcome, exit_price, exit_time_str, pnl_pct, note, sig_id))
+                        """, (outcome, exit_price, exit_time_str, pnl_pct, note, 1 if is_stale else 0, sig_id))
 
                         resolved_dict = {
                             "id": sig_id,
@@ -603,11 +615,14 @@ class StockStorage:
                             "pnl_pct": pnl_pct,
                             "outcome_note": note,
                             "is_gold": is_gold,
+                            "is_stale": is_stale,
+                            "age_seconds": age_seconds,
                         }
                         resolved_signals.append(resolved_dict)
                         logger.info(
                             f"🎯 Sinyal #{sig_id} {sig_type} {clean_ticker} terselesaikan: "
                             f"{outcome} @ {exit_price} (PnL: {pnl_pct:+.2f}%) pada {exit_time_str}"
+                            f"{' [KADALUARSA/TIDAK DI-BROADCAST]' if is_stale else ''}"
                         )
                         break
 
@@ -690,6 +705,37 @@ class StockStorage:
                 VALUES (?, ?, ?, ?)
             """, (int(deal_ticket), int(position_id), str(outcome), float(pnl_pct)))
             conn.commit()
+
+    def mark_signal_outcome_notified(self, sig_id: int) -> None:
+        """Menandai bahwa laporan hasil (TP/SL) untuk sinyal ini telah dilaporkan ke Telegram."""
+        if not sig_id:
+            return
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE signals SET is_outcome_notified = 1 WHERE id = ?",
+                    (int(sig_id),)
+                )
+                conn.commit()
+        except Exception as ex:
+            logger.debug(f"Gagal menandai is_outcome_notified #{sig_id}: {ex}")
+
+    def is_signal_outcome_notified(self, sig_id: int) -> bool:
+        """Memeriksa apakah laporan hasil (TP/SL) untuk sinyal ini sudah pernah dilaporkan ke Telegram."""
+        if not sig_id:
+            return False
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT is_outcome_notified FROM signals WHERE id = ?",
+                    (int(sig_id),)
+                )
+                row = cursor.fetchone()
+                return bool(row and row["is_outcome_notified"])
+        except Exception:
+            return False
 
     def get_recent_completed_signals(
         self, limit: int = 5, ticker: Optional[str] = None

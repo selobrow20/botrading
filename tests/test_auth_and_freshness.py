@@ -213,3 +213,73 @@ def test_copier_broadcast_and_document_sending(tmp_path):
     cls_res2 = ChatAgent.classify_intent("minta file copier")
     assert cls_res2["intent"] == "COPIER"
 
+
+def test_tp_sl_dedup_and_stale_suppression(tmp_path):
+    import pandas as pd
+    from data.storage import StockStorage
+    from notify.telegram_bot import TelegramNotifier
+
+    db_file = tmp_path / "test_dedup.db"
+    storage = StockStorage(db_path=str(db_file))
+
+    # 1. Test database notification flag
+    sig_id = storage.save_signal(
+        ticker="XAUUSD",
+        strategy_name="9 Buku",
+        signal_type="SELL",
+        price=4133.76,
+        reasons=["Test reasons"],
+        candle_time="2026-10-05 11:45:00",
+        is_notified=True,
+        take_profit_price=4106.25,
+        stop_loss_price=4142.93,
+    )
+    assert not storage.is_signal_outcome_notified(sig_id)
+
+    # 2. Test resolve_open_signals with old candle data (stale > 30 minutes)
+    df_old = pd.DataFrame(
+        [
+            {"datetime": "2026-10-05 13:00:00", "Open": 4140.0, "High": 4145.0, "Low": 4135.0, "Close": 4143.0, "Volume": 1000},
+        ]
+    ).set_index("datetime")
+    resolved = storage.resolve_open_signals("XAUUSD", df_old)
+    assert len(resolved) == 1
+    res0 = resolved[0]
+    assert res0["outcome"] == "LOSE"
+    assert res0["exit_price"] == 4142.93
+    assert res0["is_stale"] is True  # Verified stale!
+    assert storage.is_signal_outcome_notified(sig_id) is True  # Automatically marked notified so never pushed!
+
+    # 3. Test TelegramNotifier deduplication
+    notifier = TelegramNotifier(token="mock_tok", chat_id="12345", storage=storage)
+    async def mock_send(*args, **kwargs):
+        return True
+    notifier._async_send_text = mock_send
+
+    # Since is_signal_outcome_notified is True, send_tp_sl_report should suppress it
+    assert notifier.send_tp_sl_report(res0) is True
+
+    # Test fresh signal in notifier cache
+    fresh_sig = {
+        "id": 99999,
+        "ticker": "XAUUSD",
+        "signal_type": "BUY",
+        "price": 4150.0,
+        "exit_price": 4160.0,
+        "take_profit_price": 4160.0,
+        "stop_loss_price": 4140.0,
+        "outcome": "WIN",
+        "pnl_pct": 0.24,
+        "candle_time": "2026-10-06 09:00:00",
+        "exit_time": "2026-10-06 09:15:00",
+        "outcome_note": "Test profit",
+    }
+    # First send: passes through
+    ok1 = notifier.send_tp_sl_report(fresh_sig)
+    assert ok1 is True
+    # Second send: caught by in-memory deduplication cache
+    dedup_key = f"99999_XAUUSD_WIN_{round(4160.0, 2)}"
+    assert dedup_key in notifier._reported_outcomes_cache
+    ok2 = notifier.send_tp_sl_report(fresh_sig)
+    assert ok2 is True
+
