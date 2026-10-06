@@ -192,3 +192,58 @@ def test_pipeline_runner_chart_a_plus_direct_auto_execution():
         mock_b.execute_signal.reset_mock()
         res2 = runner.run_pipeline(watchlist=["XAUUSD"])
         assert not mock_b.execute_signal.called
+
+
+def test_pipeline_runner_jalur2_respects_bob_volman_veto():
+    storage = MagicMock()
+    fetcher = MagicMock()
+    notifier = MagicMock()
+
+    runner = PipelineRunner(storage=storage, fetcher=fetcher, notifier=notifier)
+
+    with patch("scheduler.run_scheduler.is_idx_market_open", return_value=(False, "Tutup")), \
+         patch("scheduler.run_scheduler.is_gold_market_open", return_value=(True, "Buka")), \
+         patch.object(runner, "check_and_report_mt5_deals"), \
+         patch.object(runner, "check_upcoming_news_job"), \
+         patch("trading.mt5_bridge.MT5Bridge") as MockBridge:
+        mock_b = MockBridge.return_value
+        mock_b.enabled = True
+        mock_b.is_available.return_value = True
+        mock_b.is_in_reversal_cooldown.return_value = (False, "")
+        mock_b.get_open_positions.return_value = []
+
+        dates = pd.date_range("2026-10-02 10:00", periods=100, freq="15min")
+        df_gold = pd.DataFrame({
+            "Open": [4120.0] * 100,
+            "High": [4125.0] * 100,
+            "Low": [4100.0] * 100,
+            "Close": [4121.45] * 100,
+            "Volume": [1000] * 100,
+        }, index=dates)
+
+        fetcher.get_data.return_value = df_gold
+        fetcher.fetch_and_store.return_value = df_gold
+        fetcher.normalize_ticker.side_effect = lambda t: t
+
+        # Mock signal_engine returning HOLD because Bob Volman veto is active (price overextended)
+        sig_vetoed = SignalResult(
+            signal="HOLD",
+            ticker="XAUUSD",
+            strategy_name="DayTrading_Intraday_Momentum",
+            price=4121.45,
+            reasons=[
+                "🚫 [FILTER ANTI-KEJAR LILIN BOB VOLMAN] SELL ditolak. Harga ($4121.45) terlalu jauh dari EMA20 ($4134.21): jarak $12.76 > batas aman $10.23",
+            ],
+            candle_time=str(dates[-1]),
+            pdf_confluence_score=95.0,
+            setup_grade="Grade A+ (Setup Sempurna ⭐⭐⭐⭐⭐)",
+            market_direction_prediction="Arah market diprediksi Bearish kuat melanjutkan tren",
+        )
+        runner.signal_engine.evaluate_bar = MagicMock(return_value=sig_vetoed)
+
+        res = runner.run_pipeline(watchlist=["XAUUSD"])
+
+        # Jalur 2 MUST NOT override or bypass the Bob Volman hard veto!
+        assert not mock_b.execute_signal.called
+        assert not notifier.send_mt5_execution_report.called
+

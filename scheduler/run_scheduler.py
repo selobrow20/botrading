@@ -476,7 +476,20 @@ class PipelineRunner:
                             c_pred = str(sig_result.meta.get("prediction_summary", ""))
 
                         is_a_plus = ("Grade A+" in c_grade or c_score >= 80.0)
-                        if is_a_plus and ("Bearish" in c_pred or "Bullish" in c_pred):
+                        # DISIPLIN 9 BUKU: Haram memaksakan auto-open jika ada veto mutlak atau penolakan overextended Bob Volman
+                        r_text = " ".join(str(r) for r in (sig_result.reasons or []))
+                        is_hard_veto = any(
+                            k in r_text for k in [
+                                "FILTER ANTI-KEJAR LILIN BOB VOLMAN",
+                                "Overextended",
+                                "overextended",
+                                "Veto Lapis 3",
+                                "OTAK UTAMA H4",
+                                "Judas",
+                                "Manipulasi",
+                            ]
+                        )
+                        if is_a_plus and not is_hard_veto and ("Bearish" in c_pred or "Bullish" in c_pred):
                             c_action = "SELL" if "Bearish" in c_pred else "BUY"
                             c_time_key = f"{ticker}_{sig_result.candle_time}_{c_action}"
 
