@@ -1614,23 +1614,19 @@ class SignalEngine:
             if macro_blocked:
                 signal = "HOLD"
                 reasons = [macro_block_reason]
-            elif rsi_extreme_reject:
-                signal = "HOLD"
-                reasons = [rsi_extreme_reason]
-            elif ema_overextended_reject:
+            elif rsi_extreme_reject or ema_overextended_reject:
                 enable_limit_orders = bool(self.config.get("mt5", {}).get("enable_limit_orders", True))
+                always_limit = bool(self.config.get("mt5", {}).get("always_use_limit_orders", False))
                 min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
                 min_limit_dist = min_limit_pips / 10.0
                 can_place_buy_limit = (
                     enable_limit_orders
                     and is_gold
                     and apply_pdf_filter
-                    and pdf_approved
-                    and (pdf_score >= 80.0 or bool(self.config.get("mt5", {}).get("always_use_limit_orders", False)))
+                    and (pdf_approved or (always_limit and pdf_score >= 65.0) or pdf_score >= 80.0)
                     and not macro_blocked
                     and h1_ok
                     and not judas_trap
-                    and not rsi_extreme_reject
                 )
                 ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
                 if can_place_buy_limit and ema20_lvl <= round(curr_price - min_limit_dist, 2):
@@ -1649,6 +1645,9 @@ class SignalEngine:
                         f"Lapis 1 (Otak Utama H4): {macro_bias}",
                         f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)",
                     ]
+                elif rsi_extreme_reject:
+                    signal = "HOLD"
+                    reasons = [rsi_extreme_reason]
                 else:
                     signal = "HOLD"
                     reasons = [ema_overextended_reason]
@@ -1693,23 +1692,19 @@ class SignalEngine:
             elif macro_blocked:
                 signal = "HOLD"
                 reasons = [macro_block_reason]
-            elif rsi_extreme_reject:
-                signal = "HOLD"
-                reasons = [rsi_extreme_reason]
-            elif ema_overextended_reject:
+            elif rsi_extreme_reject or ema_overextended_reject:
                 enable_limit_orders = bool(self.config.get("mt5", {}).get("enable_limit_orders", True))
+                always_limit = bool(self.config.get("mt5", {}).get("always_use_limit_orders", False))
                 min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
                 min_limit_dist = min_limit_pips / 10.0
                 can_place_sell_limit = (
                     enable_limit_orders
                     and is_gold
                     and apply_pdf_filter
-                    and pdf_approved
-                    and (pdf_score >= 80.0 or bool(self.config.get("mt5", {}).get("always_use_limit_orders", False)))
+                    and (pdf_approved or (always_limit and pdf_score >= 65.0) or pdf_score >= 80.0)
                     and not macro_blocked
                     and h1_ok
                     and not judas_trap
-                    and not rsi_extreme_reject
                 )
                 ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
                 if can_place_sell_limit and ema20_lvl >= round(curr_price + min_limit_dist, 2):
@@ -1728,6 +1723,9 @@ class SignalEngine:
                         f"Lapis 1 (Otak Utama H4): {macro_bias}",
                         f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)",
                     ]
+                elif rsi_extreme_reject:
+                    signal = "HOLD"
+                    reasons = [rsi_extreme_reason]
                 else:
                     signal = "HOLD"
                     reasons = [ema_overextended_reason]
@@ -1802,7 +1800,7 @@ class SignalEngine:
                         f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
                         f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
                     ]
-            elif ema_overextended_reject and is_gold and bool(self.config.get("mt5", {}).get("enable_limit_orders", True)) and apply_pdf_filter and pdf_approved and (pdf_score >= 80.0 or bool(self.config.get("mt5", {}).get("always_use_limit_orders", False))) and not macro_blocked and h1_ok and not judas_trap and not rsi_extreme_reject:
+            elif (ema_overextended_reject or rsi_extreme_reject) and is_gold and bool(self.config.get("mt5", {}).get("enable_limit_orders", True)) and apply_pdf_filter and (pdf_approved or (bool(self.config.get("mt5", {}).get("always_use_limit_orders", False)) and pdf_score >= 65.0) or pdf_score >= 80.0) and not macro_blocked and h1_ok and not judas_trap:
                 min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
                 min_limit_dist = min_limit_pips / 10.0
                 ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
