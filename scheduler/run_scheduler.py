@@ -1760,14 +1760,23 @@ class PipelineRunner:
                     return False, f"Candle kedaluwarsa/telat ({age_mins}m lalu > batas {max_age // 60}m)"
 
             # 4. Validasi Pergeseran Harga (Price Drift / Slip Guard)
-            # Jika harga live saat ini sudah lari terlalu jauh dari harga sinyal,
-            # sinyal dianggap TELAT dan dibuang demi melindungi user & member dari entry pucuk/telat.
+            # Khusus MARKET ORDER (BUY / SELL): jika harga running sudah melar > 2.50 USD dari candle close,
+            # sinyal dianggap telat/slipping demi melindungi user & member dari entry pucuk/dasar.
+            # UNTUK PENDING LIMIT ORDER (BUY_LIMIT / SELL_LIMIT):
+            # Harga limit memang dirancang berjarak dari harga live (menjemput retest 20 EMA di level diskon/premium).
+            is_limit_order = sig.signal in ["BUY_LIMIT", "SELL_LIMIT"] or getattr(sig, "is_limit_order", False)
             check_price = current_live_price or sig.price
-            if check_price and sig.price and check_price > 0 and sig.price > 0:
+            if is_limit_order and check_price and check_price > 0:
+                lim_p = float(getattr(sig, "limit_price", 0.0) or sig.price)
+                if sig.signal == "BUY_LIMIT" and check_price <= lim_p:
+                    return False, f"Harga live (${check_price:.2f}) sudah menembus di bawah harga limit (${lim_p:.2f}). Pending BUY LIMIT terlewat."
+                elif sig.signal == "SELL_LIMIT" and check_price >= lim_p:
+                    return False, f"Harga live (${check_price:.2f}) sudah menembus di atas harga limit (${lim_p:.2f}). Pending SELL LIMIT terlewat."
+            elif not is_limit_order and check_price and sig.price and check_price > 0 and sig.price > 0:
                 diff_pct = abs(check_price - sig.price) / sig.price
                 if is_gold:
                     diff_usd = abs(check_price - sig.price)
-                    # Di Gold: Jika harga sudah lari > $2.50 USD (25 pips) dari entry, sinyal telat dibatalkan
+                    # Di Gold: Jika harga sudah lari > $2.50 USD (25 pips) dari entry, sinyal market telat dibatalkan
                     if diff_usd > 2.50:
                         return False, f"Harga Gold sudah lari terlalu jauh (${diff_usd:.2f} USD > batas $2.50 USD / 25 pips). Sinyal telat dibatalkan."
                 else:
