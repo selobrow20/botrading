@@ -832,7 +832,11 @@ class MT5MemberBridge:
         """
         Membatalkan pending limit order yang berlawanan arah dengan arah order/sinyal baru.
         Misal: Ada order BUY baru -> Batalkan pending order SELL_LIMIT yang aktif.
+        Jika mode Jaring Dua Sisi aktif, pembatalan dilewati.
         """
+        if bool((getattr(self, "cfg", None) or {}).get("enable_dual_sided_limits", False)):
+            return []
+
         if symbol and symbol.upper() in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"] and (not new_direction or new_direction.upper() not in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]):
             new_direction, symbol = symbol, new_direction
         if not new_direction:

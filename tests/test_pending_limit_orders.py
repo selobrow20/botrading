@@ -170,7 +170,8 @@ def test_mt5_bridge_pending_orders_lifecycle():
     })
     assert len(bridge.get_pending_orders()) == 2
 
-    # Ketika ada sinyal/arah BUY baru, pending SELL_LIMIT lawan harus dibatalkan
+    # Ketika ada sinyal/arah BUY baru dan dual-sided nonaktif, pending SELL_LIMIT lawan harus dibatalkan
+    bridge.enable_dual_sided_limits = False
     cancelled_opp = bridge.cancel_opposite_pending_orders("XAUUSD", "BUY")
     assert 1003 in cancelled_opp
     assert len(bridge.get_pending_orders()) == 1

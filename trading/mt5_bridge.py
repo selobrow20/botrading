@@ -88,6 +88,7 @@ class MT5Bridge:
         self.limit_order_expiry_mins: int = int(mt5_cfg.get("limit_order_expiry_mins", 120))
         self.max_pending_orders_per_symbol: int = int(mt5_cfg.get("max_pending_orders_per_symbol", 1))
         self.min_limit_distance_pips: float = float(mt5_cfg.get("min_limit_distance_pips", 15.0))
+        self.enable_dual_sided_limits: bool = bool(cfg.get("trading", {}).get("enable_dual_sided_limits", False) or mt5_cfg.get("enable_dual_sided_limits", False))
         self.reversal_cooldown_until: Optional[datetime] = None
         self.reversal_cooldown_reason: str = ""
         # Directional Cooldown: {direction: datetime_until} — Anti-Revenge Re-entry setelah SL beruntun
@@ -795,7 +796,16 @@ class MT5Bridge:
         """
         Membatalkan pending order yang berlawanan arah dengan sinyal atau posisi baru.
         Misal: Ada posisi BUY baru -> Batalkan pending order SELL_LIMIT yang aktif.
+        Jika mode Jaring Dua Sisi (dual-sided limits) aktif, pembatalan dilewati agar kedua sisi tetap aktif.
         """
+        enable_dual = getattr(self, "enable_dual_sided_limits", None)
+        if enable_dual is None:
+            cfg = getattr(self, "config", None) or load_config()
+            enable_dual = bool(cfg.get("mt5", {}).get("enable_dual_sided_limits", False)) or bool(cfg.get("trading", {}).get("enable_dual_sided_limits", False))
+        if enable_dual:
+            logger.info("ℹ️ [DUAL-SIDED LIMITS] Melewati pembatalan pending order lawan: Jaring dua sisi aktif.")
+            return []
+
         if new_direction.upper() not in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"] and symbol and symbol.upper() in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]:
             new_direction, symbol = symbol, new_direction
 

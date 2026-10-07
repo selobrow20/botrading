@@ -697,6 +697,7 @@ def test_25_sltp_invalid_blocked(mt5_bridge):
 def test_26_option_2_always_limit_orders_buy(signal_engine, mt5_bridge):
     """26. Opsi 2 (Always Limit): Sinyal BUY otomatis menjadi BUY_LIMIT di diskon 20 EMA."""
     signal_engine.config["mt5"]["always_use_limit_orders"] = True
+    mt5_bridge.config["mt5"]["always_use_limit_orders"] = True
     df = create_gold_df(10, base_price=2700.0, trend="up")
     df.index = pd.date_range("2026-10-06 09:00", periods=10, freq="15min")
     res = signal_engine.evaluate_bar(
@@ -724,6 +725,7 @@ def test_26_option_2_always_limit_orders_buy(signal_engine, mt5_bridge):
 def test_27_option_2_always_limit_orders_sell(signal_engine, mt5_bridge):
     """27. Opsi 2 (Always Limit): Sinyal SELL otomatis menjadi SELL_LIMIT di premium 20 EMA."""
     signal_engine.config["mt5"]["always_use_limit_orders"] = True
+    mt5_bridge.config["mt5"]["always_use_limit_orders"] = True
     df = create_gold_df(10, base_price=2700.0, trend="down")
     df.index = pd.date_range("2026-10-06 09:00", periods=10, freq="15min")
     res = signal_engine.evaluate_bar(

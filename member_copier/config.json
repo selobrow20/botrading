@@ -8,7 +8,7 @@
   "usd_only_high_grade": true,
   "cent_only_high_grade": true,
   "enable_limit_orders": true,
-  "always_use_limit_orders": true,
+  "always_use_limit_orders": false,
   "limit_order_expiry_mins": 120,
   "max_pending_orders_per_symbol": 4,
   "enable_multi_level_limits": true,
