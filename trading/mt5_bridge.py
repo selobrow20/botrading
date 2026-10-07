@@ -1745,12 +1745,12 @@ class MT5Bridge:
 
         is_cent = self.is_cent_account()
         if not is_cent:
-            lot = float(cfg_mt5.get("usd_execution_lot", 0.01))
+            lot = float(cfg_mt5.get("limit_order_lot_usd", cfg_mt5.get("usd_execution_lot", 0.01)))
         else:
             if self.is_us_session_window():
                 lot = float(cfg_mt5.get("us_session_aggressive_lot", 0.08))
             else:
-                lot = float(cfg_mt5.get("limit_order_lot", cfg_mt5.get("high_confidence_lot", 0.05)))
+                lot = float(cfg_mt5.get("limit_order_lot_cent", cfg_mt5.get("limit_order_lot", 0.05)))
 
         # Section 27: Execution Guards untuk Pending Limit Orders
         algo_ok, algo_msg = self.is_algo_trading_enabled()
@@ -1805,6 +1805,7 @@ class MT5Bridge:
                 else:
                     final_tp = round(p_item - tp_d, 2)
                     final_sl = round(p_item + sl_d, 2)
+                item_lot = lot if not is_cent else float(itm.get("lot", lot))
                 orders_to_process.append({
                     "level": itm.get("level", len(orders_to_process) + 1),
                     "label": itm.get("label", f"Level {len(orders_to_process) + 1}"),
@@ -1812,7 +1813,7 @@ class MT5Bridge:
                     "price": p_item,
                     "tp": final_tp,
                     "sl": final_sl,
-                    "lot": float(itm.get("lot", lot)),
+                    "lot": item_lot,
                 })
         else:
             orders_to_process.append({
@@ -2253,12 +2254,17 @@ class MT5Bridge:
         if not orders:
             return {"success": False, "placed_tickets": [], "placed_orders": [], "message": "Tidak ada order untuk dipasang."}
 
+        is_cent = self.is_cent_account()
+        cfg_mt5 = getattr(self, "config", {}).get("mt5", {})
+        target_lot = float(cfg_mt5.get("limit_order_lot_cent", cfg_mt5.get("limit_order_lot", 0.05))) if is_cent else float(cfg_mt5.get("limit_order_lot_usd", 0.01))
+
         if self.simulation_mode:
             placed_tickets = []
             placed_orders = []
             for ord_info in orders:
                 cur_sig = ord_info.get("type") or ord_info.get("signal", "BUY_LIMIT")
                 p_val = float(ord_info["price"])
+                lot_val = target_lot if not is_cent else float(ord_info.get("lot", target_lot))
                 self._simulated_ticket += 1
                 ticket = self._simulated_ticket
                 lim_dict = {
@@ -2269,7 +2275,7 @@ class MT5Bridge:
                     "price_open": p_val,
                     "sl": float(ord_info["sl"]),
                     "tp": float(ord_info["tp"]),
-                    "volume": float(ord_info.get("lot", 0.05)),
+                    "volume": lot_val,
                     "time_setup": datetime.now(ZoneInfo("Asia/Jakarta")),
                     "comment": f"9PDF-{cur_sig[:5]}",
                 }
@@ -2310,7 +2316,7 @@ class MT5Bridge:
             p_val = float(ord_info["price"])
             sl_val = float(ord_info["sl"])
             tp_val = float(ord_info["tp"])
-            lot_val = float(ord_info.get("lot", 0.05))
+            lot_val = target_lot if not is_cent else float(ord_info.get("lot", target_lot))
             label = ord_info.get("label", cur_sig)
 
             # Validasi harga limit terhadap tick live (MT5 rule: BUY_LIMIT < ask, SELL_LIMIT > bid)

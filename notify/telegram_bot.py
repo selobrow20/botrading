@@ -769,7 +769,12 @@ class TelegramNotifier:
         score = float(order_info.get("score", 0.0))
         grade = str(order_info.get("grade", "Grade A"))
         is_limit = action in ["BUY_LIMIT", "SELL_LIMIT"]
-        lot_badge = "🔥 <b>MOMEN BAGUS BANGET (0.05 LOT)</b>" if volume >= 0.05 else "🛡️ <b>STANDAR / PENGAMAN (0.01 LOT)</b>"
+        if volume <= 0.01:
+            lot_badge = "🛡️ <b>AKUN STANDARD USD (0.01 LOT)</b>"
+        elif volume >= 0.08:
+            lot_badge = "⚡ <b>SESI US AGRESIF (0.08 LOT)</b>"
+        else:
+            lot_badge = "🔥 <b>AKUN CENT USC (0.05 LOT)</b>"
         action_icon = "🟢" if "BUY" in action else "🔴"
 
         if is_limit:

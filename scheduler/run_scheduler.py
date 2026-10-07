@@ -730,6 +730,9 @@ class PipelineRunner:
             logger.info(f"⏰ [2-HOUR REFRESH] {len(cancelled)} Pending order kadaluarsa ({cancelled}) berhasil dibatalkan. Menyiapkan jaring baru!")
 
         # 3. Periksa pending order yang masih aktif di MT5
+        is_cent = b.is_cent_account()
+        target_limit_lot = float(cfg_mt5.get("limit_order_lot_cent", cfg_mt5.get("limit_order_lot", 0.05))) if is_cent else float(cfg_mt5.get("limit_order_lot_usd", 0.01))
+
         active_pending = b.get_pending_orders(symbol=ticker)
         buy_limits = [o for o in active_pending if "BUY" in o.get("type", "")]
         sell_limits = [o for o in active_pending if "SELL" in o.get("type", "")]
@@ -760,33 +763,39 @@ class PipelineRunner:
                 trade_type=trade_type,
                 df_h1=df_h1_ind,
                 df_h4=df_h4_ind,
+                is_cent=is_cent,
             )
 
         if not ladder_orders:
             return
 
-        # Filter order yang benar-benar dibutuhkan
+        # Filter order yang benar-benar dibutuhkan & pastikan lot presisi sesuai jenis akun
         orders_to_deploy = []
         if needs_buy:
-            orders_to_deploy.extend([o for o in ladder_orders if "BUY" in o.get("type", "")][:max_levels])
+            for o in [ord for ord in ladder_orders if "BUY" in ord.get("type", "")][:max_levels]:
+                o["lot"] = target_limit_lot
+                orders_to_deploy.append(o)
         if needs_sell:
-            orders_to_deploy.extend([o for o in ladder_orders if "SELL" in o.get("type", "")][:max_levels])
+            for o in [ord for ord in ladder_orders if "SELL" in ord.get("type", "")][:max_levels]:
+                o["lot"] = target_limit_lot
+                orders_to_deploy.append(o)
 
         if not orders_to_deploy:
             return
 
-        logger.info(f"🔄 [2-HOUR REFRESH] Memasang jaring pending limit order baru ({len(orders_to_deploy)} order) untuk {ticker}...")
+        acc_type_lbl = "Cent (USC)" if is_cent else "Standard (USD)"
+        logger.info(f"🔄 [2-HOUR REFRESH] Memasang jaring pending limit order baru ({len(orders_to_deploy)} order @ {target_limit_lot} lot | {acc_type_lbl}) untuk {ticker}...")
         deploy_res = b.deploy_dual_sided_limit_bracket(symbol=ticker, orders=orders_to_deploy)
         if deploy_res.get("success"):
             placed_orders = deploy_res.get("placed_orders", [])
-            logger.info(f"✅ [2-HOUR REFRESH] {len(placed_orders)} Pending limit order berhasil terpasang di MT5!")
+            logger.info(f"✅ [2-HOUR REFRESH] {len(placed_orders)} Pending limit order ({target_limit_lot} lot) berhasil terpasang di MT5!")
             for po in placed_orders:
                 try:
                     self.notifier.send_mt5_execution_report({
                         "ticket": po.get("ticket"),
                         "action": po.get("action", po.get("type")),
                         "symbol": po.get("symbol", ticker),
-                        "volume": po.get("volume", 0.05),
+                        "volume": po.get("volume", target_limit_lot),
                         "price": po.get("price"),
                         "tp": po.get("tp"),
                         "sl": po.get("sl"),

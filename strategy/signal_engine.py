@@ -254,8 +254,8 @@ def get_trading_session(dt: Optional[Any] = None) -> Tuple[str, str]:
 class SignalEngine:
     """Engine evaluasi aturan strategi untuk menghasilkan sinyal BUY/SELL/HOLD."""
 
-    def __init__(self, strategies: Optional[List[Strategy]] = None):
-        self.config = load_config()
+    def __init__(self, strategies: Optional[List[Strategy]] = None, config: Optional[Dict[str, Any]] = None):
+        self.config = config if config is not None else load_config()
         if strategies is not None:
             self.strategies = strategies
         else:
@@ -1294,17 +1294,33 @@ class SignalEngine:
         trade_type: str = "SHORT",
         df_h1: Optional[pd.DataFrame] = None,
         df_h4: Optional[pd.DataFrame] = None,
+        is_cent: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
         """
         Menghasilkan jaring dua sisi pending limit orders (BUY LIMIT & SELL LIMIT)
         berdasarkan analisis pasar terkini (20 EMA, 50 EMA, Support Demand & Resistance Supply)
         sesuai kaidah 9 Buku PDF & SMC Spec.
+        Lot:
+        - Akun Cent (USC): 0.05 Lot
+        - Akun Standard (USD): 0.01 Lot
         """
         cfg_mt5 = self.config.get("mt5", {})
         min_limit_pips = float(cfg_mt5.get("min_limit_distance_pips", 15.0))
         min_dist = max(1.50, min_limit_pips / 10.0)
         min_spacing_usd = max(2.00, float(cfg_mt5.get("min_level_spacing_pips", 20.0)) / 10.0)
-        order_lot = float(cfg_mt5.get("limit_order_lot", 0.05))
+
+        # Penentuan Lot: Akun Standard USD = 0.01 Lot, Akun Cent (USC) = 0.05 Lot
+        if is_cent is False:
+            order_lot = float(cfg_mt5.get("limit_order_lot_usd", 0.01))
+        elif is_cent is True:
+            order_lot = float(cfg_mt5.get("limit_order_lot_cent", cfg_mt5.get("limit_order_lot", 0.05)))
+        else:
+            try:
+                from trading.mt5_bridge import MT5Bridge
+                b = MT5Bridge()
+                order_lot = float(cfg_mt5.get("limit_order_lot_cent", 0.05)) if b.is_cent_account() else float(cfg_mt5.get("limit_order_lot_usd", 0.01))
+            except Exception:
+                order_lot = float(cfg_mt5.get("limit_order_lot", 0.05))
 
         MIN_GOLD_USD = 6.00
         sl_dist = MIN_GOLD_USD

@@ -651,3 +651,98 @@ def test_member_copier_news_guard_telegram_message_handling():
     assert 9911 in cancelled
     assert 9922 in cancelled
 
+
+def test_limit_orders_lot_size_usd_vs_cent():
+    """Memastikan pending limit order akun Standard USD strictly 0.01 lot dan akun Cent USC 0.05 lot."""
+    import pandas as pd
+    from strategy.signal_engine import SignalEngine, SignalResult
+    from trading.mt5_bridge import MT5Bridge
+
+    engine = SignalEngine(config={"mt5": {"limit_order_lot_cent": 0.05, "limit_order_lot_usd": 0.01}})
+    df_dummy = pd.DataFrame({
+        "Open": [4100.0] * 35,
+        "High": [4115.0] * 35,
+        "Low": [4090.0] * 35,
+        "Close": [4105.0] * 35,
+        "Volume": [1000] * 35,
+    })
+    snapshot = {"ema_20": 4102.0, "ema_50": 4095.0}
+
+    # 1. Test generate_dual_sided_limit_orders untuk USD (0.01) vs Cent (0.05)
+    orders_usd = engine.generate_dual_sided_limit_orders(
+        df=df_dummy,
+        ticker="XAUUSD",
+        curr_price=4105.0,
+        snapshot=snapshot,
+        trade_type="SHORT",
+        is_cent=False,
+    )
+    assert len(orders_usd) == 4
+    for o in orders_usd:
+        assert o["lot"] == 0.01, f"Expected 0.01 for USD account, got {o['lot']}"
+
+    orders_cent = engine.generate_dual_sided_limit_orders(
+        df=df_dummy,
+        ticker="XAUUSD",
+        curr_price=4105.0,
+        snapshot=snapshot,
+        trade_type="SHORT",
+        is_cent=True,
+    )
+    assert len(orders_cent) == 4
+    for o in orders_cent:
+        assert o["lot"] == 0.05, f"Expected 0.05 for Cent account, got {o['lot']}"
+
+    # 2. Test deploy_dual_sided_limit_bracket di MT5Bridge
+    bridge = MT5Bridge(simulation_mode=True)
+    bridge.enabled = True
+
+    # Akun Standard USD
+    bridge._is_cent_override = False
+    bridge._simulated_pending_orders.clear()
+    res_usd = bridge.deploy_dual_sided_limit_bracket("XAUUSD", orders_usd)
+    assert res_usd["success"] is True
+    for po in res_usd["placed_orders"]:
+        assert po["volume"] == 0.01, f"Expected 0.01 for USD, got {po['volume']}"
+
+    # Akun Cent USC
+    bridge._is_cent_override = True
+    bridge._simulated_pending_orders.clear()
+    res_cent = bridge.deploy_dual_sided_limit_bracket("XAUUSDc", orders_cent)
+    assert res_cent["success"] is True
+    for po in res_cent["placed_orders"]:
+        assert po["volume"] == 0.05, f"Expected 0.05 for Cent, got {po['volume']}"
+
+    # 3. Test execute_limit_order di MT5Bridge
+    from unittest.mock import patch
+    sig_limit = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="Test",
+        signal="BUY_LIMIT",
+        price=4095.0,
+        candle_time="2026-10-08T06:00:00",
+        take_profit_price=4105.0,
+        stop_loss_price=4089.0,
+        pdf_confluence_score=85.0,
+        setup_grade="Grade A+",
+        is_limit_order=True,
+        limit_price=4095.0,
+    )
+    # USD -> 0.01
+    bridge._is_cent_override = False
+    bridge._simulated_pending_orders.clear()
+    with patch.dict(bridge.config["mt5"], {"enable_news_limit_guard": False}):
+        res_exec_usd = bridge.execute_limit_order(sig_limit)
+        assert res_exec_usd["success"] is True
+        assert res_exec_usd["volume"] == 0.01
+
+    # Cent -> 0.05 (di luar sesi US)
+    bridge._is_cent_override = True
+    bridge._simulated_pending_orders.clear()
+    with patch.dict(bridge.config["mt5"], {"enable_news_limit_guard": False}), \
+         patch.object(bridge, "is_us_session_window", return_value=False):
+        res_exec_cent = bridge.execute_limit_order(sig_limit)
+        assert res_exec_cent["success"] is True
+        assert res_exec_cent["volume"] == 0.05
+
+
