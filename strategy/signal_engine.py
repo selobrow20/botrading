@@ -1285,6 +1285,137 @@ class SignalEngine:
 
         return True, ""
 
+    def generate_dual_sided_limit_orders(
+        self,
+        df: pd.DataFrame,
+        ticker: str,
+        curr_price: float,
+        snapshot: Dict[str, Any],
+        trade_type: str = "SHORT",
+        df_h1: Optional[pd.DataFrame] = None,
+        df_h4: Optional[pd.DataFrame] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Menghasilkan jaring dua sisi pending limit orders (BUY LIMIT & SELL LIMIT)
+        berdasarkan analisis pasar terkini (20 EMA, 50 EMA, Support Demand & Resistance Supply)
+        sesuai kaidah 9 Buku PDF & SMC Spec.
+        """
+        cfg_mt5 = self.config.get("mt5", {})
+        min_limit_pips = float(cfg_mt5.get("min_limit_distance_pips", 15.0))
+        min_dist = max(1.50, min_limit_pips / 10.0)
+        min_spacing_usd = max(2.00, float(cfg_mt5.get("min_level_spacing_pips", 20.0)) / 10.0)
+        order_lot = float(cfg_mt5.get("limit_order_lot", 0.05))
+
+        MIN_GOLD_USD = 6.00
+        sl_dist = MIN_GOLD_USD
+        tp_dist = max(18.00, MIN_GOLD_USD * 3.0) if trade_type == "LONG" else MIN_GOLD_USD
+        rrr = 3.0 if trade_type == "LONG" else 1.0
+
+        ema20_raw = float(snapshot.get("ema_20", curr_price) or curr_price)
+        ema50_raw = float(snapshot.get("ema_50", curr_price) or curr_price)
+
+        recent_slice = df.tail(30) if len(df) >= 30 else df
+        recent_low = float(recent_slice["Low"].min()) if "Low" in recent_slice.columns else (curr_price - 10.0)
+        recent_high = float(recent_slice["High"].max()) if "High" in recent_slice.columns else (curr_price + 10.0)
+
+        # ─── 1. SISI BUY LIMIT (Lantai Support / Diskon) ───
+        max_buy1 = round(curr_price - min_dist, 2)
+        if ema20_raw <= max_buy1:
+            buy1_p = round(ema20_raw, 2)
+            buy1_lbl = "BUY LIMIT L1 (Retest 20 EMA Support)"
+        else:
+            buy1_p = round(min(max_buy1, recent_low + 1.00), 2)
+            if buy1_p >= max_buy1:
+                buy1_p = max_buy1
+            buy1_lbl = "BUY LIMIT L1 (Demand Rebound / Diskon)"
+
+        buy1_sl = round(buy1_p - sl_dist, 2)
+        buy1_tp = round(buy1_p + tp_dist, 2)
+
+        max_buy2 = round(buy1_p - min_spacing_usd, 2)
+        if ema50_raw <= max_buy2:
+            buy2_p = round(ema50_raw, 2)
+            buy2_lbl = "BUY LIMIT L2 (Retest 50 EMA Support)"
+        else:
+            buy2_p = max_buy2
+            buy2_lbl = "BUY LIMIT L2 (Deep Floor S2 / Demand)"
+
+        buy2_sl = round(buy2_p - sl_dist, 2)
+        buy2_tp = round(buy2_p + tp_dist, 2)
+
+        # ─── 2. SISI SELL LIMIT (Atap Resisten / Premium) ───
+        min_sell1 = round(curr_price + min_dist, 2)
+        if ema20_raw >= min_sell1:
+            sell1_p = round(ema20_raw, 2)
+            sell1_lbl = "SELL LIMIT L1 (Retest 20 EMA Resistance)"
+        else:
+            sell1_p = round(max(min_sell1, recent_high - 1.00), 2)
+            if sell1_p <= min_sell1:
+                sell1_p = min_sell1
+            sell1_lbl = "SELL LIMIT L1 (Supply Pullback / Premium)"
+
+        sell1_sl = round(sell1_p + sl_dist, 2)
+        sell1_tp = round(sell1_p - tp_dist, 2)
+
+        min_sell2 = round(sell1_p + min_spacing_usd, 2)
+        if ema50_raw >= min_sell2:
+            sell2_p = round(ema50_raw, 2)
+            sell2_lbl = "SELL LIMIT L2 (Retest 50 EMA Resistance)"
+        else:
+            sell2_p = min_sell2
+            sell2_lbl = "SELL LIMIT L2 (Deep Ceiling R2 / Supply)"
+
+        sell2_sl = round(sell2_p + sl_dist, 2)
+        sell2_tp = round(sell2_p - tp_dist, 2)
+
+        orders = [
+            {
+                "level": 1,
+                "label": buy1_lbl,
+                "signal": "BUY_LIMIT",
+                "type": "BUY_LIMIT",
+                "price": buy1_p,
+                "tp": buy1_tp,
+                "sl": buy1_sl,
+                "rrr": rrr,
+                "lot": order_lot,
+            },
+            {
+                "level": 2,
+                "label": buy2_lbl,
+                "signal": "BUY_LIMIT",
+                "type": "BUY_LIMIT",
+                "price": buy2_p,
+                "tp": buy2_tp,
+                "sl": buy2_sl,
+                "rrr": rrr,
+                "lot": order_lot,
+            },
+            {
+                "level": 3,
+                "label": sell1_lbl,
+                "signal": "SELL_LIMIT",
+                "type": "SELL_LIMIT",
+                "price": sell1_p,
+                "tp": sell1_tp,
+                "sl": sell1_sl,
+                "rrr": rrr,
+                "lot": order_lot,
+            },
+            {
+                "level": 4,
+                "label": sell2_lbl,
+                "signal": "SELL_LIMIT",
+                "type": "SELL_LIMIT",
+                "price": sell2_p,
+                "tp": sell2_tp,
+                "sl": sell2_sl,
+                "rrr": rrr,
+                "lot": order_lot,
+            },
+        ]
+        return orders
+
     def evaluate_bar(
         self,
         df: pd.DataFrame,
@@ -2050,127 +2181,18 @@ class SignalEngine:
         is_actionable = signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]
         final_price = limit_price_val if is_limit_type and limit_price_val is not None else curr_price
 
-        # Multi-Level / Ladder Limit Orders (Dual-Level Sniper: 20 EMA + 50 EMA)
+        # Multi-Level / Ladder Limit Orders (Dual-Sided Jaring: BUY LIMIT & SELL LIMIT)
         ladder_orders: List[Dict[str, Any]] = []
-        if is_limit_type and limit_price_val is not None:
-            enable_multi = bool(self.config.get("mt5", {}).get("enable_multi_level_limits", True))
-            max_levels = int(self.config.get("mt5", {}).get("max_limit_levels", 2))
-            min_spacing_usd = float(self.config.get("mt5", {}).get("min_level_spacing_pips", 20.0)) / 10.0
-            order_lot = float(self.config.get("mt5", {}).get("limit_order_lot", 0.05))
-
-            lvl1 = {
-                "level": 1,
-                "label": "Level 1 (Entry Cepat - 20 EMA)",
-                "signal": signal,
-                "price": limit_price_val,
-                "tp": tp_price,
-                "sl": sl_price,
-                "rrr": rrr,
-                "lot": order_lot,
-            }
-            ladder_orders.append(lvl1)
-
-            if enable_multi and max_levels >= 2:
-                ema50_raw = round(float(curr_row.get("ema_50", snapshot.get("ema_50", curr_price)) or curr_price), 2)
-                sl_dist_calc = max(6.00, round(abs(limit_price_val - (sl_price or limit_price_val)), 2))
-                tp_dist_calc = max(6.00, round(abs((tp_price or limit_price_val) - limit_price_val), 2))
-
-                if signal == "SELL_LIMIT":
-                    lvl2_price = max(ema50_raw, round(limit_price_val + min_spacing_usd, 2))
-                    lvl2_sl = round(lvl2_price + sl_dist_calc, 2)
-                    lvl2_tp = round(lvl2_price - tp_dist_calc, 2)
-                else:
-                    lvl2_price = min(ema50_raw, round(limit_price_val - min_spacing_usd, 2))
-                    lvl2_sl = round(lvl2_price - sl_dist_calc, 2)
-                    lvl2_tp = round(lvl2_price + tp_dist_calc, 2)
-
-                lvl2 = {
-                    "level": 2,
-                    "label": "Level 2 (Deep Retest - 50 EMA)",
-                    "signal": signal,
-                    "price": lvl2_price,
-                    "tp": lvl2_tp,
-                    "sl": lvl2_sl,
-                    "rrr": rrr,
-                    "lot": order_lot,
-                }
-                ladder_orders.append(lvl2)
-
-            # Jaring Dua Sisi (Dual-Sided / Bracket Limits: BUY LIMIT & SELL LIMIT bersamaan)
-            enable_dual = bool(self.config.get("mt5", {}).get("enable_dual_sided_limits", False))
-            if enable_dual:
-                sl_dist_calc = max(6.00, round(abs(limit_price_val - (sl_price or limit_price_val)), 2))
-                tp_dist_calc = max(6.00, round(abs((tp_price or limit_price_val) - limit_price_val), 2))
-                if signal == "SELL_LIMIT":
-                    opp_signal = "BUY_LIMIT"
-                    # Lantai support di recent low / demand zone
-                    if "Low" in df.columns:
-                        recent_low = round(float(df["Low"].tail(30).min()), 2)
-                    elif "low" in df.columns:
-                        recent_low = round(float(df["low"].tail(30).min()), 2)
-                    else:
-                        recent_low = round(curr_price - 10.0, 2)
-
-                    opp_lvl1_p = round(min(curr_price - min_spacing_usd, recent_low + 1.0), 2)
-                    if opp_lvl1_p >= curr_price:
-                        opp_lvl1_p = round(curr_price - min_spacing_usd, 2)
-                    opp_lvl2_p = round(opp_lvl1_p - min_spacing_usd, 2)
-
-                    ladder_orders.append({
-                        "level": 3,
-                        "label": "Lantai Support 1 (Demand Rebound)",
-                        "signal": opp_signal,
-                        "price": opp_lvl1_p,
-                        "tp": round(opp_lvl1_p + tp_dist_calc, 2),
-                        "sl": round(opp_lvl1_p - sl_dist_calc, 2),
-                        "rrr": rrr,
-                        "lot": order_lot,
-                    })
-                    ladder_orders.append({
-                        "level": 4,
-                        "label": "Lantai Support 2 (Deep Floor S2)",
-                        "signal": opp_signal,
-                        "price": opp_lvl2_p,
-                        "tp": round(opp_lvl2_p + tp_dist_calc, 2),
-                        "sl": round(opp_lvl2_p - sl_dist_calc, 2),
-                        "rrr": rrr,
-                        "lot": order_lot,
-                    })
-                elif signal == "BUY_LIMIT":
-                    opp_signal = "SELL_LIMIT"
-                    # Atap resisten di recent high / supply zone
-                    if "High" in df.columns:
-                        recent_high = round(float(df["High"].tail(30).max()), 2)
-                    elif "high" in df.columns:
-                        recent_high = round(float(df["high"].tail(30).max()), 2)
-                    else:
-                        recent_high = round(curr_price + 10.0, 2)
-
-                    opp_lvl1_p = round(max(curr_price + min_spacing_usd, recent_high - 1.0), 2)
-                    if opp_lvl1_p <= curr_price:
-                        opp_lvl1_p = round(curr_price + min_spacing_usd, 2)
-                    opp_lvl2_p = round(opp_lvl1_p + min_spacing_usd, 2)
-
-                    ladder_orders.append({
-                        "level": 3,
-                        "label": "Atap Resisten 1 (Supply Pullback)",
-                        "signal": opp_signal,
-                        "price": opp_lvl1_p,
-                        "tp": round(opp_lvl1_p - tp_dist_calc, 2),
-                        "sl": round(opp_lvl1_p + sl_dist_calc, 2),
-                        "rrr": rrr,
-                        "lot": order_lot,
-                    })
-                    ladder_orders.append({
-                        "level": 4,
-                        "label": "Atap Resisten 2 (Deep Ceiling R2)",
-                        "signal": opp_signal,
-                        "price": opp_lvl2_p,
-                        "tp": round(opp_lvl2_p - tp_dist_calc, 2),
-                        "sl": round(opp_lvl2_p + sl_dist_calc, 2),
-                        "rrr": rrr,
-                        "lot": order_lot,
-                    })
+        if is_gold and bool(self.config.get("mt5", {}).get("enable_limit_orders", True)):
+            ladder_orders = self.generate_dual_sided_limit_orders(
+                df=df_with_ind,
+                ticker=ticker,
+                curr_price=curr_price,
+                snapshot=snapshot,
+                trade_type=trade_type,
+                df_h1=df_h1,
+                df_h4=df_h4,
+            )
 
         if is_actionable and market_regime:
             reasons.append(f"Regime Pasar: {market_regime}")

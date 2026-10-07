@@ -650,6 +650,19 @@ class PipelineRunner:
                     except Exception as ex_chart_alert:
                         logger.error(f"Error memproses eksekusi sinyal chart A+: {ex_chart_alert}")
 
+                # JALUR 3: PENGELOLAAN JARING DUA SISI PENDING LIMIT ORDER (BUY & SELL LIMIT) SETIAP 2 JAM
+                if is_gold:
+                    try:
+                        self.maintain_dual_sided_pending_limits(
+                            ticker=ticker,
+                            sig_result=sig_result,
+                            df_ind=df_ind,
+                            df_h1_ind=df_h1_ind,
+                            df_h4_ind=df_h4_ind,
+                        )
+                    except Exception as ex_lim:
+                        logger.error(f"Error pada pengelolaan dual-sided pending limits {ticker}: {ex_lim}")
+
                 results["details"].append({
                     "ticker": ticker,
                     "signal": sig_result.signal,
@@ -669,6 +682,119 @@ class PipelineRunner:
             f"{results['signals_triggered']} sinyal aktif, {results['signals_notified']} notifikasi terkirim ==="
         )
         return results
+
+    def maintain_dual_sided_pending_limits(
+        self,
+        ticker: str,
+        sig_result: Any,
+        df_ind: pd.DataFrame,
+        df_h1_ind: Optional[pd.DataFrame] = None,
+        df_h4_ind: Optional[pd.DataFrame] = None,
+    ) -> None:
+        """
+        Memelihara siklus hidup jaring dua sisi pending limit orders (BUY LIMIT & SELL LIMIT)
+        untuk instrumen Gold (XAUUSD):
+        1. Menghapus pending order kadaluarsa (setiap 2 jam / 120 menit).
+        2. Memeriksa News Guard (10 menit sebelum berita besar -> batalkan & jeda).
+        3. Memeriksa ketersediaan pending order aktif. Jika kosong atau kadaluarsa,
+           lakukan analisis ulang kondisi pasar terkini (SMC, 20 EMA, 50 EMA, Likuiditas, Support/Resistance)
+           dan pasang jaring baru (BUY LIMIT & SELL LIMIT) secara otomatis!
+        """
+        cfg_mt5 = getattr(self, "config", {}).get("mt5", {})
+        if not bool(cfg_mt5.get("enable_limit_orders", True)):
+            return
+
+        # 1. News Guard Check
+        if bool(cfg_mt5.get("enable_news_limit_guard", True)):
+            nb_mins = int(cfg_mt5.get("news_limit_guard_minutes_before", 10))
+            na_mins = int(cfg_mt5.get("news_limit_guard_minutes_after", 15))
+            try:
+                from data.economic_calendar import EconomicCalendar
+                cal = EconomicCalendar(storage=self.storage)
+                active_guard_news = cal.get_active_high_impact_news(mins_before=nb_mins, mins_after=na_mins)
+                if active_guard_news:
+                    logger.info(f"🚫 [NEWS GUARD] Jeda pasang limit order: Berita {active_guard_news[0].get('title')} sedang aktif.")
+                    return
+            except Exception as ex_cal:
+                logger.debug(f"Pengecekan news calendar guard: {ex_cal}")
+
+        from trading.mt5_bridge import MT5Bridge
+        b = MT5Bridge()
+        if not b.enabled and not b.simulation_mode:
+            return
+
+        # 2. Batalkan order kadaluarsa (> 120 menit / 2 jam)
+        expiry_mins = int(cfg_mt5.get("limit_order_expiry_mins", 120))
+        cancelled = b.cancel_stale_pending_orders(max_age_minutes=expiry_mins)
+        if cancelled:
+            logger.info(f"⏰ [2-HOUR REFRESH] {len(cancelled)} Pending order kadaluarsa ({cancelled}) berhasil dibatalkan. Menyiapkan jaring baru!")
+
+        # 3. Periksa pending order yang masih aktif di MT5
+        active_pending = b.get_pending_orders(symbol=ticker)
+        buy_limits = [o for o in active_pending if "BUY" in o.get("type", "")]
+        sell_limits = [o for o in active_pending if "SELL" in o.get("type", "")]
+        max_levels = int(cfg_mt5.get("max_limit_levels", 2))
+
+        enable_dual = bool(cfg_mt5.get("enable_dual_sided_limits", True))
+        if enable_dual:
+            needs_buy = len(buy_limits) < max_levels
+            needs_sell = len(sell_limits) < max_levels
+        else:
+            needs_buy = len(buy_limits) == 0
+            needs_sell = len(sell_limits) == 0
+
+        if not needs_buy and not needs_sell:
+            return
+
+        # 4. Analisis ulang pasar terkini untuk mendapatkan level baru
+        curr_p = float(sig_result.price) if sig_result and getattr(sig_result, "price", 0.0) else float(df_ind["Close"].iloc[-1])
+        ladder_orders = getattr(sig_result, "ladder_limit_orders", [])
+        if not ladder_orders:
+            snapshot = self.signal_engine._extract_snapshot(df_ind, -1)
+            trade_type = getattr(sig_result, "trade_type", "SHORT") if sig_result else "SHORT"
+            ladder_orders = self.signal_engine.generate_dual_sided_limit_orders(
+                df=df_ind,
+                ticker=ticker,
+                curr_price=curr_p,
+                snapshot=snapshot,
+                trade_type=trade_type,
+                df_h1=df_h1_ind,
+                df_h4=df_h4_ind,
+            )
+
+        if not ladder_orders:
+            return
+
+        # Filter order yang benar-benar dibutuhkan
+        orders_to_deploy = []
+        if needs_buy:
+            orders_to_deploy.extend([o for o in ladder_orders if "BUY" in o.get("type", "")][:max_levels])
+        if needs_sell:
+            orders_to_deploy.extend([o for o in ladder_orders if "SELL" in o.get("type", "")][:max_levels])
+
+        if not orders_to_deploy:
+            return
+
+        logger.info(f"🔄 [2-HOUR REFRESH] Memasang jaring pending limit order baru ({len(orders_to_deploy)} order) untuk {ticker}...")
+        deploy_res = b.deploy_dual_sided_limit_bracket(symbol=ticker, orders=orders_to_deploy)
+        if deploy_res.get("success"):
+            placed_orders = deploy_res.get("placed_orders", [])
+            logger.info(f"✅ [2-HOUR REFRESH] {len(placed_orders)} Pending limit order berhasil terpasang di MT5!")
+            for po in placed_orders:
+                try:
+                    self.notifier.send_mt5_execution_report({
+                        "ticket": po.get("ticket"),
+                        "action": po.get("action", po.get("type")),
+                        "symbol": po.get("symbol", ticker),
+                        "volume": po.get("volume", 0.05),
+                        "price": po.get("price"),
+                        "tp": po.get("tp"),
+                        "sl": po.get("sl"),
+                        "score": getattr(sig_result, "pdf_confluence_score", 90.0) if sig_result else 90.0,
+                        "grade": getattr(sig_result, "setup_grade", "Grade A+") if sig_result else "Grade A+",
+                    })
+                except Exception as ex_tg:
+                    logger.debug(f"Gagal kirim kartu laporan limit order ke Telegram: {ex_tg}")
 
     def check_upcoming_news_job(self) -> int:
         """

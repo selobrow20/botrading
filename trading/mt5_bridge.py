@@ -703,7 +703,9 @@ class MT5Bridge:
                     time_setup = None
                     if hasattr(o, "time_setup") and o.time_setup:
                         try:
-                            time_setup = datetime.fromtimestamp(o.time_setup, tz=ZoneInfo("Asia/Jakarta"))
+                            offset = self.get_broker_time_offset()
+                            true_utc_epoch = o.time_setup - offset
+                            time_setup = datetime.fromtimestamp(true_utc_epoch, tz=ZoneInfo("Asia/Jakarta"))
                         except Exception:
                             time_setup = datetime.now(ZoneInfo("Asia/Jakarta"))
                     else:
@@ -2238,4 +2240,145 @@ class MT5Bridge:
         except Exception as e:
             logger.warning(f"Error mengambil riwayat closed deals MT5: {e}")
             return []
+
+    def deploy_dual_sided_limit_bracket(
+        self,
+        symbol: str,
+        orders: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Memasang bracket dual-sided pending limit orders (BUY LIMIT & SELL LIMIT)
+        berdasarkan analisis SMC & Likuiditas terkini, dengan penyegaran otomatis berkala.
+        """
+        if not orders:
+            return {"success": False, "placed_tickets": [], "placed_orders": [], "message": "Tidak ada order untuk dipasang."}
+
+        if self.simulation_mode:
+            placed_tickets = []
+            placed_orders = []
+            for ord_info in orders:
+                cur_sig = ord_info.get("type") or ord_info.get("signal", "BUY_LIMIT")
+                p_val = float(ord_info["price"])
+                self._simulated_ticket += 1
+                ticket = self._simulated_ticket
+                lim_dict = {
+                    "ticket": ticket,
+                    "symbol": symbol,
+                    "type": cur_sig,
+                    "price": p_val,
+                    "price_open": p_val,
+                    "sl": float(ord_info["sl"]),
+                    "tp": float(ord_info["tp"]),
+                    "volume": float(ord_info.get("lot", 0.05)),
+                    "time_setup": datetime.now(ZoneInfo("Asia/Jakarta")),
+                    "comment": f"9PDF-{cur_sig[:5]}",
+                }
+                self._simulated_pending_orders.append(lim_dict)
+                placed_tickets.append(ticket)
+                placed_orders.append(lim_dict)
+            logger.info(f"🤖 [SIMULASI] {len(placed_tickets)} Dual-sided pending limit orders berhasil dipasang.")
+            return {
+                "success": len(placed_tickets) > 0,
+                "placed_tickets": placed_tickets,
+                "placed_orders": placed_orders,
+                "message": f"[SIMULASI] {len(placed_tickets)} Dual-sided pending limit orders berhasil dipasang.",
+            }
+
+        if not self.ensure_connected():
+            return {"success": False, "placed_tickets": [], "placed_orders": [], "message": "MT5 tidak terhubung."}
+
+        broker_sym = self.find_symbol(symbol) or symbol
+        tick = mt5.symbol_info_tick(broker_sym)
+        if tick is None:
+            return {"success": False, "placed_tickets": [], "placed_orders": [], "message": f"Gagal membaca tick pasar {broker_sym}."}
+
+        sym_info = mt5.symbol_info(broker_sym)
+        filling_mode = int(sym_info.filling_mode or 0) if sym_info else 0
+        if filling_mode & 1:
+            fill_type = mt5.ORDER_FILLING_FOK
+        elif filling_mode & 2:
+            fill_type = mt5.ORDER_FILLING_IOC
+        else:
+            fill_type = mt5.ORDER_FILLING_RETURN
+
+        placed_tickets = []
+        placed_orders = []
+        active_pending = self.get_pending_orders(symbol=broker_sym)
+
+        for ord_info in orders:
+            cur_sig = ord_info.get("type") or ord_info.get("signal", "BUY_LIMIT")
+            p_val = float(ord_info["price"])
+            sl_val = float(ord_info["sl"])
+            tp_val = float(ord_info["tp"])
+            lot_val = float(ord_info.get("lot", 0.05))
+            label = ord_info.get("label", cur_sig)
+
+            # Validasi harga limit terhadap tick live (MT5 rule: BUY_LIMIT < ask, SELL_LIMIT > bid)
+            if "BUY" in cur_sig:
+                if p_val >= tick.ask - 1.00:
+                    p_val = round(tick.ask - 1.50, 2)
+                    sl_val = round(p_val - 6.00, 2)
+                    tp_val = round(p_val + 6.00, 2)
+                order_raw_type = mt5.ORDER_TYPE_BUY_LIMIT
+            else:
+                if p_val <= tick.bid + 1.00:
+                    p_val = round(tick.bid + 1.50, 2)
+                    sl_val = round(p_val + 6.00, 2)
+                    tp_val = round(p_val - 6.00, 2)
+                order_raw_type = mt5.ORDER_TYPE_SELL_LIMIT
+
+            # Anti-duplicate check: jika sudah ada pending order dengan tipe sama dalam jarak $1.50 USD
+            is_dup = any(po.get("type") == cur_sig and abs(po.get("price", 0.0) - p_val) < 1.50 for po in active_pending)
+            if is_dup:
+                logger.info(f"Pending order {cur_sig} @ {p_val} sudah aktif di area yang sama. Dilewati.")
+                continue
+
+            request = {
+                "action": mt5.TRADE_ACTION_PENDING,
+                "symbol": broker_sym,
+                "volume": lot_val,
+                "type": order_raw_type,
+                "price": p_val,
+                "sl": sl_val,
+                "tp": tp_val,
+                "deviation": self.max_slippage,
+                "magic": self.magic_number,
+                "comment": f"9PDF-{cur_sig[:5]}"[:31],
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": fill_type,
+            }
+
+            logger.info(f"🚀 Memasang Dual-Sided Limit: {cur_sig} {lot_val} {broker_sym} @ {p_val} (TP: {tp_val}, SL: {sl_val}) [{label}]")
+            result = mt5.order_send(request)
+
+            if result is None:
+                err = mt5.last_error()
+                logger.warning(f"Gagal order_send: {err[1]} (Kode: {err[0]})")
+                continue
+
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                logger.warning(f"Broker retcode {result.retcode}: {result.comment}")
+                continue
+
+            logger.info(f"✅ Berhasil pasang {cur_sig} #{result.order} ({label}) @ {p_val}")
+            placed_tickets.append(result.order)
+            placed_orders.append({
+                "ticket": result.order,
+                "action": cur_sig,
+                "symbol": broker_sym,
+                "price": p_val,
+                "sl": sl_val,
+                "tp": tp_val,
+                "volume": lot_val,
+                "label": label,
+            })
+            active_pending.append({"type": cur_sig, "price": p_val, "ticket": result.order})
+
+        return {
+            "success": len(placed_tickets) > 0,
+            "placed_tickets": placed_tickets,
+            "placed_orders": placed_orders,
+            "message": f"Berhasil memasang {len(placed_tickets)} pending limit order.",
+        }
+
 
