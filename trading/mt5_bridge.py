@@ -1634,7 +1634,8 @@ class MT5Bridge:
         cfg = getattr(self, "config", None) or load_config()
         cfg_mt5 = cfg.get("mt5", {})
         min_limit_score = float(cfg_mt5.get("high_confidence_threshold", 80.0))
-        if score < min_limit_score and "A+" not in str(grade).upper():
+        always_limit = bool(cfg_mt5.get("always_use_limit_orders", False))
+        if not always_limit and score < min_limit_score and "A+" not in str(grade).upper():
             msg = (
                 f"🛡️ [PENDING LIMIT FILTER] Sinyal {sig_type} ditolak: Skor ({score:.0f}%, {grade}) "
                 f"belum tembus batas Grade A+ (≥{min_limit_score:.0f}%). Pending limit hanya untuk sniper Grade A+!"
@@ -1690,6 +1691,38 @@ class MT5Bridge:
                 lot = float(cfg_mt5.get("us_session_aggressive_lot", 0.08))
             else:
                 lot = float(cfg_mt5.get("limit_order_lot", cfg_mt5.get("high_confidence_lot", 0.05)))
+
+        # Section 27: Execution Guards untuk Pending Limit Orders
+        algo_ok, algo_msg = self.is_algo_trading_enabled()
+        if not algo_ok:
+            logger.warning(algo_msg)
+            return {
+                "success": False,
+                "status": "algo_trading_disabled",
+                "message": algo_msg,
+            }
+
+        margin_ok, margin_msg = self.check_margin_sufficient(ticker, 0 if "BUY" in sig_type else 1, lot, limit_price)
+        if not margin_ok:
+            logger.warning(margin_msg)
+            return {
+                "success": False,
+                "status": "insufficient_margin",
+                "message": margin_msg,
+            }
+
+        # Validasi Jarak & Arah SL/TP
+        sl_tp_ok, sl_tp_msg = self.validate_sl_tp("BUY" if "BUY" in sig_type else "SELL", limit_price, sl, tp)
+        if not sl_tp_ok:
+            logger.warning(sl_tp_msg)
+            return {
+                "success": False,
+                "status": "invalid_sl_tp",
+                "message": sl_tp_msg,
+            }
+
+        # Risk Percentage (WARNING ONLY)
+        self.calculate_risk_percentage(ticker, limit_price, sl, lot)
 
         if self.simulation_mode:
             self._simulated_ticket += 1

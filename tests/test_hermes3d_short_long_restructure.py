@@ -686,3 +686,62 @@ def test_25_sltp_invalid_blocked(mt5_bridge):
     res = mt5_bridge.execute_signal(sig_invalid)
     assert res["success"] is False
     assert res["status"] == "invalid_sltp"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TEST 26 - 27: OPSI 2 (100% PENDING LIMIT ORDER SNIPER MODE)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_26_option_2_always_limit_orders_buy(signal_engine, mt5_bridge):
+    """26. Opsi 2 (Always Limit): Sinyal BUY otomatis menjadi BUY_LIMIT di diskon 20 EMA."""
+    signal_engine.config["mt5"]["always_use_limit_orders"] = True
+    df = create_gold_df(10, base_price=2700.0, trend="up")
+    df.index = pd.date_range("2026-10-06 09:00", periods=10, freq="15min")
+    res = signal_engine.evaluate_bar(
+        df, "XAUUSD", apply_pdf_filter=True, preferred_trade_type="SHORT"
+    )
+    # Harus terkonversi menjadi BUY_LIMIT
+    assert res.signal == "BUY_LIMIT"
+    assert res.direction == "BUY"
+    assert res.trade_type == "SHORT"
+    assert res.is_limit_order is True
+    assert res.limit_order_type == "BUY_LIMIT"
+    assert res.limit_price is not None
+    assert res.limit_price < df.iloc[-1]["Close"]  # Di bawah harga pasar live (diskon)
+    assert res.stop_loss_price < res.limit_price
+    assert res.take_profit_price > res.limit_price
+
+    # Eksekusi ke MT5 Bridge
+    exec_res = mt5_bridge.execute_signal(res)
+    assert exec_res["success"] is True
+    assert exec_res["status"] == "pending_placed"
+    assert exec_res["action"] == "BUY_LIMIT"
+    assert exec_res["volume"] == 0.05
+
+
+def test_27_option_2_always_limit_orders_sell(signal_engine, mt5_bridge):
+    """27. Opsi 2 (Always Limit): Sinyal SELL otomatis menjadi SELL_LIMIT di premium 20 EMA."""
+    signal_engine.config["mt5"]["always_use_limit_orders"] = True
+    df = create_gold_df(10, base_price=2700.0, trend="down")
+    df.index = pd.date_range("2026-10-06 09:00", periods=10, freq="15min")
+    res = signal_engine.evaluate_bar(
+        df, "XAUUSD", apply_pdf_filter=True, preferred_trade_type="LONG"
+    )
+    # Harus terkonversi menjadi SELL_LIMIT
+    assert res.signal == "SELL_LIMIT"
+    assert res.direction == "SELL"
+    assert res.trade_type == "LONG"
+    assert res.is_limit_order is True
+    assert res.limit_order_type == "SELL_LIMIT"
+    assert res.limit_price is not None
+    assert res.limit_price > df.iloc[-1]["Close"]  # Di atas harga pasar live (premium)
+    assert res.stop_loss_price > res.limit_price
+    assert res.take_profit_price < res.limit_price
+
+    # Eksekusi ke MT5 Bridge
+    exec_res = mt5_bridge.execute_signal(res)
+    assert exec_res["success"] is True
+    assert exec_res["status"] == "pending_placed"
+    assert exec_res["action"] == "SELL_LIMIT"
+    assert exec_res["volume"] == 0.05
+

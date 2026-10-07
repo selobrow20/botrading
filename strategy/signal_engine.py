@@ -1626,7 +1626,7 @@ class SignalEngine:
                     and is_gold
                     and apply_pdf_filter
                     and pdf_approved
-                    and pdf_score >= 80.0
+                    and (pdf_score >= 80.0 or bool(self.config.get("mt5", {}).get("always_use_limit_orders", False)))
                     and not macro_blocked
                     and h1_ok
                     and not judas_trap
@@ -1705,7 +1705,7 @@ class SignalEngine:
                     and is_gold
                     and apply_pdf_filter
                     and pdf_approved
-                    and pdf_score >= 80.0
+                    and (pdf_score >= 80.0 or bool(self.config.get("mt5", {}).get("always_use_limit_orders", False)))
                     and not macro_blocked
                     and h1_ok
                     and not judas_trap
@@ -1802,7 +1802,7 @@ class SignalEngine:
                         f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
                         f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
                     ]
-            elif ema_overextended_reject and is_gold and bool(self.config.get("mt5", {}).get("enable_limit_orders", True)) and apply_pdf_filter and pdf_approved and pdf_score >= 80.0 and not macro_blocked and h1_ok and not judas_trap and not rsi_extreme_reject:
+            elif ema_overextended_reject and is_gold and bool(self.config.get("mt5", {}).get("enable_limit_orders", True)) and apply_pdf_filter and pdf_approved and (pdf_score >= 80.0 or bool(self.config.get("mt5", {}).get("always_use_limit_orders", False))) and not macro_blocked and h1_ok and not judas_trap and not rsi_extreme_reject:
                 min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
                 min_limit_dist = min_limit_pips / 10.0
                 ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
@@ -1854,6 +1854,60 @@ class SignalEngine:
                         )
                     )
                 ]
+
+        # OPSI 2 (Murni Sniper Limit): 100% Selalu Pasang Pending Limit Order (BUY LIMIT & SELL LIMIT)
+        always_limit = (
+            bool(self.config.get("mt5", {}).get("always_use_limit_orders", False))
+            and is_gold
+            and apply_pdf_filter
+            and signal in ["BUY", "SELL"]
+        )
+        if always_limit:
+            min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
+            min_limit_dist = min_limit_pips / 10.0
+            ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
+
+            if signal == "BUY":
+                signal = "BUY_LIMIT"
+                is_limit_order_sig = True
+                limit_order_type_val = "BUY_LIMIT"
+                # Tempatkan di 20 EMA atau minimal 15 pips di bawah harga pasar live (diskon)
+                if ema20_lvl <= round(curr_price - min_limit_dist, 2):
+                    limit_price_val = ema20_lvl
+                else:
+                    limit_price_val = round(curr_price - min_limit_dist, 2)
+
+                sl_dist_lim = max(6.00, sl_distance)
+                if trade_type == "LONG":
+                    tp_dist_lim = max(18.00, round(sl_dist_lim * 3.0, 2))
+                    rrr = 3.0
+                else:
+                    tp_dist_lim = max(6.00, sl_dist_lim)
+                    rrr = 1.0
+                sl_price = round(limit_price_val - sl_dist_lim, 2)
+                tp_price = round(limit_price_val + tp_dist_lim, 2)
+                reasons.insert(0, f"🟡 [SNIPER LIMIT ORDER] BUY LIMIT dipasang di ${limit_price_val:,.2f} (Retest Diskon Support / 20 EMA)")
+
+            elif signal == "SELL":
+                signal = "SELL_LIMIT"
+                is_limit_order_sig = True
+                limit_order_type_val = "SELL_LIMIT"
+                # Tempatkan di 20 EMA atau minimal 15 pips di atas harga pasar live (premium)
+                if ema20_lvl >= round(curr_price + min_limit_dist, 2):
+                    limit_price_val = ema20_lvl
+                else:
+                    limit_price_val = round(curr_price + min_limit_dist, 2)
+
+                sl_dist_lim = max(6.00, sl_distance)
+                if trade_type == "LONG":
+                    tp_dist_lim = max(18.00, round(sl_dist_lim * 3.0, 2))
+                    rrr = 3.0
+                else:
+                    tp_dist_lim = max(6.00, sl_dist_lim)
+                    rrr = 1.0
+                sl_price = round(limit_price_val + sl_dist_lim, 2)
+                tp_price = round(limit_price_val - tp_dist_lim, 2)
+                reasons.insert(0, f"🟡 [SNIPER LIMIT ORDER] SELL LIMIT dipasang di ${limit_price_val:,.2f} (Retest Premium Resistance / 20 EMA)")
 
         is_limit_type = signal in ["BUY_LIMIT", "SELL_LIMIT"]
         is_actionable = signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]

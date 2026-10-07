@@ -217,15 +217,23 @@ class TelegramNotifier:
                 lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
 
         elif sig.signal in ["BUY_LIMIT", "SELL_LIMIT"] and is_gold:
-            lim_label = "BUY LIMIT" if sig.signal == "BUY_LIMIT" else "SELL LIMIT"
-            lim_icon = "🟢" if sig.signal == "BUY_LIMIT" else "🔴"
+            lim_label = "BUY LIMIT" if "BUY" in sig.signal else "SELL LIMIT"
+            lim_icon = "🟢" if "BUY" in sig.signal else "🔴"
+            trade_type_val = getattr(sig, "trade_type", "SHORT") or "SHORT"
+            direction_val = getattr(sig, "direction", "BUY" if "BUY" in sig.signal else "SELL") or ("BUY" if "BUY" in sig.signal else "SELL")
+            macro_h4 = getattr(sig, "macro_bias_h4", "") or "NEUTRAL / SIDEWAYS"
             lines.append(f"🟡 <b>SINYAL PENDING ORDER SNIPER: {lim_label} ({display_ticker})</b>")
+            lines.append(f"🌐 <b>Market:</b> H4 = <code>{macro_h4}</code>")
+            lines.append(f"⚡ <b>Trade Type:</b> <code>{trade_type_val} — {'SCALPING' if trade_type_val == 'SHORT' else 'INTRADAY/SWING'}</code>")
+            lines.append(f"🧭 <b>Direction:</b> <code>{direction_val}</code>")
+            if trade_type_val == "LONG":
+                lines.append("🛡️ <b>Break Even:</b> <code>+60 pips</code>")
             lines.append(f"🎯 <b>Metode Entry:</b> 🛡️ <b>Pending Limit Anti-Kejar Lilin (Bob Volman)</b>")
             lines.append(f"📍 <b>Harga Pasang Limit:</b> <code>{price_str}</code> (Retest 20 EMA)")
             if sig.take_profit_price and sig.stop_loss_price:
                 tp_str = format_currency(sig.take_profit_price, sig.ticker)
                 sl_str = format_currency(sig.stop_loss_price, sig.ticker)
-                rrr = sig.risk_reward_ratio or 2.0
+                rrr = sig.risk_reward_ratio or (3.0 if trade_type_val == "LONG" else 1.0)
                 lines.append(f"🎯 <b>Take Profit (TP):</b> <code>{tp_str}</code>")
                 lines.append(f"🛑 <b>Stop Loss (SL):</b> <code>{sl_str}</code>")
                 lines.append(f"⚖️ <b>Risk/Reward Ratio:</b> 1 : {rrr}")

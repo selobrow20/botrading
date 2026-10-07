@@ -102,9 +102,11 @@ def test_mt5_bridge_execute_limit_order_success():
 
 def test_mt5_bridge_reject_low_grade_limit():
     """Memastikan Pending Limit Order DITOLAK jika belum memenuhi standar Grade A+ (>= 80%)."""
+    from unittest.mock import patch
     bridge = MT5Bridge(simulation_mode=True)
     bridge.enabled = True
     bridge.trading_hours = "all"
+    bridge._simulated_pending_orders.clear()
 
     low_score_sig = SignalResult(
         ticker="XAUUSD",
@@ -118,9 +120,10 @@ def test_mt5_bridge_reject_low_grade_limit():
         setup_grade="Grade A",
         is_limit_order=True,
     )
-    res = bridge.execute_limit_order(low_score_sig)
-    assert res["success"] is False
-    assert res["status"] == "skip_standard_grade"
+    with patch.dict(bridge.config["mt5"], {"always_use_limit_orders": False}):
+        res = bridge.execute_limit_order(low_score_sig)
+        assert res["success"] is False
+        assert res["status"] == "skip_standard_grade"
 
 
 def test_mt5_bridge_pending_orders_lifecycle():
