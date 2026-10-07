@@ -13,13 +13,13 @@ from member_copier.client_copier import (
 
 
 def test_copier_version_exists():
-    assert CLIENT_COPIER_VERSION == "2.4.2"
+    assert CLIENT_COPIER_VERSION == "2.4.3"
     v_file = Path("member_copier/version.json")
     assert v_file.exists()
     data = json.loads(v_file.read_text(encoding="utf-8"))
-    assert data["version"] == "2.4.2"
+    assert data["version"] == "2.4.3"
+    assert parse_version("2.4.3") > parse_version("2.4.2")
     assert parse_version("2.4.2") > parse_version("2.4.1")
-    assert parse_version("2.4.1") > parse_version("2.4.0")
 
 
 def test_apply_zip_update_preserves_user_config(tmp_path, monkeypatch):

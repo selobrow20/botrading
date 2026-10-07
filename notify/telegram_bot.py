@@ -217,29 +217,37 @@ class TelegramNotifier:
                 lines.append(f"💡 <i>{html.escape(clean_reason)}</i>")
 
         elif sig.signal in ["BUY_LIMIT", "SELL_LIMIT"] and is_gold:
-            lim_label = "BUY LIMIT" if "BUY" in sig.signal else "SELL LIMIT"
-            lim_icon = "🟢" if "BUY" in sig.signal else "🔴"
             trade_type_val = getattr(sig, "trade_type", "SHORT") or "SHORT"
             direction_val = getattr(sig, "direction", "BUY" if "BUY" in sig.signal else "SELL") or ("BUY" if "BUY" in sig.signal else "SELL")
             macro_h4 = getattr(sig, "macro_bias_h4", "") or "NEUTRAL / SIDEWAYS"
             ladder_orders = getattr(sig, "ladder_limit_orders", []) or []
 
+            has_both_sides = any("BUY" in str(o.get("signal", "")) for o in ladder_orders) and any("SELL" in str(o.get("signal", "")) for o in ladder_orders)
+            if has_both_sides:
+                lim_label = "DUAL-SIDED BRACKET (BUY & SELL LIMIT)"
+            else:
+                lim_label = "BUY LIMIT" if "BUY" in sig.signal else "SELL LIMIT"
+
             if len(ladder_orders) >= 2:
-                lines.append(f"🟡 <b>SINYAL PENDING ORDER SNIPER (DUAL-LEVEL): {lim_label} ({display_ticker})</b>")
+                title_badge = "DUAL-SIDED BRACKET" if has_both_sides else "DUAL-LEVEL"
+                lines.append(f"🟡 <b>SINYAL PENDING ORDER SNIPER ({title_badge}): {lim_label} ({display_ticker})</b>")
                 lines.append(f"🌐 <b>Market:</b> H4 = <code>{macro_h4}</code>")
                 lines.append(f"⚡ <b>Trade Type:</b> <code>{trade_type_val} — {'SCALPING' if trade_type_val == 'SHORT' else 'INTRADAY/SWING'}</code>")
                 lines.append(f"🧭 <b>Direction:</b> <code>{direction_val}</code>")
                 if trade_type_val == "LONG":
                     lines.append("🛡️ <b>Break Even:</b> <code>+60 pips</code>")
-                lines.append(f"🎯 <b>Metode Entry:</b> 🛡️ <b>Dual-Level Ladder Sniper (Bob Volman & Martin Pring)</b>")
+                method_name = "Jaring Dua Sisi Support & Resisten" if has_both_sides else "Dual-Level Ladder Sniper"
+                lines.append(f"🎯 <b>Metode Entry:</b> 🛡️ <b>{method_name} (Bob Volman & Martin Pring)</b>")
                 lines.append("")
                 for itm in ladder_orders:
                     lvl_num = itm.get("level", 1)
                     lvl_lbl = itm.get("label", f"Level {lvl_num}")
+                    itm_sig = itm.get("signal") or itm.get("type") or sig.signal
+                    itm_icon = "🟢" if "BUY" in itm_sig else "🔴"
                     p_str = format_currency(itm.get("price", 0.0), sig.ticker)
                     t_str = format_currency(itm.get("tp", 0.0), sig.ticker)
                     s_str = format_currency(itm.get("sl", 0.0), sig.ticker)
-                    lines.append(f"📍 <b>{lvl_lbl}:</b>")
+                    lines.append(f"{itm_icon} <b>{lvl_lbl} ({itm_sig}):</b>")
                     lines.append(f"   • Limit : <code>{p_str}</code>")
                     lines.append(f"   • TP    : <code>{t_str}</code>")
                     lines.append(f"   • SL    : <code>{s_str}</code>")

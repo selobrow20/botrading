@@ -482,3 +482,47 @@ def test_member_copier_parse_dual_level_and_execute():
     assert res["success"] is True
     assert len(res["tickets"]) == 2
     assert mock_mt5.order_send.call_count == 2
+
+
+def test_dual_sided_bracket_limits_execution():
+    """Menguji eksekusi Dual-Sided Bracket Limits (BUY LIMIT dan SELL LIMIT bersamaan) di MT5Bridge."""
+    from unittest.mock import patch
+    bridge = MT5Bridge(simulation_mode=True)
+    bridge.enabled = True
+    bridge.trading_hours = "all"
+    bridge._simulated_pending_orders.clear()
+
+    ladder = [
+        {"level": 1, "label": "Atap Resisten 1 (20 EMA)", "signal": "SELL_LIMIT", "price": 4115.00, "tp": 4085.00, "sl": 4127.00, "lot": 0.05},
+        {"level": 2, "label": "Atap Resisten 2 (50 EMA)", "signal": "SELL_LIMIT", "price": 4129.00, "tp": 4099.00, "sl": 4141.00, "lot": 0.05},
+        {"level": 3, "label": "Lantai Support 1 (Demand)", "signal": "BUY_LIMIT", "price": 4070.00, "tp": 4090.00, "sl": 4062.00, "lot": 0.05},
+        {"level": 4, "label": "Lantai Support 2 (Deep S2)", "signal": "BUY_LIMIT", "price": 4060.00, "tp": 4080.00, "sl": 4052.00, "lot": 0.05},
+    ]
+    sig = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="Master_Confluence_Strategy",
+        signal="SELL_LIMIT",
+        price=4115.00,
+        candle_time="2026-10-07T18:00:00",
+        take_profit_price=4085.00,
+        stop_loss_price=4127.00,
+        pdf_confluence_score=90.0,
+        setup_grade="Grade A+",
+        is_limit_order=True,
+        ladder_limit_orders=ladder,
+    )
+
+    with patch.dict(bridge.config["mt5"], {
+        "enable_multi_level_limits": True,
+        "enable_dual_sided_limits": True,
+        "max_limit_levels": 2,
+        "max_pending_orders_per_symbol": 4,
+    }):
+        res = bridge.execute_limit_order(sig)
+        assert res["success"] is True
+        assert len(res["tickets"]) == 4
+        orders = bridge.get_pending_orders("XAUUSD")
+        assert len(orders) == 4
+        order_types = [o["type"] for o in orders]
+        assert order_types.count("SELL_LIMIT") == 2
+        assert order_types.count("BUY_LIMIT") == 2

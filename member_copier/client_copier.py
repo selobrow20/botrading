@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.4.2"
+CLIENT_COPIER_VERSION = "2.4.3"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -875,8 +875,9 @@ class MT5MemberBridge:
         # Bersihkan order basi terlebih dahulu
         self.cancel_stale_pending_orders(symbol=sym, max_age_minutes=int(self.cfg.get("limit_order_expiry_mins", 120)))
 
-        # Bersihkan pending order lawan
-        self.cancel_opposite_pending_orders(sym, action)
+        # Bersihkan pending order lawan jika dual-sided tidak aktif
+        if not bool(self.cfg.get("enable_dual_sided_limits", False)):
+            self.cancel_opposite_pending_orders(sym, action)
 
         s_info = self.mt5.symbol_info(sym)
         if not s_info:
@@ -893,18 +894,20 @@ class MT5MemberBridge:
         if limit_price <= 0 or tp_raw <= 0 or sl_raw <= 0:
             return {"success": False, "message": f"Harga limit (${limit_price:.2f}), TP (${tp_raw:.2f}), atau SL (${sl_raw:.2f}) tidak valid."}
 
-        # Multi-Level Support (Dual-Level Sniper)
+        # Multi-Level Support (Dual-Level & Dual-Sided Sniper)
         enable_multi = bool(self.cfg.get("enable_multi_level_limits", True))
         ladder_items = sig.get("ladder_limit_orders", [])
         max_levels = int(self.cfg.get("max_limit_levels", 2))
-        max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 2))
+        max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 4))
 
         orders_to_place = []
         if enable_multi and len(ladder_items) >= 2:
-            for itm in ladder_items[:max_levels]:
+            for itm in ladder_items[:max_pending]:
+                item_sig = itm.get("signal") or itm.get("type") or itm.get("order_type") or action
                 orders_to_place.append({
-                    "level": itm.get("level", 1),
-                    "label": itm.get("label", f"Level {itm.get('level', 1)}"),
+                    "level": itm.get("level", len(orders_to_place) + 1),
+                    "label": itm.get("label", f"Level {len(orders_to_place) + 1}"),
+                    "type": item_sig,
                     "price": float(itm.get("price", limit_price)),
                     "tp": float(itm.get("tp", tp_raw)),
                     "sl": float(itm.get("sl", sl_raw)),
@@ -913,6 +916,7 @@ class MT5MemberBridge:
             orders_to_place.append({
                 "level": 1,
                 "label": "Level 1",
+                "type": action,
                 "price": limit_price,
                 "tp": tp_raw,
                 "sl": sl_raw,
@@ -941,7 +945,6 @@ class MT5MemberBridge:
         trade_lot = max(vol_min, min(vol_max, trade_lot))
 
         digits = int(getattr(s_info, "digits", 2) or 2)
-        order_raw_type = self.mt5.ORDER_TYPE_BUY_LIMIT if action == "BUY_LIMIT" else self.mt5.ORDER_TYPE_SELL_LIMIT
 
         # Filling mode
         filling_mode = int(s_info.filling_mode or 0)
@@ -962,21 +965,23 @@ class MT5MemberBridge:
             p_val = ord_info["price"]
             tp_item = ord_info["tp"]
             sl_item = ord_info["sl"]
+            cur_sig = ord_info.get("type", action)
+            order_raw_type = self.mt5.ORDER_TYPE_BUY_LIMIT if "BUY" in cur_sig else self.mt5.ORDER_TYPE_SELL_LIMIT
 
             # Validasi tick
-            if action == "BUY_LIMIT" and p_val >= tick.ask:
+            if "BUY" in cur_sig and p_val >= tick.ask:
                 print(f"   ⚠️ Harga BUY LIMIT (${p_val:,.2f}) harus lebih rendah dari harga Ask live (${tick.ask:,.2f}). Dilewati.")
                 continue
-            elif action == "SELL_LIMIT" and p_val <= tick.bid:
+            elif "SELL" in cur_sig and p_val <= tick.bid:
                 print(f"   ⚠️ Harga SELL LIMIT (${p_val:,.2f}) harus lebih tinggi dari harga Bid live (${tick.bid:,.2f}). Dilewati.")
                 continue
 
             # Anti-duplicate & max pending check per level
             active_pending = self.get_pending_orders(symbol=sym)
             if len(active_pending) >= max_pending:
-                is_dup = any(po.get("type") == action and abs(po.get("price", 0.0) - p_val) < 2.0 for po in active_pending)
+                is_dup = any(po.get("type") == cur_sig and abs(po.get("price", 0.0) - p_val) < 2.0 for po in active_pending)
                 if is_dup:
-                    print(f"   ℹ️ Pending order #{action} @ {p_val} sudah ada aktif di area yang sama. Dilewati.")
+                    print(f"   ℹ️ Pending order #{cur_sig} @ {p_val} sudah ada aktif di area yang sama. Dilewati.")
                     continue
                 print(f"   ℹ️ Kuota maksimal pending order ({max_pending}) sudah tercapai pada {sym}.")
                 break
@@ -988,7 +993,7 @@ class MT5MemberBridge:
             if sl_dist > tp_dist:
                 sl_dist = tp_dist
 
-            if action == "BUY_LIMIT":
+            if "BUY" in cur_sig:
                 tp_val = round(p_val + tp_dist, digits)
                 sl_val = round(p_val - sl_dist, digits)
             else:

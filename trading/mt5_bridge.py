@@ -1732,13 +1732,14 @@ class MT5Bridge:
 
         orders_to_process = []
         if enable_multi and len(ladder_items) >= 2:
-            for itm in ladder_items[:max_levels]:
+            for itm in ladder_items[:max_pending]:
+                item_sig = itm.get("signal") or itm.get("type") or itm.get("order_type") or sig_type
                 p_item = float(itm.get("price", limit_price))
                 tp_item = float(itm.get("tp", tp))
                 sl_item = float(itm.get("sl", sl))
                 tp_d = max(MIN_GOLD_USD, round(abs(tp_item - p_item), 2))
                 sl_d = max(MIN_GOLD_USD, round(abs(p_item - sl_item), 2))
-                if sig_type == "BUY_LIMIT":
+                if "BUY" in item_sig:
                     final_tp = round(p_item + tp_d, 2)
                     final_sl = round(p_item - sl_d, 2)
                 else:
@@ -1747,6 +1748,7 @@ class MT5Bridge:
                 orders_to_process.append({
                     "level": itm.get("level", len(orders_to_process) + 1),
                     "label": itm.get("label", f"Level {len(orders_to_process) + 1}"),
+                    "type": item_sig,
                     "price": p_item,
                     "tp": final_tp,
                     "sl": final_sl,
@@ -1756,6 +1758,7 @@ class MT5Bridge:
             orders_to_process.append({
                 "level": 1,
                 "label": "Level 1",
+                "type": sig_type,
                 "price": limit_price,
                 "tp": tp,
                 "sl": sl,
@@ -1767,9 +1770,10 @@ class MT5Bridge:
             placed_orders = []
             active_pending = self.get_pending_orders(symbol=ticker)
             for ord_info in orders_to_process:
+                cur_sig = ord_info.get("type", sig_type)
                 curr_active = self.get_pending_orders(symbol=ticker)
                 if len(curr_active) >= max_pending:
-                    is_dup = any(po.get("type") == sig_type and abs(po.get("price", 0.0) - ord_info["price"]) < 2.0 for po in curr_active)
+                    is_dup = any(po.get("type") == cur_sig and abs(po.get("price", 0.0) - ord_info["price"]) < 2.0 for po in curr_active)
                     if is_dup:
                         continue
                     break
@@ -1779,19 +1783,19 @@ class MT5Bridge:
                 lim_dict = {
                     "ticket": ticket,
                     "symbol": ticker,
-                    "type": sig_type,
+                    "type": cur_sig,
                     "price": ord_info["price"],
                     "price_open": ord_info["price"],
                     "sl": ord_info["sl"],
                     "tp": ord_info["tp"],
                     "volume": ord_info["lot"],
                     "time_setup": datetime.now(ZoneInfo("Asia/Jakarta")),
-                    "comment": f"9PDF-{sig_type[:5]}",
+                    "comment": f"9PDF-{cur_sig[:5]}",
                 }
                 self._simulated_pending_orders.append(lim_dict)
                 placed_tickets.append(ticket)
                 placed_orders.append(lim_dict)
-                logger.info(f"🤖 [SIMULASI] Pending Order #{ticket} ({ord_info['label']}) {sig_type} {ord_info['lot']} {ticker} @ {ord_info['price']} (TP: {ord_info['tp']}, SL: {ord_info['sl']}) sukses dipasang.")
+                logger.info(f"🤖 [SIMULASI] Pending Order #{ticket} ({ord_info['label']}) {cur_sig} {ord_info['lot']} {ticker} @ {ord_info['price']} (TP: {ord_info['tp']}, SL: {ord_info['sl']}) sukses dipasang.")
 
             if not placed_tickets and len(self.get_pending_orders(symbol=ticker)) >= max_pending:
                 return {
@@ -1834,28 +1838,29 @@ class MT5Bridge:
         else:
             fill_type = mt5.ORDER_FILLING_RETURN
 
-        order_raw_type = mt5.ORDER_TYPE_BUY_LIMIT if sig_type == "BUY_LIMIT" else mt5.ORDER_TYPE_SELL_LIMIT
-
         placed_tickets = []
         placed_orders = []
         last_err = ""
 
         for ord_info in orders_to_process:
             p_val = ord_info["price"]
+            cur_sig = ord_info.get("type", sig_type)
+            order_raw_type = mt5.ORDER_TYPE_BUY_LIMIT if "BUY" in cur_sig else mt5.ORDER_TYPE_SELL_LIMIT
+
             # Validasi harga limit terhadap tick live
-            if sig_type == "BUY_LIMIT" and p_val >= tick.ask:
+            if "BUY" in cur_sig and p_val >= tick.ask:
                 logger.warning(f"Harga BUY LIMIT (${p_val:.2f}) harus lebih rendah dari harga Ask (${tick.ask:.2f}). Dilewati.")
                 continue
-            elif sig_type == "SELL_LIMIT" and p_val <= tick.bid:
+            elif "SELL" in cur_sig and p_val <= tick.bid:
                 logger.warning(f"Harga SELL LIMIT (${p_val:.2f}) harus lebih tinggi dari harga Bid (${tick.bid:.2f}). Dilewati.")
                 continue
 
             # Anti-duplicate & max pending check per level
             active_pending = self.get_pending_orders(symbol=broker_sym)
             if len(active_pending) >= max_pending:
-                is_dup = any(po.get("type") == sig_type and abs(po.get("price", 0.0) - p_val) < 2.0 for po in active_pending)
+                is_dup = any(po.get("type") == cur_sig and abs(po.get("price", 0.0) - p_val) < 2.0 for po in active_pending)
                 if is_dup:
-                    logger.info(f"Pending order {sig_type} @ {p_val} sudah ada aktif di area yang sama. Dilewati.")
+                    logger.info(f"Pending order {cur_sig} @ {p_val} sudah ada aktif di area yang sama. Dilewati.")
                     continue
                 logger.info(f"Maksimal pending order ({max_pending}) sudah tercapai pada {broker_sym}.")
                 break
@@ -1870,12 +1875,12 @@ class MT5Bridge:
                 "tp": ord_info["tp"],
                 "deviation": self.max_slippage,
                 "magic": self.magic_number,
-                "comment": f"9PDF-{sig_type[:5]}"[:31],
+                "comment": f"9PDF-{cur_sig[:5]}"[:31],
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": fill_type,
             }
 
-            logger.info(f"Mengirim Pending Order Request ke MT5: {sig_type} {ord_info['lot']} {broker_sym} @ {p_val} (TP: {ord_info['tp']}, SL: {ord_info['sl']})")
+            logger.info(f"Mengirim Pending Order Request ke MT5: {cur_sig} {ord_info['lot']} {broker_sym} @ {p_val} (TP: {ord_info['tp']}, SL: {ord_info['sl']})")
             result = mt5.order_send(request)
 
             if result is None:
@@ -1889,11 +1894,11 @@ class MT5Bridge:
                 logger.warning(last_err)
                 continue
 
-            logger.info(f"✅ Pending Order MT5 #{result.order} ({ord_info['label']}) berhasil dipasang! {sig_type} {ord_info['lot']} {broker_sym} @ {p_val}")
+            logger.info(f"✅ Pending Order MT5 #{result.order} ({ord_info['label']}) berhasil dipasang! {cur_sig} {ord_info['lot']} {broker_sym} @ {p_val}")
             placed_tickets.append(result.order)
             placed_orders.append({
                 "ticket": result.order,
-                "action": sig_type,
+                "action": cur_sig,
                 "symbol": broker_sym,
                 "volume": ord_info["lot"],
                 "price": p_val,
@@ -1903,7 +1908,8 @@ class MT5Bridge:
                 "label": ord_info["label"],
             })
 
-        self.cancel_opposite_pending_orders("BUY" if "BUY" in sig_type else "SELL", broker_sym)
+        if not bool(cfg_mt5.get("enable_dual_sided_limits", False)):
+            self.cancel_opposite_pending_orders("BUY" if "BUY" in sig_type else "SELL", broker_sym)
 
         if not placed_tickets:
             if len(self.get_pending_orders(symbol=broker_sym)) >= max_pending:

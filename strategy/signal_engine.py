@@ -1959,6 +1959,82 @@ class SignalEngine:
                 }
                 ladder_orders.append(lvl2)
 
+            # Jaring Dua Sisi (Dual-Sided / Bracket Limits: BUY LIMIT & SELL LIMIT bersamaan)
+            enable_dual = bool(self.config.get("mt5", {}).get("enable_dual_sided_limits", False))
+            if enable_dual:
+                sl_dist_calc = max(6.00, round(abs(limit_price_val - (sl_price or limit_price_val)), 2))
+                tp_dist_calc = max(6.00, round(abs((tp_price or limit_price_val) - limit_price_val), 2))
+                if signal == "SELL_LIMIT":
+                    opp_signal = "BUY_LIMIT"
+                    # Lantai support di recent low / demand zone
+                    if "Low" in df.columns:
+                        recent_low = round(float(df["Low"].tail(30).min()), 2)
+                    elif "low" in df.columns:
+                        recent_low = round(float(df["low"].tail(30).min()), 2)
+                    else:
+                        recent_low = round(curr_price - 10.0, 2)
+
+                    opp_lvl1_p = round(min(curr_price - min_spacing_usd, recent_low + 1.0), 2)
+                    if opp_lvl1_p >= curr_price:
+                        opp_lvl1_p = round(curr_price - min_spacing_usd, 2)
+                    opp_lvl2_p = round(opp_lvl1_p - min_spacing_usd, 2)
+
+                    ladder_orders.append({
+                        "level": 3,
+                        "label": "Lantai Support 1 (Demand Rebound)",
+                        "signal": opp_signal,
+                        "price": opp_lvl1_p,
+                        "tp": round(opp_lvl1_p + tp_dist_calc, 2),
+                        "sl": round(opp_lvl1_p - sl_dist_calc, 2),
+                        "rrr": rrr,
+                        "lot": order_lot,
+                    })
+                    ladder_orders.append({
+                        "level": 4,
+                        "label": "Lantai Support 2 (Deep Floor S2)",
+                        "signal": opp_signal,
+                        "price": opp_lvl2_p,
+                        "tp": round(opp_lvl2_p + tp_dist_calc, 2),
+                        "sl": round(opp_lvl2_p - sl_dist_calc, 2),
+                        "rrr": rrr,
+                        "lot": order_lot,
+                    })
+                elif signal == "BUY_LIMIT":
+                    opp_signal = "SELL_LIMIT"
+                    # Atap resisten di recent high / supply zone
+                    if "High" in df.columns:
+                        recent_high = round(float(df["High"].tail(30).max()), 2)
+                    elif "high" in df.columns:
+                        recent_high = round(float(df["high"].tail(30).max()), 2)
+                    else:
+                        recent_high = round(curr_price + 10.0, 2)
+
+                    opp_lvl1_p = round(max(curr_price + min_spacing_usd, recent_high - 1.0), 2)
+                    if opp_lvl1_p <= curr_price:
+                        opp_lvl1_p = round(curr_price + min_spacing_usd, 2)
+                    opp_lvl2_p = round(opp_lvl1_p + min_spacing_usd, 2)
+
+                    ladder_orders.append({
+                        "level": 3,
+                        "label": "Atap Resisten 1 (Supply Pullback)",
+                        "signal": opp_signal,
+                        "price": opp_lvl1_p,
+                        "tp": round(opp_lvl1_p - tp_dist_calc, 2),
+                        "sl": round(opp_lvl1_p + sl_dist_calc, 2),
+                        "rrr": rrr,
+                        "lot": order_lot,
+                    })
+                    ladder_orders.append({
+                        "level": 4,
+                        "label": "Atap Resisten 2 (Deep Ceiling R2)",
+                        "signal": opp_signal,
+                        "price": opp_lvl2_p,
+                        "tp": round(opp_lvl2_p - tp_dist_calc, 2),
+                        "sl": round(opp_lvl2_p + sl_dist_calc, 2),
+                        "rrr": rrr,
+                        "lot": order_lot,
+                    })
+
         if is_actionable and market_regime:
             reasons.append(f"Regime Pasar: {market_regime}")
 
