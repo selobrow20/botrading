@@ -1910,6 +1910,26 @@ class SignalEngine:
                 reasons.insert(0, f"🟡 [SNIPER LIMIT ORDER] SELL LIMIT dipasang di ${limit_price_val:,.2f} (Retest Premium Resistance / 20 EMA)")
 
         is_limit_type = signal in ["BUY_LIMIT", "SELL_LIMIT"]
+        if is_limit_type and is_gold and bool(self.config.get("mt5", {}).get("enable_news_limit_guard", True)):
+            try:
+                from data.storage import StockStorage
+                st = getattr(self, "storage", None) or StockStorage()
+                nb_mins = int(self.config.get("mt5", {}).get("news_limit_guard_minutes_before", 10))
+                na_mins = int(self.config.get("mt5", {}).get("news_limit_guard_minutes_after", 15))
+                active_news = st.get_active_high_impact_news(mins_before=nb_mins, mins_after=na_mins)
+                if active_news:
+                    ev = active_news[0]
+                    ev_title = ev.get("title", "High-Impact News")
+                    ev_wib = ev.get("date_wib", "")
+                    signal = "HOLD"
+                    is_limit_type = False
+                    is_limit_order_sig = False
+                    reasons = [
+                        f"🛡️ [NEWS GUARD] Dilarang pasang Pending Limit Order 10 menit sebelum & 15 menit setelah High-Impact News ({ev_title} pukul {ev_wib} WIB)!"
+                    ]
+            except Exception as e_sng:
+                pass
+
         is_actionable = signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]
         final_price = limit_price_val if is_limit_type and limit_price_val is not None else curr_price
 

@@ -1295,4 +1295,27 @@ class StockStorage:
             cursor.execute("UPDATE economic_calendar SET alert_sent = 1 WHERE id = ?", (event_id,))
             conn.commit()
 
+    def get_active_high_impact_news(
+        self, mins_before: int = 10, mins_after: int = 15, current_time_utc: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Mengambil event berita besar (High Impact atau FOMC, CPI, NFP, PCE) yang berada
+        dalam jendela bahaya aktif: [Waktu Event - mins_before] s/d [Waktu Event + mins_after].
+        TIDAK dibatasi alert_sent, sehingga selalu aktif untuk News Guard pembatalan Buy/Sell Limit.
+        """
+        now_utc = current_time_utc or datetime.now(timezone.utc)
+        start_bound = (now_utc - timedelta(minutes=mins_after)).strftime("%Y-%m-%d %H:%M:%S")
+        end_bound = (now_utc + timedelta(minutes=mins_before)).strftime("%Y-%m-%d %H:%M:%S")
+
+        query = """
+            SELECT * FROM economic_calendar
+            WHERE date_utc >= ? AND date_utc <= ?
+            AND (impact = 'High' OR news_type IN ('FOMC', 'CPI', 'NFP', 'PCE'))
+            ORDER BY date_utc ASC
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (start_bound, end_bound))
+            return [dict(r) for r in cursor.fetchall()]
+
 

@@ -824,6 +824,26 @@ class MT5Bridge:
                     cancelled.append(t_id)
         return cancelled
 
+    def cancel_all_pending_orders(self, symbol: Optional[str] = None, reason: str = "") -> List[int]:
+        """
+        Membatalkan seluruh pending order (BUY_LIMIT & SELL_LIMIT) yang aktif.
+        Digunakan untuk pengamanan modal (misal: 10 menit sebelum High-Impact News rilis).
+        """
+        pending_orders = self.get_pending_orders(symbol=symbol)
+        cancelled = []
+        for po in pending_orders:
+            t_id = po.get("ticket")
+            p_type = po.get("type", "LIMIT")
+            p_price = po.get("price", 0.0)
+            logger.info(
+                f"🚨 [CANCEL ALL PENDING] Membatalkan order #{t_id} ({p_type} @ {p_price}) "
+                f"Alasan: {reason or 'Pengamanan modal'}"
+            )
+            res = self.cancel_pending_order(t_id)
+            if res.get("success"):
+                cancelled.append(t_id)
+        return cancelled
+
     def find_symbol(self, target_symbol: str) -> Optional[str]:
         """
         Menemukan nama simbol instrumen yang tepat pada broker MT5 pengguna
@@ -1617,6 +1637,7 @@ class MT5Bridge:
         sl = float(getattr(sig, "stop_loss_price", 0.0) or 0.0)
         score = float(getattr(sig, "pdf_confluence_score", 0.0) or 0.0)
         grade = str(getattr(sig, "setup_grade", "Grade A+"))
+        is_gold_symbol = any(k in ticker.upper() for k in ["XAUUSD", "GC=F", "GOLD", "EMAS"])
 
         if not self.enabled:
             return {
@@ -1656,6 +1677,33 @@ class MT5Bridge:
                 "status": "skip_standard_grade",
                 "message": msg,
             }
+
+        # 1c. Proteksi News Guard: Dilarang pasang limit order 10 menit sebelum berita besar
+        if bool(cfg_mt5.get("enable_news_limit_guard", True)) and is_gold_symbol:
+            mins_before = int(cfg_mt5.get("news_limit_guard_minutes_before", 10))
+            mins_after = int(cfg_mt5.get("news_limit_guard_minutes_after", 15))
+            try:
+                from data.storage import StockStorage
+                st_instance = getattr(self, "storage", None) or StockStorage()
+                active_news = st_instance.get_active_high_impact_news(mins_before=mins_before, mins_after=mins_after)
+                if active_news:
+                    ev = active_news[0]
+                    ev_title = ev.get("title", "High-Impact News")
+                    ev_wib = ev.get("date_wib", "")
+                    ev_type = ev.get("news_type", "NEWS")
+                    msg = (
+                        f"🛡️ [NEWS GUARD] Pending limit order {sig_type} ditolak: "
+                        f"Berita besar '{ev_title}' ({ev_type}) rilis pukul {ev_wib} WIB! "
+                        f"Dilarang memasang limit order {mins_before} menit sebelum & {mins_after} menit setelah news demi keselamatan modal."
+                    )
+                    logger.info(msg)
+                    return {
+                        "success": False,
+                        "status": "news_guard_blocked",
+                        "message": msg,
+                    }
+            except Exception as e_ng:
+                logger.debug(f"Pengecekan news guard dilewati: {e_ng}")
 
         active_pending = self.get_pending_orders(symbol=ticker)
         max_pending = int(cfg_mt5.get("max_pending_orders_per_symbol", 1))

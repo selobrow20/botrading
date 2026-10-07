@@ -1228,6 +1228,48 @@ class TelegramNotifier:
                 success = False
         return success
 
+    def send_news_limit_cancellation_alert(self, event_info: Dict[str, Any], cancelled_tickets: List[int]) -> bool:
+        """Mengirimkan kartu resmi Telegram saat seluruh Buy Limit & Sell Limit dibatalkan 10 menit sebelum berita besar."""
+        title = event_info.get("title", "High-Impact News")
+        date_wib = event_info.get("date_wib", "")
+        news_type = event_info.get("news_type", "NEWS")
+        impact = event_info.get("impact", "High")
+        ticket_str = ", ".join(f"#{t}" for t in cancelled_tickets) if cancelled_tickets else "-"
+
+        lines = [
+            "🚨 <b>[NEWS GUARD] PENDING LIMIT ORDER DIBATALKAN!</b> 🛡️",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"📰 <b>Berita Besar:</b> {html.escape(title)} (<b>{news_type}</b>)",
+            f"💥 <b>Dampak:</b> {impact} Impact (Volatilitas Ekstrem)",
+            f"⏰ <b>Jadwal Rilis:</b> <code>{date_wib} WIB</code> (<b>~10 Menit Lagi!</b>)",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "🛡️ <b>TINDAKAN PENGAMANAN MODAL:</b>",
+            f"• 🚫 <b>Status:</b> Seluruh <b>BUY LIMIT</b> & <b>SELL LIMIT</b> telah dibatalkan seketika!",
+            f"• 🎫 <b>Tiket Dibatalkan:</b> <code>{ticket_str}</code>",
+            f"• 💡 <b>Alasan:</b> Melindungi akun dari lonjakan <i>spread</i> broker, <i>slippage</i> parah, dan cambukan dua arah (whipsaw) saat rilis berita.",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "⏳ <i>Jaring limit order baru akan kembali dipasang setelah badai berita mereda (~15 menit pasca rilis).</i>",
+        ]
+        msg = "\n".join(lines)
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+
+        tv_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Pantau Chart di TradingView", url=get_tradingview_url("XAUUSD"))
+        ]])
+
+        success = True
+        for cid in approved_ids:
+            try:
+                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
+                if not res:
+                    success = False
+            except Exception as e:
+                logger.error(f"Error saat broadcast news guard limit cancellation ke {cid}: {e}")
+                success = False
+        return success
+
     def format_chart_confirmation_message(self, info: Dict[str, Any]) -> str:
         """
         Menyusun pesan Sinyal Konfirmasi Chart A+ (Win Rate Tinggi / 100% Confluence 9 Buku PDF).

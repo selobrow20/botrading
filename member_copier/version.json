@@ -1,9 +1,9 @@
 {
-  "version": "2.4.3",
-  "name": "MT5 VIP Auto-Copier (Hermes 3D Dual-Sided Bracket Limits)",
+  "version": "2.4.4",
+  "name": "MT5 VIP Auto-Copier (News Guard 10m Pre-News Auto-Cancel & Dual-Sided Limits)",
   "released_at": "2026-10-07",
   "min_python": "3.10",
-  "changelog": "Pembaruan v2.4.3: Dukungan penuh Dual-Sided Bracket Limits (Wajib pasang BUY LIMIT di Support dan SELL LIMIT di Resisten bersamaan) anti-ketinggalan momen sesuai kaidah Bob Volman & Martin Pring.",
+  "changelog": "Pembaruan v2.4.4: Proteksi News Guard Otomatis (Membatalkan seluruh Buy Limit & Sell Limit 10 menit sebelum High-Impact News rilis) serta mode Hibrida cerdas.",
   "features": [
     "Dual-Sided Bracket Limits: Pasang BUY LIMIT di Support dan SELL LIMIT di Resisten bersamaan",
     "Dual-Level Sniper Limit: Level 1 (Agresif) dan Level 2 (Konservatif / Deep Retest)",

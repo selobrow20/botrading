@@ -709,6 +709,31 @@ class PipelineRunner:
                     except Exception as e:
                         logger.error(f"Gagal mengirim laporan TP/SL Gold ke Telegram: {e}")
 
+            # ─── NEWS GUARD: BATALKAN SELURUH LIMIT ORDER 10 MENIT SEBELUM BERITA BESAR ───
+            cfg_mt5 = getattr(self, "config", {}).get("mt5", {})
+            if bool(cfg_mt5.get("enable_news_limit_guard", True)):
+                nb_mins = int(cfg_mt5.get("news_limit_guard_minutes_before", 10))
+                na_mins = int(cfg_mt5.get("news_limit_guard_minutes_after", 15))
+                active_guard_news = cal.get_active_high_impact_news(mins_before=nb_mins, mins_after=na_mins)
+                if active_guard_news and mt5_active:
+                    try:
+                        b = MT5Bridge()
+                        po_list = b.get_pending_orders(symbol="XAUUSD")
+                        if po_list:
+                            main_ev = active_guard_news[0]
+                            cancelled_tickets = b.cancel_all_pending_orders(
+                                symbol="XAUUSD",
+                                reason=f"10 menit sebelum High-Impact News: {main_ev.get('title')} ({main_ev.get('date_wib')} WIB)"
+                            )
+                            if cancelled_tickets:
+                                logger.info(
+                                    f"🚨 [NEWS GUARD] Berhasil membatalkan {len(cancelled_tickets)} pending order "
+                                    f"({cancelled_tickets}) 10 menit sebelum {main_ev.get('title')} ({main_ev.get('date_wib')} WIB)!"
+                                )
+                                self.notifier.send_news_limit_cancellation_alert(main_ev, cancelled_tickets)
+                    except Exception as ex_ng:
+                        logger.error(f"Error pada eksekusi News Guard pembatalan pending limit order: {ex_ng}")
+
             # Cek berita besar yang akan rilis ~10 menit ke depan (sesuai arahan user)
             upcoming = cal.get_upcoming_high_impact_news(within_minutes=10)
             if not upcoming:

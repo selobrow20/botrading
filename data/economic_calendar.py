@@ -312,3 +312,11 @@ class EconomicCalendar:
     def get_this_week_schedule(self) -> List[Dict[str, Any]]:
         """Mengambil jadwal high-impact news pekan ini."""
         return self.storage.get_this_week_news(limit=12, high_only=True)
+
+    def get_active_high_impact_news(
+        self, mins_before: int = 10, mins_after: int = 15, current_time_utc: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
+        """Mengambil berita besar yang berada dalam jendela aktif news guard (mins_before s/d mins_after)."""
+        return self.storage.get_active_high_impact_news(
+            mins_before=mins_before, mins_after=mins_after, current_time_utc=current_time_utc
+        )

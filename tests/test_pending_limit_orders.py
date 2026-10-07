@@ -527,3 +527,127 @@ def test_dual_sided_bracket_limits_execution():
         order_types = [o["type"] for o in orders]
         assert order_types.count("SELL_LIMIT") == 2
         assert order_types.count("BUY_LIMIT") == 2
+
+
+def test_news_guard_storage_and_detection():
+    """Menguji deteksi jendela aktif 10m pre-news pada StockStorage."""
+    import tempfile
+    from pathlib import Path
+    from data.storage import StockStorage
+    from datetime import datetime, timezone, timedelta
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        storage = StockStorage(db_path=Path(tmp_dir) / "test_ng.db")
+
+        now_utc = datetime(2026, 10, 8, 12, 0, 0, tzinfo=timezone.utc)
+        # News 8 menit lagi (didalam 10 menit sebelum)
+        news_soon_dt = now_utc + timedelta(minutes=8)
+        # News 25 menit lagi (di luar 10 menit)
+        news_far_dt = now_utc + timedelta(minutes=25)
+
+        events = [
+            {
+                "title": "US CPI Core m/m",
+                "country": "USD",
+                "date_utc": news_soon_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                "date_wib": (news_soon_dt + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S"),
+                "impact": "High",
+                "forecast": "0.3%",
+                "previous": "0.2%",
+                "news_type": "CPI",
+            },
+            {
+                "title": "US Retail Sales",
+                "country": "USD",
+                "date_utc": news_far_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                "date_wib": (news_far_dt + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S"),
+                "impact": "High",
+                "forecast": "0.1%",
+                "previous": "0.1%",
+                "news_type": "OTHER",
+            },
+        ]
+        storage.save_economic_events(events)
+
+        # Cek window 10 menit sebelum & 15 menit sesudah
+        active = storage.get_active_high_impact_news(mins_before=10, mins_after=15, current_time_utc=now_utc)
+        assert len(active) == 1
+        assert active[0]["news_type"] == "CPI"
+        assert "US CPI Core" in active[0]["title"]
+
+
+def test_news_guard_cancel_all_pending_orders_and_block():
+    """Menguji cancel_all_pending_orders dan penolakan pending order saat news guard aktif."""
+    from unittest.mock import patch, MagicMock
+    from trading.mt5_bridge import MT5Bridge
+    from strategy.signal_engine import SignalResult
+
+    bridge = MT5Bridge(simulation_mode=True)
+    bridge.enabled = True
+    bridge._simulated_pending_orders.clear()
+
+    # Tambahkan 2 pending order aktif
+    bridge._simulated_pending_orders.append({"ticket": 8801, "symbol": "XAUUSD", "type": "BUY_LIMIT", "price": 4070.0})
+    bridge._simulated_pending_orders.append({"ticket": 8802, "symbol": "XAUUSD", "type": "SELL_LIMIT", "price": 4120.0})
+    assert len(bridge.get_pending_orders("XAUUSD")) == 2
+
+    # Uji pembatalan serentak
+    cancelled = bridge.cancel_all_pending_orders(symbol="XAUUSD", reason="News Guard 10 Menit")
+    assert 8801 in cancelled
+    assert 8802 in cancelled
+    assert len(bridge.get_pending_orders("XAUUSD")) == 0
+
+    # Uji blokir eksekusi pending order saat news guard aktif
+    sig = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="Master_Confluence_Strategy",
+        signal="BUY_LIMIT",
+        price=4070.00,
+        take_profit_price=4100.00,
+        stop_loss_price=4055.00,
+        pdf_confluence_score=95.0,
+        setup_grade="Grade A+",
+        is_limit_order=True,
+    )
+
+    mock_storage = MagicMock()
+    mock_storage.get_active_high_impact_news.return_value = [{
+        "title": "FOMC Statement",
+        "news_type": "FOMC",
+        "date_wib": "2026-10-08 01:00:00",
+        "impact": "High",
+    }]
+    bridge.storage = mock_storage
+
+    with patch.dict(bridge.config["mt5"], {"enable_news_limit_guard": True, "news_limit_guard_minutes_before": 10}):
+        res = bridge.execute_limit_order(sig)
+        assert res["success"] is False
+        assert res["status"] == "news_guard_blocked"
+        assert "NEWS GUARD" in res["message"]
+
+
+def test_member_copier_news_guard_telegram_message_handling():
+    """Menguji member copier membatalkan seluruh pending order saat menerima alert News Guard."""
+    from member_copier.client_copier import MT5MemberBridge
+    from unittest.mock import MagicMock
+
+    cfg = {"gold_symbol": "XAUUSD", "enable_news_limit_guard": True}
+    bridge = MT5MemberBridge(cfg)
+
+    # Mock order pending di MT5 member
+    po1 = MagicMock(ticket=9911, type=2, price_open=4070.0, symbol="XAUUSDc", volume_current=0.05, sl=4055.0, tp=4100.0)
+    po2 = MagicMock(ticket=9922, type=3, price_open=4125.0, symbol="XAUUSDc", volume_current=0.05, sl=4137.0, tp=4095.0)
+    mock_mt5 = MagicMock()
+    mock_mt5.ORDER_TYPE_BUY_LIMIT = 2
+    mock_mt5.ORDER_TYPE_SELL_LIMIT = 3
+    mock_mt5.TRADE_ACTION_REMOVE = 8
+    mock_mt5.TRADE_RETCODE_DONE = 10009
+    mock_mt5.orders_get.return_value = [po1, po2]
+    mock_res = MagicMock(retcode=10009, comment="Request executed")
+    mock_mt5.order_send.return_value = mock_res
+    bridge.mt5 = mock_mt5
+    bridge.ensure_connected = MagicMock(return_value=True)
+
+    cancelled = bridge.cancel_all_pending_orders("XAUUSDc", reason="Test News Guard")
+    assert 9911 in cancelled
+    assert 9922 in cancelled
+

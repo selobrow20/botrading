@@ -69,6 +69,9 @@ mt5:
   max_limit_levels: 2               # Maksimal 2 level limit bertingkat per sisi sinyal
   min_level_spacing_pips: 20.0      # Jarak minimal antar level limit: 20 pips ($2.00 USD)
   min_limit_distance_pips: 15.0     # Jarak minimal harga limit dari harga pasar saat ini: 15 pips ($1.50 USD)
+  enable_news_limit_guard: true     # Otomatis hapus Buy Limit & Sell Limit 10 menit sebelum berita besar (High-Impact News)
+  news_limit_guard_minutes_before: 10 # Batas menit sebelum rilis berita untuk membatalkan semua limit order (10 menit)
+  news_limit_guard_minutes_after: 15  # Batas menit setelah rilis berita untuk membekukan pasang limit order baru (15 menit)
   risk_percent: 1.0
   max_slippage: 20
   gold_symbol: XAUUSDc

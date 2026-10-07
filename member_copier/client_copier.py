@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.4.3"
+CLIENT_COPIER_VERSION = "2.4.4"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -852,6 +852,23 @@ class MT5MemberBridge:
                 res = self.cancel_pending_order(t_id)
                 if res.get("success"):
                     cancelled.append(t_id)
+        return cancelled
+
+    def cancel_all_pending_orders(self, symbol: str = None, reason: str = "") -> list:
+        """
+        Membatalkan seluruh pending limit order (BUY_LIMIT & SELL_LIMIT) yang aktif.
+        Digunakan untuk pengamanan modal saat News Guard 10 menit sebelum berita besar.
+        """
+        pending_orders = self.get_pending_orders(symbol=symbol)
+        cancelled = []
+        for po in pending_orders:
+            t_id = po.get("ticket")
+            p_type = po.get("type", "LIMIT")
+            p_price = po.get("price", 0.0)
+            print(f"🚨 [NEWS GUARD] Membatalkan pending order #{t_id} ({p_type} @ {p_price}). Alasan: {reason or 'Pengamanan Modal'}")
+            res = self.cancel_pending_order(t_id)
+            if res.get("success"):
+                cancelled.append(t_id)
         return cancelled
 
     def execute_limit_order(self, sig: dict) -> dict:
@@ -1784,6 +1801,14 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
         if "PERINGATAN DINI PEMBALIKAN ARAH TREN" in msg_upper:
             print(f"\n⚠️ [{datetime.now().strftime('%H:%M:%S')}] PERINGATAN DINI DARI MASTER BOT:")
             print("   Indikasi awal pembalikan arah XAU/USD terdeteksi. Posisi MT5 Anda tetap berjalan dalam siaga.")
+            return
+
+        # Deteksi News Guard: Pembatalan Pending Limit Order 10 Menit Sebelum Berita Besar
+        if "NEWS GUARD" in msg_upper and any(k in msg_upper for k in ["PENDING LIMIT ORDER DIBATALKAN", "BATALKAN PENDING", "HAPUS LIMIT"]):
+            sym = bridge.find_broker_symbol()
+            cancelled = bridge.cancel_all_pending_orders(symbol=sym, reason="News Guard 10 Menit Sebelum High-Impact News")
+            print(f"\n🚨 [{datetime.now().strftime('%H:%M:%S')}] [NEWS GUARD AKTIF] Membatalkan {len(cancelled)} pending order "
+                  f"(BUY LIMIT & SELL LIMIT) di akun MT5 Member mengikuti Master Bot demi keamanan modal!")
             return
 
         sig = parse_signal(msg_text)
