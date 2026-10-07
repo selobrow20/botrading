@@ -1724,34 +1724,97 @@ class MT5Bridge:
         # Risk Percentage (WARNING ONLY)
         self.calculate_risk_percentage(ticker, limit_price, sl, lot)
 
-        if self.simulation_mode:
-            self._simulated_ticket += 1
-            ticket = self._simulated_ticket
-            lim_dict = {
-                "ticket": ticket,
-                "symbol": ticker,
-                "type": sig_type,
+        # Multi-Level / Ladder Limit Orders (Dual-Level Sniper)
+        enable_multi = bool(cfg_mt5.get("enable_multi_level_limits", True))
+        ladder_items = getattr(sig, "ladder_limit_orders", []) or []
+        max_levels = int(cfg_mt5.get("max_limit_levels", 2))
+        max_pending = int(cfg_mt5.get("max_pending_orders_per_symbol", 2))
+
+        orders_to_process = []
+        if enable_multi and len(ladder_items) >= 2:
+            for itm in ladder_items[:max_levels]:
+                p_item = float(itm.get("price", limit_price))
+                tp_item = float(itm.get("tp", tp))
+                sl_item = float(itm.get("sl", sl))
+                tp_d = max(MIN_GOLD_USD, round(abs(tp_item - p_item), 2))
+                sl_d = max(MIN_GOLD_USD, round(abs(p_item - sl_item), 2))
+                if sig_type == "BUY_LIMIT":
+                    final_tp = round(p_item + tp_d, 2)
+                    final_sl = round(p_item - sl_d, 2)
+                else:
+                    final_tp = round(p_item - tp_d, 2)
+                    final_sl = round(p_item + sl_d, 2)
+                orders_to_process.append({
+                    "level": itm.get("level", len(orders_to_process) + 1),
+                    "label": itm.get("label", f"Level {len(orders_to_process) + 1}"),
+                    "price": p_item,
+                    "tp": final_tp,
+                    "sl": final_sl,
+                    "lot": float(itm.get("lot", lot)),
+                })
+        else:
+            orders_to_process.append({
+                "level": 1,
+                "label": "Level 1",
                 "price": limit_price,
-                "price_open": limit_price,
-                "sl": sl,
                 "tp": tp,
-                "volume": lot,
-                "time_setup": datetime.now(ZoneInfo("Asia/Jakarta")),
-                "comment": f"9PDF-{sig_type[:5]}",
-            }
-            self._simulated_pending_orders.append(lim_dict)
-            logger.info(f"🤖 [SIMULASI] Pending Order #{ticket} {sig_type} {lot} {ticker} @ {limit_price} (TP: {tp}, SL: {sl}) sukses dipasang.")
+                "sl": sl,
+                "lot": lot,
+            })
+
+        if self.simulation_mode:
+            placed_tickets = []
+            placed_orders = []
+            active_pending = self.get_pending_orders(symbol=ticker)
+            for ord_info in orders_to_process:
+                curr_active = self.get_pending_orders(symbol=ticker)
+                if len(curr_active) >= max_pending:
+                    is_dup = any(po.get("type") == sig_type and abs(po.get("price", 0.0) - ord_info["price"]) < 2.0 for po in curr_active)
+                    if is_dup:
+                        continue
+                    break
+
+                self._simulated_ticket += 1
+                ticket = self._simulated_ticket
+                lim_dict = {
+                    "ticket": ticket,
+                    "symbol": ticker,
+                    "type": sig_type,
+                    "price": ord_info["price"],
+                    "price_open": ord_info["price"],
+                    "sl": ord_info["sl"],
+                    "tp": ord_info["tp"],
+                    "volume": ord_info["lot"],
+                    "time_setup": datetime.now(ZoneInfo("Asia/Jakarta")),
+                    "comment": f"9PDF-{sig_type[:5]}",
+                }
+                self._simulated_pending_orders.append(lim_dict)
+                placed_tickets.append(ticket)
+                placed_orders.append(lim_dict)
+                logger.info(f"🤖 [SIMULASI] Pending Order #{ticket} ({ord_info['label']}) {sig_type} {ord_info['lot']} {ticker} @ {ord_info['price']} (TP: {ord_info['tp']}, SL: {ord_info['sl']}) sukses dipasang.")
+
+            if not placed_tickets and len(self.get_pending_orders(symbol=ticker)) >= max_pending:
+                return {
+                    "success": False,
+                    "status": "already_pending",
+                    "message": f"Pending limit order sudah aktif mencapai batas maksimum ({max_pending}).",
+                }
+
+            first_ord = placed_orders[0] if placed_orders else orders_to_process[0]
+            first_t = placed_tickets[0] if placed_tickets else 0
             return {
-                "success": True,
-                "ticket": ticket,
+                "success": len(placed_tickets) > 0,
+                "ticket": first_t,
+                "tickets": placed_tickets,
                 "action": sig_type,
                 "symbol": ticker,
-                "volume": lot,
-                "price": limit_price,
-                "tp": tp,
-                "sl": sl,
+                "volume": first_ord.get("volume", first_ord.get("lot", lot)),
+                "price": first_ord.get("price", limit_price),
+                "tp": first_ord.get("tp", tp),
+                "sl": first_ord.get("sl", sl),
                 "status": "pending_placed",
-                "message": f"[SIMULASI] Pending order #{ticket} {sig_type} {lot} lot @ {limit_price} berhasil dipasang.",
+                "message": f"[SIMULASI] {len(placed_tickets)} Pending limit order berhasil dipasang.",
+                "placed_orders": placed_orders,
             }
 
         if not self.ensure_connected():
@@ -1761,18 +1824,6 @@ class MT5Bridge:
         tick = mt5.symbol_info_tick(broker_sym)
         if tick is None:
             return {"success": False, "status": "no_tick", "message": f"Gagal membaca tick pasar {broker_sym}."}
-
-        min_pips_dist = float(cfg_mt5.get("min_limit_distance_pips", 15.0)) / 10.0
-        if sig_type == "BUY_LIMIT":
-            if limit_price >= tick.ask:
-                msg = f"Harga BUY LIMIT (${limit_price:.2f}) harus lebih rendah dari harga Ask (${tick.ask:.2f})."
-                logger.warning(msg)
-                return {"success": False, "status": "invalid_limit_price", "message": msg}
-        elif sig_type == "SELL_LIMIT":
-            if limit_price <= tick.bid:
-                msg = f"Harga SELL LIMIT (${limit_price:.2f}) harus lebih tinggi dari harga Bid (${tick.bid:.2f})."
-                logger.warning(msg)
-                return {"success": False, "status": "invalid_limit_price", "message": msg}
 
         sym_info = mt5.symbol_info(broker_sym)
         filling_mode = int(sym_info.filling_mode or 0) if sym_info else 0
@@ -1784,57 +1835,103 @@ class MT5Bridge:
             fill_type = mt5.ORDER_FILLING_RETURN
 
         order_raw_type = mt5.ORDER_TYPE_BUY_LIMIT if sig_type == "BUY_LIMIT" else mt5.ORDER_TYPE_SELL_LIMIT
-        request = {
-            "action": mt5.TRADE_ACTION_PENDING,
-            "symbol": broker_sym,
-            "volume": lot,
-            "type": order_raw_type,
-            "price": limit_price,
-            "sl": sl,
-            "tp": tp,
-            "deviation": self.max_slippage,
-            "magic": self.magic_number,
-            "comment": f"9PDF-{sig_type[:5]}"[:31],
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": fill_type,
-        }
 
-        logger.info(f"Mengirim Pending Order Request ke MT5: {sig_type} {lot} {broker_sym} @ {limit_price} (TP: {tp}, SL: {sl})")
-        result = mt5.order_send(request)
+        placed_tickets = []
+        placed_orders = []
+        last_err = ""
 
-        if result is None:
-            err = mt5.last_error()
-            return {
-                "success": False,
-                "status": "order_failed",
-                "message": f"Eksekusi Pending Order MT5 gagal: {err[1]} (Kode: {err[0]})",
+        for ord_info in orders_to_process:
+            p_val = ord_info["price"]
+            # Validasi harga limit terhadap tick live
+            if sig_type == "BUY_LIMIT" and p_val >= tick.ask:
+                logger.warning(f"Harga BUY LIMIT (${p_val:.2f}) harus lebih rendah dari harga Ask (${tick.ask:.2f}). Dilewati.")
+                continue
+            elif sig_type == "SELL_LIMIT" and p_val <= tick.bid:
+                logger.warning(f"Harga SELL LIMIT (${p_val:.2f}) harus lebih tinggi dari harga Bid (${tick.bid:.2f}). Dilewati.")
+                continue
+
+            # Anti-duplicate & max pending check per level
+            active_pending = self.get_pending_orders(symbol=broker_sym)
+            if len(active_pending) >= max_pending:
+                is_dup = any(po.get("type") == sig_type and abs(po.get("price", 0.0) - p_val) < 2.0 for po in active_pending)
+                if is_dup:
+                    logger.info(f"Pending order {sig_type} @ {p_val} sudah ada aktif di area yang sama. Dilewati.")
+                    continue
+                logger.info(f"Maksimal pending order ({max_pending}) sudah tercapai pada {broker_sym}.")
+                break
+
+            request = {
+                "action": mt5.TRADE_ACTION_PENDING,
+                "symbol": broker_sym,
+                "volume": ord_info["lot"],
+                "type": order_raw_type,
+                "price": p_val,
+                "sl": ord_info["sl"],
+                "tp": ord_info["tp"],
+                "deviation": self.max_slippage,
+                "magic": self.magic_number,
+                "comment": f"9PDF-{sig_type[:5]}"[:31],
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": fill_type,
             }
 
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
-            msg = f"Pending Order MT5 ditolak oleh broker: {result.comment} (Retcode: {result.retcode})"
-            logger.warning(msg)
-            return {
-                "success": False,
-                "status": "broker_rejected",
-                "retcode": result.retcode,
-                "message": msg,
-            }
+            logger.info(f"Mengirim Pending Order Request ke MT5: {sig_type} {ord_info['lot']} {broker_sym} @ {p_val} (TP: {ord_info['tp']}, SL: {ord_info['sl']})")
+            result = mt5.order_send(request)
 
-        logger.info(f"✅ Pending Order MT5 #{result.order} berhasil dipasang! {sig_type} {lot} {broker_sym} @ {limit_price}")
+            if result is None:
+                err = mt5.last_error()
+                last_err = f"MT5 error: {err[1]} (Kode: {err[0]})"
+                logger.warning(last_err)
+                continue
+
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                last_err = f"Broker retcode {result.retcode}: {result.comment}"
+                logger.warning(last_err)
+                continue
+
+            logger.info(f"✅ Pending Order MT5 #{result.order} ({ord_info['label']}) berhasil dipasang! {sig_type} {ord_info['lot']} {broker_sym} @ {p_val}")
+            placed_tickets.append(result.order)
+            placed_orders.append({
+                "ticket": result.order,
+                "action": sig_type,
+                "symbol": broker_sym,
+                "volume": ord_info["lot"],
+                "price": p_val,
+                "tp": ord_info["tp"],
+                "sl": ord_info["sl"],
+                "level": ord_info["level"],
+                "label": ord_info["label"],
+            })
 
         self.cancel_opposite_pending_orders("BUY" if "BUY" in sig_type else "SELL", broker_sym)
 
+        if not placed_tickets:
+            if len(self.get_pending_orders(symbol=broker_sym)) >= max_pending:
+                return {
+                    "success": False,
+                    "status": "already_pending",
+                    "message": f"Pending limit order sudah aktif di area ini atau mencapai batas kuota ({max_pending}).",
+                }
+            return {
+                "success": False,
+                "status": "order_failed",
+                "message": f"Gagal memasang pending order: {last_err or 'Harga tick atau broker menolak'}",
+            }
+
+        first_p = placed_orders[0]
         return {
             "success": True,
-            "ticket": result.order,
+            "ticket": first_p["ticket"],
+            "tickets": placed_tickets,
             "action": sig_type,
             "symbol": broker_sym,
-            "volume": lot,
-            "price": limit_price,
-            "tp": tp,
-            "sl": sl,
+            "volume": first_p["volume"],
+            "price": first_p["price"],
+            "tp": first_p["tp"],
+            "sl": first_p["sl"],
             "status": "pending_placed",
-            "message": f"Pending Order #{result.order} {sig_type} {lot} lot @ ${limit_price:,.2f} sukses dipasang di MT5.",
+            "message": f"{len(placed_tickets)} Pending Order #{placed_tickets} {sig_type} sukses dipasang di MT5.",
+            "placed_orders": placed_orders,
         }
 
     def close_position(self, ticket: int) -> Dict[str, Any]:

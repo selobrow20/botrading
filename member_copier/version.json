@@ -1,11 +1,12 @@
 {
-  "version": "2.4.1",
-  "name": "MT5 VIP Auto-Copier (Hermes 3D Pure Sniper Limit)",
+  "version": "2.4.2",
+  "name": "MT5 VIP Auto-Copier (Hermes 3D Dual-Level Sniper Limit)",
   "released_at": "2026-10-07",
   "min_python": "3.10",
-  "changelog": "Pembaruan v2.4.1: Opsi 2 Murni Sniper Pending Limit Order (BUY LIMIT & SELL LIMIT) aktif penuh 100%. Entry sniper di pullback 20 EMA / diskon-premium tanpa kejar lilin, auto-cancel 120 menit, dan Auto-BEP +60 pips.",
+  "changelog": "Pembaruan v2.4.2: Dukungan penuh Dual-Level Pending Limit Orders (Level 1: 20 EMA & Level 2: 50 EMA Deep Retest) anti-telat masuk sesuai kaidah Bob Volman & Martin Pring.",
   "features": [
-    "Opsi 2 Pure Sniper: 100% Sinyal dieksekusi sebagai pending BUY LIMIT & SELL LIMIT",
+    "Dual-Level Sniper Limit: Level 1 (20 EMA Agresif) dan Level 2 (50 EMA Konservatif / Golden Pocket)",
+    "Opsi 2 Pure Sniper: 100% Sinyal dipasang sebagai pending BUY LIMIT & SELL LIMIT",
     "Anti-Kejar Lilin Bob Volman: Entry retest 20 EMA di level diskon (BUY) dan premium (SELL)",
     "Auto-Cancel 120 Menit: Pending limit order otomatis dibatalkan jika tidak tersentuh dalam 2 jam",
     "Restrukturisasi SHORT & LONG: Scalping 60 pips (R:R 1:1) dan Intraday Swing 180 pips (R:R 3:1)",

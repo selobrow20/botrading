@@ -222,22 +222,45 @@ class TelegramNotifier:
             trade_type_val = getattr(sig, "trade_type", "SHORT") or "SHORT"
             direction_val = getattr(sig, "direction", "BUY" if "BUY" in sig.signal else "SELL") or ("BUY" if "BUY" in sig.signal else "SELL")
             macro_h4 = getattr(sig, "macro_bias_h4", "") or "NEUTRAL / SIDEWAYS"
-            lines.append(f"🟡 <b>SINYAL PENDING ORDER SNIPER: {lim_label} ({display_ticker})</b>")
-            lines.append(f"🌐 <b>Market:</b> H4 = <code>{macro_h4}</code>")
-            lines.append(f"⚡ <b>Trade Type:</b> <code>{trade_type_val} — {'SCALPING' if trade_type_val == 'SHORT' else 'INTRADAY/SWING'}</code>")
-            lines.append(f"🧭 <b>Direction:</b> <code>{direction_val}</code>")
-            if trade_type_val == "LONG":
-                lines.append("🛡️ <b>Break Even:</b> <code>+60 pips</code>")
-            lines.append(f"🎯 <b>Metode Entry:</b> 🛡️ <b>Pending Limit Anti-Kejar Lilin (Bob Volman)</b>")
-            lines.append(f"📍 <b>Harga Pasang Limit:</b> <code>{price_str}</code> (Retest 20 EMA)")
-            if sig.take_profit_price and sig.stop_loss_price:
-                tp_str = format_currency(sig.take_profit_price, sig.ticker)
-                sl_str = format_currency(sig.stop_loss_price, sig.ticker)
-                rrr = sig.risk_reward_ratio or (3.0 if trade_type_val == "LONG" else 1.0)
-                lines.append(f"🎯 <b>Take Profit (TP):</b> <code>{tp_str}</code>")
-                lines.append(f"🛑 <b>Stop Loss (SL):</b> <code>{sl_str}</code>")
-                lines.append(f"⚖️ <b>Risk/Reward Ratio:</b> 1 : {rrr}")
+            ladder_orders = getattr(sig, "ladder_limit_orders", []) or []
+
+            if len(ladder_orders) >= 2:
+                lines.append(f"🟡 <b>SINYAL PENDING ORDER SNIPER (DUAL-LEVEL): {lim_label} ({display_ticker})</b>")
+                lines.append(f"🌐 <b>Market:</b> H4 = <code>{macro_h4}</code>")
+                lines.append(f"⚡ <b>Trade Type:</b> <code>{trade_type_val} — {'SCALPING' if trade_type_val == 'SHORT' else 'INTRADAY/SWING'}</code>")
+                lines.append(f"🧭 <b>Direction:</b> <code>{direction_val}</code>")
+                if trade_type_val == "LONG":
+                    lines.append("🛡️ <b>Break Even:</b> <code>+60 pips</code>")
+                lines.append(f"🎯 <b>Metode Entry:</b> 🛡️ <b>Dual-Level Ladder Sniper (Bob Volman & Martin Pring)</b>")
+                lines.append("")
+                for itm in ladder_orders:
+                    lvl_num = itm.get("level", 1)
+                    lvl_lbl = itm.get("label", f"Level {lvl_num}")
+                    p_str = format_currency(itm.get("price", 0.0), sig.ticker)
+                    t_str = format_currency(itm.get("tp", 0.0), sig.ticker)
+                    s_str = format_currency(itm.get("sl", 0.0), sig.ticker)
+                    lines.append(f"📍 <b>{lvl_lbl}:</b>")
+                    lines.append(f"   • Limit : <code>{p_str}</code>")
+                    lines.append(f"   • TP    : <code>{t_str}</code>")
+                    lines.append(f"   • SL    : <code>{s_str}</code>")
                 lines.append(f"⏳ <b>Masa Berlaku:</b> <code>2 Jam</code> (Auto-Cancel jika tidak terjemput)")
+            else:
+                lines.append(f"🟡 <b>SINYAL PENDING ORDER SNIPER: {lim_label} ({display_ticker})</b>")
+                lines.append(f"🌐 <b>Market:</b> H4 = <code>{macro_h4}</code>")
+                lines.append(f"⚡ <b>Trade Type:</b> <code>{trade_type_val} — {'SCALPING' if trade_type_val == 'SHORT' else 'INTRADAY/SWING'}</code>")
+                lines.append(f"🧭 <b>Direction:</b> <code>{direction_val}</code>")
+                if trade_type_val == "LONG":
+                    lines.append("🛡️ <b>Break Even:</b> <code>+60 pips</code>")
+                lines.append(f"🎯 <b>Metode Entry:</b> 🛡️ <b>Pending Limit Anti-Kejar Lilin (Bob Volman)</b>")
+                lines.append(f"📍 <b>Harga Pasang Limit:</b> <code>{price_str}</code> (Retest 20 EMA)")
+                if sig.take_profit_price and sig.stop_loss_price:
+                    tp_str = format_currency(sig.take_profit_price, sig.ticker)
+                    sl_str = format_currency(sig.stop_loss_price, sig.ticker)
+                    rrr = sig.risk_reward_ratio or (3.0 if trade_type_val == "LONG" else 1.0)
+                    lines.append(f"🎯 <b>Take Profit (TP):</b> <code>{tp_str}</code>")
+                    lines.append(f"🛑 <b>Stop Loss (SL):</b> <code>{sl_str}</code>")
+                    lines.append(f"⚖️ <b>Risk/Reward Ratio:</b> 1 : {rrr}")
+                    lines.append(f"⏳ <b>Masa Berlaku:</b> <code>2 Jam</code> (Auto-Cancel jika tidak terjemput)")
 
             lines.append(f"⏱️ <b>{time_wib}</b> | RSI: <b>{rsi_val}</b> | Vol: <b>{vol_ratio}</b>")
             if wr_badge:
@@ -475,20 +498,17 @@ class TelegramNotifier:
             return {"success": False, "sent_count": 0, "recipients": [], "error": f"File {p} tidak ditemukan."}
 
         caption = custom_caption or (
-            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.4.0 (HERMES 3D SHORT & LONG)</b> 🚀\n"
+            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.4.2 (DUAL-LEVEL SNIPER LIMIT)</b> 🚀\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5 v2.4.0.\n\n"
-            "✨ <b>FITUR & LOGIKA TERBARU (v2.4.0):</b>\n"
-            "1. ⚡ <b>Sinyal SHORT (Scalping 1:1):</b> Quick in, quick out dengan target presisi SL ~60 pips & TP ~60 pips ($6.00 USD) tanpa nahan lama!\n"
-            "2. 🌊 <b>Sinyal LONG (Intraday Swing 3:1):</b> SL dinamis anchored ke swing structure 15-bar terakhir, target TP wajib 3x SL (min 180 pips / $18.00 USD)!\n"
-            "3. 🧭 <b>Pemisahan Total Direction & Trade Type:</b> Arah BUY/SELL terpisah independen dari durasi SHORT/LONG, anti-salah eksekusi!\n"
-            "4. 🛡️ <b>Auto-BEP +60 Pips untuk LONG:</b> Otomatis kunci Break Even saat floating profit mencapai +60 pips ($6.00 USD) tanpa menutup posisi!\n"
-            "5. 📊 <b>Broker-Adaptive Spread Protection:</b> Toleran pada spread normal broker (3.6 - 3.7 pips), blokir keras hanya jika spread ekstrem >6.5 pips!\n"
-            "6. 🔒 <b>Max 1 Layer Strict Lock:</b> Menjaga akun tetap disiplin 1 posisi aktif, anti-martingale & anti-overtrading!\n"
-            "7. 🟡 <b>Sniper Pending Limit Orders (BUY & SELL LIMIT):</b> Eksekusi pending limit di area 20 EMA untuk setup Grade A+!\n"
-            "8. ⏳ <b>Auto-Cancel 120 Menit & Reversal Cleanup:</b> Pending order otomatis dibatalkan jika stale 2 jam atau terjadi pembalikan arah!\n"
-            "9. 🔄 <b>Zero-Touch OTA Auto-Reload:</b> Aplikasi yang sedang berjalan otomatis mengunduh & hot-reload sendiri!\n"
-            "10. 🛡️ <b>Preserve User Config:</b> Pengaturan akun dan lot kustom member tetap aman 100%.\n\n"
+            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5 v2.4.2.\n\n"
+            "✨ <b>FITUR & LOGIKA TERBARU (v2.4.2):</b>\n"
+            "1. 🎯 <b>Dual-Level Pending Limit Orders:</b> Memasang 2 level pending order sekaligus (Level 1: 20 EMA Agresif & Level 2: 50 EMA Deep Retest) agar tidak telat masuk dan tetap disiplin 9 PDF!\n"
+            "2. 🟡 <b>Opsi 2 Murni Sniper Limit:</b> 100% Sinyal dieksekusi sebagai BUY LIMIT & SELL LIMIT tanpa kejar lilin.\n"
+            "3. ⚡ <b>Sinyal SHORT & LONG:</b> Scalping 60 pips (R:R 1:1) dan Intraday Swing 180 pips (R:R 3:1) dengan TP/SL presisi.\n"
+            "4. 🛡️ <b>Auto-BEP +60 Pips:</b> Kunci modal otomatis saat floating profit mencapai +60 pips ($6.00 USD).\n"
+            "5. ⏳ <b>Auto-Cancel 120 Menit & Reversal Cleanup:</b> Pending order stale 2 jam atau berlawanan arah dibatalkan otomatis.\n"
+            "6. 🔄 <b>Zero-Touch OTA Auto-Reload:</b> Aplikasi auto-copier member langsung ter-update otomatis dari Telegram.\n"
+            "7. 🛡️ <b>Preserve User Config:</b> Nomor akun dan pengaturan lot member tetap tersimpan aman 100%.\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━"
         )
 

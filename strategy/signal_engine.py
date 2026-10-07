@@ -44,6 +44,7 @@ class SignalResult:
     limit_order_type: Optional[str] = None  # 'BUY_LIMIT' atau 'SELL_LIMIT'
     limit_price: Optional[float] = None
     limit_expiry_minutes: int = 120
+    ladder_limit_orders: List[Dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self):
         # Sinkronisasi direction dan signal agar selalu konsisten namun terpisah dari trade_type
@@ -80,6 +81,7 @@ class SignalResult:
             "limit_order_type": self.limit_order_type,
             "limit_price": self.limit_price,
             "limit_expiry_minutes": self.limit_expiry_minutes,
+            "ladder_limit_orders": self.ladder_limit_orders,
         }
 
 
@@ -1911,6 +1913,52 @@ class SignalEngine:
         is_actionable = signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]
         final_price = limit_price_val if is_limit_type and limit_price_val is not None else curr_price
 
+        # Multi-Level / Ladder Limit Orders (Dual-Level Sniper: 20 EMA + 50 EMA)
+        ladder_orders: List[Dict[str, Any]] = []
+        if is_limit_type and limit_price_val is not None:
+            enable_multi = bool(self.config.get("mt5", {}).get("enable_multi_level_limits", True))
+            max_levels = int(self.config.get("mt5", {}).get("max_limit_levels", 2))
+            min_spacing_usd = float(self.config.get("mt5", {}).get("min_level_spacing_pips", 20.0)) / 10.0
+            order_lot = float(self.config.get("mt5", {}).get("limit_order_lot", 0.05))
+
+            lvl1 = {
+                "level": 1,
+                "label": "Level 1 (Entry Cepat - 20 EMA)",
+                "signal": signal,
+                "price": limit_price_val,
+                "tp": tp_price,
+                "sl": sl_price,
+                "rrr": rrr,
+                "lot": order_lot,
+            }
+            ladder_orders.append(lvl1)
+
+            if enable_multi and max_levels >= 2:
+                ema50_raw = round(float(curr_row.get("ema_50", snapshot.get("ema_50", curr_price)) or curr_price), 2)
+                sl_dist_calc = max(6.00, round(abs(limit_price_val - (sl_price or limit_price_val)), 2))
+                tp_dist_calc = max(6.00, round(abs((tp_price or limit_price_val) - limit_price_val), 2))
+
+                if signal == "SELL_LIMIT":
+                    lvl2_price = max(ema50_raw, round(limit_price_val + min_spacing_usd, 2))
+                    lvl2_sl = round(lvl2_price + sl_dist_calc, 2)
+                    lvl2_tp = round(lvl2_price - tp_dist_calc, 2)
+                else:
+                    lvl2_price = min(ema50_raw, round(limit_price_val - min_spacing_usd, 2))
+                    lvl2_sl = round(lvl2_price - sl_dist_calc, 2)
+                    lvl2_tp = round(lvl2_price + tp_dist_calc, 2)
+
+                lvl2 = {
+                    "level": 2,
+                    "label": "Level 2 (Deep Retest - 50 EMA)",
+                    "signal": signal,
+                    "price": lvl2_price,
+                    "tp": lvl2_tp,
+                    "sl": lvl2_sl,
+                    "rrr": rrr,
+                    "lot": order_lot,
+                }
+                ladder_orders.append(lvl2)
+
         if is_actionable and market_regime:
             reasons.append(f"Regime Pasar: {market_regime}")
 
@@ -1946,6 +1994,7 @@ class SignalEngine:
             limit_order_type=signal if is_limit_type else None,
             limit_price=limit_price_val if is_limit_type else None,
             limit_expiry_minutes=int(self.config.get("mt5", {}).get("limit_order_expiry_mins", 120)),
+            ladder_limit_orders=ladder_orders,
         )
 
     def evaluate_all_strategies(

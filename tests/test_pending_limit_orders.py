@@ -308,3 +308,177 @@ def test_member_copier_bridge_pending_execution():
     assert res["ticket"] == 554433
     assert res["action"] == "BUY_LIMIT"
     assert res["price"] == 2642.0
+
+
+def test_multi_level_signal_result_ladder_orders():
+    """Menguji field ladder_limit_orders pada SignalResult dan serialisasinya."""
+    ladder = [
+        {"level": 1, "label": "Level 1 (Entry Cepat - 20 EMA)", "price": 4127.11, "tp": 4091.11, "sl": 4139.11, "lot": 0.05},
+        {"level": 2, "label": "Level 2 (Deep Retest - 50 EMA)", "price": 4137.84, "tp": 4101.84, "sl": 4149.84, "lot": 0.05},
+    ]
+    sig = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="Master_Confluence_Strategy",
+        signal="SELL_LIMIT",
+        price=4127.11,
+        candle_time="2026-10-07T16:00:00",
+        take_profit_price=4091.11,
+        stop_loss_price=4139.11,
+        pdf_confluence_score=85.0,
+        setup_grade="Grade A+",
+        is_limit_order=True,
+        ladder_limit_orders=ladder,
+    )
+    d = sig.to_dict()
+    assert len(d["ladder_limit_orders"]) == 2
+    assert d["ladder_limit_orders"][0]["price"] == 4127.11
+    assert d["ladder_limit_orders"][1]["price"] == 4137.84
+
+
+def test_mt5_bridge_execute_multi_level_limits():
+    """Menguji eksekusi bertingkat (Dual-Level Sniper) pada MT5Bridge dalam mode simulasi."""
+    from unittest.mock import patch
+    bridge = MT5Bridge(simulation_mode=True)
+    bridge.enabled = True
+    bridge.trading_hours = "all"
+    bridge._simulated_pending_orders.clear()
+
+    ladder = [
+        {"level": 1, "label": "Level 1 (20 EMA)", "price": 4127.11, "tp": 4091.11, "sl": 4139.11, "lot": 0.05},
+        {"level": 2, "label": "Level 2 (50 EMA)", "price": 4137.84, "tp": 4101.84, "sl": 4149.84, "lot": 0.05},
+    ]
+    sig = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="Master_Confluence_Strategy",
+        signal="SELL_LIMIT",
+        price=4127.11,
+        candle_time="2026-10-07T16:00:00",
+        take_profit_price=4091.11,
+        stop_loss_price=4139.11,
+        pdf_confluence_score=88.0,
+        setup_grade="Grade A+",
+        is_limit_order=True,
+        ladder_limit_orders=ladder,
+    )
+
+    with patch.dict(bridge.config["mt5"], {
+        "enable_multi_level_limits": True,
+        "max_limit_levels": 2,
+        "max_pending_orders_per_symbol": 2,
+    }):
+        res = bridge.execute_limit_order(sig)
+        assert res["success"] is True
+        assert res["status"] == "pending_placed"
+        assert len(res["tickets"]) == 2
+        orders = bridge.get_pending_orders("XAUUSD")
+        assert len(orders) == 2
+        prices = [o["price"] for o in orders]
+        assert 4127.11 in prices
+        assert 4137.84 in prices
+
+
+def test_format_signal_message_dual_level():
+    """Menguji format kartu Telegram untuk Dual-Level Limit Order."""
+    from unittest.mock import MagicMock
+    storage_mock = MagicMock()
+    storage_mock.get_win_rate_stats.return_value = {}
+    notifier = TelegramNotifier(storage=storage_mock)
+
+    ladder = [
+        {"level": 1, "label": "Level 1 (Entry Cepat - 20 EMA)", "price": 4127.11, "tp": 4091.11, "sl": 4139.11, "lot": 0.05},
+        {"level": 2, "label": "Level 2 (Deep Retest - 50 EMA)", "price": 4137.84, "tp": 4101.84, "sl": 4149.84, "lot": 0.05},
+    ]
+    sig = SignalResult(
+        ticker="XAUUSD",
+        strategy_name="Master_Confluence_Strategy",
+        signal="SELL_LIMIT",
+        price=4127.11,
+        candle_time="2026-10-07T16:00:00",
+        take_profit_price=4091.11,
+        stop_loss_price=4139.11,
+        pdf_confluence_score=88.0,
+        setup_grade="Grade A+",
+        is_limit_order=True,
+        ladder_limit_orders=ladder,
+    )
+
+    msg = notifier.format_signal_message(sig)
+    assert "DUAL-LEVEL" in msg
+    assert "Level 1 (Entry Cepat - 20 EMA)" in msg
+    assert "4,127.11" in msg
+    assert "Level 2 (Deep Retest - 50 EMA)" in msg
+    assert "4,137.84" in msg
+
+
+def test_member_copier_parse_dual_level_and_execute():
+    """Menguji parsing dan eksekusi pesan Telegram Dual-Level di sisi Member Copier."""
+    msg = """
+🟡 SINYAL PENDING ORDER SNIPER (DUAL-LEVEL): SELL LIMIT (XAU/USD (Gold))
+🌐 Market: H4 = BEARISH
+⚡ Trade Type: SHORT — SCALPING
+🧭 Direction: SELL
+🎯 Metode Entry: 🛡️ Dual-Level Ladder Sniper (Bob Volman & Martin Pring)
+
+📍 Level 1 (Entry Cepat - 20 EMA):
+   • Limit : $4,127.11
+   • TP    : $4,091.11
+   • SL    : $4,139.11
+📍 Level 2 (Deep Retest - 50 EMA):
+   • Limit : $4,137.84
+   • TP    : $4,101.84
+   • SL    : $4,149.84
+⏳ Masa Berlaku: 2 Jam (Auto-Cancel jika tidak terjemput)
+    """
+
+    parsed = parse_signal(msg)
+    assert parsed["action"] == "SELL_LIMIT"
+    assert parsed["is_limit_order"] is True
+    assert len(parsed["ladder_limit_orders"]) == 2
+    assert parsed["ladder_limit_orders"][0]["price"] == 4127.11
+    assert parsed["ladder_limit_orders"][1]["price"] == 4137.84
+
+    # Uji eksekusi MT5MemberBridge
+    cfg = {
+        "enable_limit_orders": True,
+        "enable_multi_level_limits": True,
+        "max_limit_levels": 2,
+        "max_pending_orders_per_symbol": 2,
+        "limit_order_expiry_mins": 120,
+        "account_type": "usc",
+        "default_lot": 0.05,
+        "gold_symbol": "XAUUSD",
+    }
+    bridge = MT5MemberBridge(cfg)
+    mock_mt5 = MagicMock()
+    mock_mt5.ORDER_TYPE_SELL_LIMIT = 3
+    mock_mt5.TRADE_ACTION_PENDING = 5
+    mock_mt5.TRADE_RETCODE_DONE = 10009
+    mock_mt5.ORDER_TIME_GTC = 0
+    mock_mt5.ORDER_FILLING_FOK = 0
+
+    s_info = MagicMock()
+    s_info.digits = 2
+    s_info.volume_step = 0.01
+    s_info.volume_min = 0.01
+    s_info.volume_max = 100.0
+    s_info.filling_mode = 1
+    mock_mt5.symbol_info.return_value = s_info
+
+    tick = MagicMock()
+    tick.bid = 4115.0  # Bid live < limit price (Valid SELL_LIMIT)
+    tick.ask = 4115.5
+    mock_mt5.symbol_info_tick.return_value = tick
+
+    mock_res = MagicMock()
+    mock_res.retcode = 10009
+    mock_res.order = 778899
+    mock_mt5.order_send.return_value = mock_res
+    mock_mt5.orders_get.return_value = []
+
+    bridge.mt5 = mock_mt5
+    bridge.ensure_connected = MagicMock(return_value=True)
+
+    res = bridge.execute_order(parsed)
+    assert res["success"] is True
+    assert len(res["tickets"]) == 2
+    assert mock_mt5.order_send.call_count == 2

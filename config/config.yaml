@@ -63,7 +63,10 @@ mt5:
   always_use_limit_orders: true     # OPSI 2 (Murni Sniper Limit): 100% Selalu Pasang Pending Limit Order (BUY LIMIT & SELL LIMIT)
   limit_order_expiry_mins: 120      # Masa berlaku pending order: 120 menit (2 jam / 8 candle M15). Auto-cancel jika tidak tersentuh
   limit_order_lot: 0.05             # Ukuran lot khusus pending limit order Grade A+ (0.05 Lot)
-  max_pending_orders_per_symbol: 1  # Maksimal 1 pending order aktif per simbol untuk mencegah penumpukan
+  max_pending_orders_per_symbol: 2  # Maksimal 2 pending order aktif per simbol (Dual-Level Sniper)
+  enable_multi_level_limits: true   # Mengaktifkan pending limit bertingkat (Level 1: 20 EMA, Level 2: 50 EMA / Fib Golden Pocket)
+  max_limit_levels: 2               # Maksimal 2 level limit bertingkat per sinyal bagus
+  min_level_spacing_pips: 20.0      # Jarak minimal antar level limit: 20 pips ($2.00 USD)
   min_limit_distance_pips: 15.0     # Jarak minimal harga limit dari harga pasar saat ini: 15 pips ($1.50 USD)
   risk_percent: 1.0
   max_slippage: 20

@@ -57,6 +57,7 @@ def mt5_bridge():
     bridge.trading_hours = "all"
     bridge.config = load_config()
     bridge._simulated_positions = []
+    bridge._simulated_pending_orders = []
     bridge._simulated_ticket = 100
     for attr in ["_mock_algo_trading_enabled", "_mock_free_margin", "_mock_equity", "strict_fixed_lot", "strict_max_1_layer"]:
         if hasattr(bridge, attr):
@@ -66,6 +67,7 @@ def mt5_bridge():
         if hasattr(bridge, attr):
             delattr(bridge, attr)
     bridge._simulated_positions.clear()
+    bridge._simulated_pending_orders.clear()
 
 
 def create_gold_df(n_bars=30, base_price=2700.0, trend="up"):

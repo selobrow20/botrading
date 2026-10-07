@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.4.0"
+CLIENT_COPIER_VERSION = "2.4.2"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -267,6 +267,12 @@ def parse_signal(text: str) -> dict:
     text_upper = clean_text.upper()
 
     # Abaikan jika ini adalah laporan hasil / deal / penutupan posisi / pengumuman
+    # Namun jika terdapat header sinyal resmi (SINYAL ENTRY / SINYAL PENDING), jangan diabaikan meski ada badge akurasi!
+    is_signal_header = any(k in text_upper for k in [
+        "SINYAL ENTRY", "SINYAL PENDING", "PENDING ORDER", "BUY LIMIT", "SELL LIMIT",
+        "SINYAL BUY", "SINYAL SELL", "ENTRY BUY", "ENTRY SELL", "DUAL-LEVEL"
+    ])
+
     ignore_keywords = [
         "LAPORAN PENUTUPAN",
         "TRANSAKSI SELESAI",
@@ -274,8 +280,6 @@ def parse_signal(text: str) -> dict:
         "DEAL #",
         "POSISI DITUTUP",
         "RINGKASAN PORTOFOLIO",
-        "WIN RATE",
-        "AKURASI EMAS",
         "LIC_INFO|",
         "/START",
         "/HELP",
@@ -283,6 +287,9 @@ def parse_signal(text: str) -> dict:
         "/STATUS",
         "/LICENSE",
     ]
+    if not is_signal_header:
+        ignore_keywords.extend(["WIN RATE", "AKURASI EMAS"])
+
     if any(k in text_upper for k in ignore_keywords):
         return {}
 
@@ -371,6 +378,37 @@ def parse_signal(text: str) -> dict:
         if entry_price < 100.0:
             entry_price = 0.0
 
+    # Ekstrak Multi-Level Limit Orders (Dual-Level Sniper)
+    ladder_limit_orders = []
+    lvl_blocks = re.findall(
+        r"Level\s*(\d+)[^:\n]*:.*?(?:Limit|Harga|Entry).*?\$?([\d.,]+).*?TP.*?\$?([\d.,]+).*?SL.*?\$?([\d.,]+)",
+        clean_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if lvl_blocks:
+        for lvl_str, p_str, tp_str, sl_str in lvl_blocks:
+            lvl_p = _clean_num(p_str)
+            lvl_tp = _clean_num(tp_str)
+            lvl_sl = _clean_num(sl_str)
+            if lvl_p > 100.0 and lvl_tp > 100.0 and lvl_sl > 100.0:
+                ladder_limit_orders.append({
+                    "level": int(lvl_str),
+                    "label": f"Level {lvl_str}",
+                    "price": lvl_p,
+                    "tp": lvl_tp,
+                    "sl": lvl_sl,
+                })
+        if ladder_limit_orders:
+            is_limit_order = True
+            if entry_price <= 0:
+                entry_price = ladder_limit_orders[0]["price"]
+            if tp_price <= 0:
+                tp_price = ladder_limit_orders[0]["tp"]
+            if sl_price <= 0:
+                sl_price = ladder_limit_orders[0]["sl"]
+            if not action or action in ["BUY", "SELL"]:
+                action = f"{action or ('BUY' if 'BUY' in text_upper else 'SELL')}_LIMIT"
+
     # Jika bukan sinyal berparameter (tidak ada entry, TP, ataupun SL), abaikan
     if entry_price <= 0 and tp_price <= 0 and sl_price <= 0:
         return {}
@@ -389,7 +427,7 @@ def parse_signal(text: str) -> dict:
 
     # Deteksi Sinyal Grade A+ (0.05 lot bagus) vs Standar (0.01 lot)
     is_high_grade = False
-    if any(k in text_upper for k in ["MOMEN BAGUS BANGET", "0.05 LOT", "0,05 LOT", "GRADE A+", "GRADE: A+", "PENDING ORDER SNIPER"]):
+    if any(k in text_upper for k in ["MOMEN BAGUS BANGET", "0.05 LOT", "0,05 LOT", "GRADE A+", "GRADE: A+", "PENDING ORDER SNIPER", "DUAL-LEVEL"]):
         is_high_grade = True
     elif pdf_score >= 80.0:
         is_high_grade = True
@@ -414,6 +452,7 @@ def parse_signal(text: str) -> dict:
         "master_lot": master_lot,
         "is_high_grade": is_high_grade,
         "is_limit_order": is_limit_order,
+        "ladder_limit_orders": ladder_limit_orders,
         "raw_text": text,
     }
 
@@ -854,49 +893,30 @@ class MT5MemberBridge:
         if limit_price <= 0 or tp_raw <= 0 or sl_raw <= 0:
             return {"success": False, "message": f"Harga limit (${limit_price:.2f}), TP (${tp_raw:.2f}), atau SL (${sl_raw:.2f}) tidak valid."}
 
-        # Validasi mekanik broker MT5:
-        # BUY_LIMIT wajib < Ask
-        # SELL_LIMIT wajib > Bid
-        if action == "BUY_LIMIT" and limit_price >= tick.ask:
-            return {
-                "success": False,
-                "message": f"Harga BUY LIMIT (${limit_price:,.2f}) harus lebih rendah dari harga Ask live (${tick.ask:,.2f})."
-            }
-        elif action == "SELL_LIMIT" and limit_price <= tick.bid:
-            return {
-                "success": False,
-                "message": f"Harga SELL LIMIT (${limit_price:,.2f}) harus lebih tinggi dari harga Bid live (${tick.bid:,.2f})."
-            }
+        # Multi-Level Support (Dual-Level Sniper)
+        enable_multi = bool(self.cfg.get("enable_multi_level_limits", True))
+        ladder_items = sig.get("ladder_limit_orders", [])
+        max_levels = int(self.cfg.get("max_limit_levels", 2))
+        max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 2))
 
-        # Cek batas pending order per simbol
-        active_pending = self.get_pending_orders(symbol=sym)
-        max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 1))
-        if len(active_pending) >= max_pending:
-            for po in active_pending:
-                if po.get("type") == action:
-                    p_diff = abs(po.get("price", 0.0) - limit_price)
-                    if p_diff < 2.0:
-                        return {
-                            "success": False,
-                            "message": f"Sudah ada pending order #{po.get('ticket')} {action} @ {po.get('price')} di area yang sama."
-                        }
-
-        # Jarak TP & SL Floor Minimal 60 Pips ($6.00 USD)
-        MIN_GOLD_USD = 6.00
-        tp_dist = max(MIN_GOLD_USD, round(abs(tp_raw - limit_price), 2))
-        sl_dist = max(MIN_GOLD_USD, round(abs(limit_price - sl_raw), 2))
-        if sl_dist > tp_dist:
-            sl_dist = tp_dist
-
-        digits = int(getattr(s_info, "digits", 2) or 2)
-        if action == "BUY_LIMIT":
-            tp_val = round(limit_price + tp_dist, digits)
-            sl_val = round(limit_price - sl_dist, digits)
-            order_raw_type = self.mt5.ORDER_TYPE_BUY_LIMIT
+        orders_to_place = []
+        if enable_multi and len(ladder_items) >= 2:
+            for itm in ladder_items[:max_levels]:
+                orders_to_place.append({
+                    "level": itm.get("level", 1),
+                    "label": itm.get("label", f"Level {itm.get('level', 1)}"),
+                    "price": float(itm.get("price", limit_price)),
+                    "tp": float(itm.get("tp", tp_raw)),
+                    "sl": float(itm.get("sl", sl_raw)),
+                })
         else:
-            tp_val = round(limit_price - tp_dist, digits)
-            sl_val = round(limit_price + sl_dist, digits)
-            order_raw_type = self.mt5.ORDER_TYPE_SELL_LIMIT
+            orders_to_place.append({
+                "level": 1,
+                "label": "Level 1",
+                "price": limit_price,
+                "tp": tp_raw,
+                "sl": sl_raw,
+            })
 
         # Hitung ukuran lot
         is_cent = self.is_cent_account()
@@ -920,6 +940,9 @@ class MT5MemberBridge:
         vol_max = float(getattr(s_info, "volume_max", 100.0) or 100.0)
         trade_lot = max(vol_min, min(vol_max, trade_lot))
 
+        digits = int(getattr(s_info, "digits", 2) or 2)
+        order_raw_type = self.mt5.ORDER_TYPE_BUY_LIMIT if action == "BUY_LIMIT" else self.mt5.ORDER_TYPE_SELL_LIMIT
+
         # Filling mode
         filling_mode = int(s_info.filling_mode or 0)
         candidates = []
@@ -931,41 +954,101 @@ class MT5MemberBridge:
         seen = set()
         fill_types = [f for f in candidates if not (f in seen or seen.add(f))]
 
-        req = {
-            "action": self.mt5.TRADE_ACTION_PENDING,
-            "symbol": sym,
-            "volume": trade_lot,
-            "type": order_raw_type,
-            "price": limit_price,
-            "sl": sl_val,
-            "tp": tp_val,
-            "deviation": self.slippage,
-            "magic": self.magic,
-            "comment": "VIP-9PDF-Limit",
-            "type_time": self.mt5.ORDER_TIME_GTC,
-        }
+        placed_tickets = []
+        placed_orders = []
+        last_err = ""
 
-        last_res = None
-        for ft in fill_types:
-            req["type_filling"] = ft
-            res = self.mt5.order_send(req)
-            last_res = res
-            if res and res.retcode == self.mt5.TRADE_RETCODE_DONE:
-                return {
-                    "success": True,
-                    "ticket": res.order,
-                    "price": limit_price,
-                    "volume": trade_lot,
-                    "symbol": sym,
-                    "action": action,
-                }
-            if res and res.retcode != 10030:
+        for ord_info in orders_to_place:
+            p_val = ord_info["price"]
+            tp_item = ord_info["tp"]
+            sl_item = ord_info["sl"]
+
+            # Validasi tick
+            if action == "BUY_LIMIT" and p_val >= tick.ask:
+                print(f"   ⚠️ Harga BUY LIMIT (${p_val:,.2f}) harus lebih rendah dari harga Ask live (${tick.ask:,.2f}). Dilewati.")
+                continue
+            elif action == "SELL_LIMIT" and p_val <= tick.bid:
+                print(f"   ⚠️ Harga SELL LIMIT (${p_val:,.2f}) harus lebih tinggi dari harga Bid live (${tick.bid:,.2f}). Dilewati.")
+                continue
+
+            # Anti-duplicate & max pending check per level
+            active_pending = self.get_pending_orders(symbol=sym)
+            if len(active_pending) >= max_pending:
+                is_dup = any(po.get("type") == action and abs(po.get("price", 0.0) - p_val) < 2.0 for po in active_pending)
+                if is_dup:
+                    print(f"   ℹ️ Pending order #{action} @ {p_val} sudah ada aktif di area yang sama. Dilewati.")
+                    continue
+                print(f"   ℹ️ Kuota maksimal pending order ({max_pending}) sudah tercapai pada {sym}.")
                 break
 
-        res = last_res
-        err_code = res.retcode if res else "No response"
-        err_comment = res.comment if res else self.mt5.last_error()[1]
-        return {"success": False, "message": f"RetCode: {err_code} - {err_comment}"}
+            # Jarak TP & SL Floor Minimal 60 Pips ($6.00 USD)
+            MIN_GOLD_USD = 6.00
+            tp_dist = max(MIN_GOLD_USD, round(abs(tp_item - p_val), 2))
+            sl_dist = max(MIN_GOLD_USD, round(abs(p_val - sl_item), 2))
+            if sl_dist > tp_dist:
+                sl_dist = tp_dist
+
+            if action == "BUY_LIMIT":
+                tp_val = round(p_val + tp_dist, digits)
+                sl_val = round(p_val - sl_dist, digits)
+            else:
+                tp_val = round(p_val - tp_dist, digits)
+                sl_val = round(p_val + sl_dist, digits)
+
+            req = {
+                "action": self.mt5.TRADE_ACTION_PENDING,
+                "symbol": sym,
+                "volume": trade_lot,
+                "type": order_raw_type,
+                "price": p_val,
+                "sl": sl_val,
+                "tp": tp_val,
+                "deviation": self.slippage,
+                "magic": self.magic,
+                "comment": f"VIP-9PDF-{ord_info['label']}"[:31],
+                "type_time": self.mt5.ORDER_TIME_GTC,
+            }
+
+            order_ok = False
+            for ft in fill_types:
+                req["type_filling"] = ft
+                res = self.mt5.order_send(req)
+                if res and res.retcode == self.mt5.TRADE_RETCODE_DONE:
+                    placed_tickets.append(res.order)
+                    placed_orders.append({
+                        "ticket": res.order,
+                        "price": p_val,
+                        "volume": trade_lot,
+                        "symbol": sym,
+                        "action": action,
+                        "level": ord_info["level"],
+                        "label": ord_info["label"],
+                    })
+                    print(f"   ✅ [PENDING ORDER SUKSES] #{res.order} ({ord_info['label']}) {action} {trade_lot} Lot @ ${p_val:,.2f} pada {sym}")
+                    order_ok = True
+                    break
+                if res and res.retcode != 10030:
+                    last_err = f"RetCode: {res.retcode} - {res.comment}"
+                    break
+                elif res:
+                    last_err = f"RetCode: {res.retcode} - {res.comment}"
+
+        if not placed_tickets:
+            if len(self.get_pending_orders(symbol=sym)) >= max_pending:
+                return {"success": False, "message": f"Pending limit order sudah aktif mencapai batas maksimum ({max_pending})."}
+            return {"success": False, "message": f"Gagal memasang pending order: {last_err or 'Ditolak broker atau harga tick tidak sesuai'}"}
+
+        first_p = placed_orders[0]
+        return {
+            "success": True,
+            "ticket": first_p["ticket"],
+            "tickets": placed_tickets,
+            "price": first_p["price"],
+            "volume": first_p["volume"],
+            "symbol": sym,
+            "action": action,
+            "placed_orders": placed_orders,
+        }
 
     def execute_order(self, sig: dict) -> dict:
         if not self.ensure_connected():
