@@ -308,24 +308,41 @@ class PipelineRunner:
                 # Hitung Indikator
                 df_ind = TechnicalIndicators.add_all_indicators(df)
 
-                # Ambil data H1 khusus Gold untuk konfirmasi Sesi London Awal (14:00 - 17:00 WIB)
+                # Multi-Timeframe Hierarchy untuk Gold (H4 Context, H1 Structure, M5 Trigger)
                 df_h1_ind = None
+                df_h4_ind = None
+                df_m5_ind = None
                 if is_gold:
-                    from strategy.signal_engine import get_trading_session
-                    from datetime import time as dtime
-                    s_code, _ = get_trading_session()
-                    now_wib_t = datetime.now(ZoneInfo("Asia/Jakarta")).time()
-                    cfg_london_max_h = int(self.config.get("mt5", {}).get("london_h1_max_hour", 17))
-                    if s_code == "LONDON" and dtime(14, 0) <= now_wib_t < dtime(cfg_london_max_h, 0):
-                        try:
-                            df_h1 = self.fetcher.fetch_ohlcv(ticker, interval="1h", period="7d")
-                            if not df_h1.empty and len(df_h1) >= 2:
-                                df_h1_ind = TechnicalIndicators.add_all_indicators(df_h1)
-                        except Exception as ex_h1:
-                            logger.debug(f"Gagal mengambil data H1 London {ticker}: {ex_h1}")
+                    try:
+                        df_h1 = self.fetcher.fetch_ohlcv(ticker, interval="1h", period="7d")
+                        if not df_h1.empty and len(df_h1) >= 2:
+                            df_h1_ind = TechnicalIndicators.add_all_indicators(df_h1)
+                    except Exception as ex_h1:
+                        logger.debug(f"Gagal mengambil data H1 {ticker}: {ex_h1}")
+
+                    try:
+                        df_h4 = self.fetcher.fetch_ohlcv(ticker, interval="4h", period="14d")
+                        if not df_h4.empty and len(df_h4) >= 2:
+                            df_h4_ind = TechnicalIndicators.add_all_indicators(df_h4)
+                    except Exception as ex_h4:
+                        logger.debug(f"Gagal mengambil data H4 {ticker}: {ex_h4}")
+
+                    try:
+                        df_m5 = self.fetcher.fetch_ohlcv(ticker, interval="5m", period="2d")
+                        if not df_m5.empty and len(df_m5) >= 2:
+                            df_m5_ind = TechnicalIndicators.add_all_indicators(df_m5)
+                    except Exception as ex_m5:
+                        logger.debug(f"Gagal mengambil data M5 {ticker}: {ex_m5}")
 
                 # Evaluasi Sinyal (candle terakhir)
-                sig_result = self.signal_engine.evaluate_bar(df_ind, ticker=ticker, bar_idx=-1, df_h1=df_h1_ind)
+                sig_result = self.signal_engine.evaluate_bar(
+                    df_ind,
+                    ticker=ticker,
+                    bar_idx=-1,
+                    df_h1=df_h1_ind,
+                    df_h4=df_h4_ind,
+                    df_m5=df_m5_ind,
+                )
 
                 # Sesuai arahan pengguna: Saham IDX khusus mode BUY (Long-Only), sinyal SELL ditiadakan
                 if not is_gold and sig_result.signal == "SELL":

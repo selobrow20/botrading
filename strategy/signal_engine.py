@@ -6,13 +6,14 @@ import pandas as pd
 from config.settings import load_config, setup_logger
 from indicators.technical import TechnicalIndicators
 from strategy.rules import Strategy, RuleCondition, DEFAULT_STRATEGY, get_strategy, register_strategy
+from strategy.smc_liquidity import SMCLiquidityEngine
 
 logger = setup_logger("signal_engine")
 
 
 @dataclass
 class SignalResult:
-    """Hasil evaluasi sinyal trading untuk satu saham / komoditas (Arsitektur Hermes 3D)."""
+    """Hasil evaluasi sinyal trading untuk satu saham / komoditas (Arsitektur Hermes 3D & SMC Liquidity Engine)."""
     ticker: str
     strategy_name: str
     signal: str           # 'BUY', 'SELL', 'HOLD' (arah eksekusi / kompatibilitas backward)
@@ -46,12 +47,69 @@ class SignalResult:
     limit_expiry_minutes: int = 120
     ladder_limit_orders: List[Dict[str, Any]] = field(default_factory=list)
 
+    # Master Trading Spec 43-Section Extensions:
+    style: str = "SHORT"                  # 'SHORT' or 'LONG'
+    method: str = "Trend Continuation"    # 'Liquidity Reversal', 'Trend Continuation', 'Pullback Retest', 'Breakout Reclaim', 'SMC Range Edge'
+    h4_context: str = "NEUTRAL"           # 'BULLISH', 'BEARISH', 'NEUTRAL'
+    h1_context: str = "NEUTRAL"           # 'BULLISH', 'BEARISH', 'NEUTRAL'
+    m15_setup: str = "NORMAL"             # 'SELL-SIDE LIQUIDITY SWEEP', 'BUY-SIDE LIQUIDITY SWEEP', 'BEARISH CONTINUATION', 'BULLISH CONTINUATION', etc.
+    m5_trigger: str = "NO_TRIGGER"        # 'BULLISH CHoCH + DISPLACEMENT + RETEST', 'BEARISH BOS', etc.
+    structure_desc: str = "STRUCTURE_UNCLEAR"
+    liquidity_desc: str = "NO_VALID_LIQUIDITY"
+    liquidity_state: str = "CAUTION"      # 'SAFE', 'CAUTION', 'TRAP_RISK'
+    anti_chase: str = "PASS"              # 'PASS', 'FAIL_OVEREXTENDED', 'FAIL_CHASING'
+    trap_risk: str = "LOW"                # 'LOW', 'MEDIUM', 'HIGH'
+    confluence_score: float = 0.0         # 0 - 100
+    spread_pips: float = 3.5              # Spread dalam pips
+    risk_level: str = "NORMAL"            # 'NORMAL' or 'WARNING (>6%)'
+    verdict: str = "WAIT"                 # 'EXECUTE SHORT BUY', 'EXECUTE SHORT SELL', 'EXECUTE LONG BUY', 'EXECUTE LONG SELL', 'WAIT'
+    verdict_reason: str = ""
+    spec_report: str = ""
+
     def __post_init__(self):
         # Sinkronisasi direction dan signal agar selalu konsisten namun terpisah dari trade_type
         if self.direction == "HOLD" and self.signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]:
             self.direction = "BUY" if "BUY" in self.signal else "SELL"
         elif self.direction in ["BUY", "SELL"] and self.signal not in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]:
             self.signal = self.direction
+
+        # Sinkronisasi style dengan trade_type
+        if self.style == "SHORT" and self.trade_type != "SHORT":
+            self.style = self.trade_type
+        elif self.trade_type == "SHORT" and self.style != "SHORT":
+            self.trade_type = self.style
+
+        # Sinkronisasi verdict jika belum disetel
+        if not self.verdict or self.verdict == "WAIT":
+            if self.signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]:
+                self.verdict = f"EXECUTE {self.style} {self.direction}"
+            else:
+                self.verdict = "WAIT"
+
+    def format_master_report(self) -> str:
+        reason_txt = self.verdict_reason or (self.reasons[0] if self.reasons else "Analisis pasar selesai.")
+        return SMCLiquidityEngine.format_master_trading_spec_report(
+            style=self.style,
+            direction=self.direction if self.signal != "HOLD" else "WAIT",
+            method=self.method,
+            h4=self.h4_context or self.macro_bias_h4 or "NEUTRAL",
+            h1=self.h1_context or "NEUTRAL",
+            m15=self.m15_setup,
+            m5=self.m5_trigger,
+            structure=self.structure_desc,
+            liquidity=self.liquidity_desc,
+            liquidity_state=self.liquidity_state,
+            anti_chase=self.anti_chase,
+            trap_risk=self.trap_risk,
+            confluence_score=self.confluence_score or self.pdf_confluence_score,
+            spread=self.spread_pips,
+            risk=self.risk_level,
+            sl=self.stop_loss_price,
+            tp=self.take_profit_price,
+            rr=self.risk_reward_ratio,
+            verdict=self.verdict,
+            reason=reason_txt,
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -82,6 +140,24 @@ class SignalResult:
             "limit_price": self.limit_price,
             "limit_expiry_minutes": self.limit_expiry_minutes,
             "ladder_limit_orders": self.ladder_limit_orders,
+            # Master Trading Spec fields:
+            "style": self.style,
+            "method": self.method,
+            "h4_context": self.h4_context,
+            "h1_context": self.h1_context,
+            "m15_setup": self.m15_setup,
+            "m5_trigger": self.m5_trigger,
+            "structure": self.structure_desc,
+            "liquidity": self.liquidity_desc,
+            "liquidity_state": self.liquidity_state,
+            "anti_chase": self.anti_chase,
+            "trap_risk": self.trap_risk,
+            "confluence_score": self.confluence_score,
+            "spread": self.spread_pips,
+            "risk": self.risk_level,
+            "verdict": self.verdict,
+            "verdict_reason": self.verdict_reason,
+            "spec_report": self.spec_report,
         }
 
 
@@ -222,12 +298,15 @@ class SignalEngine:
             rsi_h4 = float(row_h4.get("rsi", 50.0))
             kumo_above = bool(row_h4.get("ichimoku_above_cloud", 0))
 
-            is_bull_trend = (close_h4 >= ema50_h4) if ema50_h4 > 0 else True
+            if abs(close_h4 - ema50_h4) <= 1.0 and 40.0 <= rsi_h4 <= 60.0:
+                return "NETRAL", f"H4 Netral/Konsolidasi (RSI {rsi_h4:.1f}, EMA50 ${ema50_h4:.2f})"
+
+            is_bull_trend = (close_h4 > ema50_h4 + 0.5) if ema50_h4 > 0 else True
             is_bull_kumo = kumo_above
-            is_bull_rsi = rsi_h4 >= 40.0
-            is_bear_trend = (close_h4 <= ema50_h4) if ema50_h4 > 0 else True
+            is_bull_rsi = rsi_h4 >= 42.0
+            is_bear_trend = (close_h4 < ema50_h4 - 0.5) if ema50_h4 > 0 else True
             is_bear_kumo = not kumo_above
-            is_bear_rsi = rsi_h4 <= 60.0
+            is_bear_rsi = rsi_h4 <= 58.0
 
             if is_bull_trend and is_bull_kumo and is_bull_rsi:
                 return "BULLISH", f"H4 Bullish (Close ${close_h4:.2f} > EMA50 ${ema50_h4:.2f}, di atas Awan Kumo, RSI {rsi_h4:.1f} >= 40)"
@@ -1215,6 +1294,7 @@ class SignalEngine:
         apply_pdf_filter: bool = True,
         df_h1: Optional[pd.DataFrame] = None,
         df_h4: Optional[pd.DataFrame] = None,
+        df_m5: Optional[pd.DataFrame] = None,
         preferred_trade_type: Optional[str] = None,
     ) -> SignalResult:
         """
@@ -1269,6 +1349,11 @@ class SignalEngine:
             "fib_golden_zone": bool(curr_row.get("fib_in_golden_zone", 0)),
         }
 
+        # ─── SMC & LIQUIDITY ENGINE (Master Trading Spec) ──────────────────
+        smc_struct = SMCLiquidityEngine.analyze_market_structure(df_with_ind)
+        smc_liq_buy = SMCLiquidityEngine.analyze_liquidity(df_with_ind, smc_struct, intended_direction="BUY")
+        smc_liq_sell = SMCLiquidityEngine.analyze_liquidity(df_with_ind, smc_struct, intended_direction="SELL")
+
         # 1. Evaluasi Aturan BUY
         buy_results = [r.evaluate_bar(curr_row, prev_row) for r in target_strategy.buy_rules]
         buy_satisfied_list = [res[0] for res in buy_results]
@@ -1303,17 +1388,31 @@ class SignalEngine:
             patterns_detected.append("Ichimoku Kumo Cloud")
 
         # 3. Tentukan arah sinyal TERLEBIH DAHULU agar TP/SL dihitung dengan benar
-        # Untuk Gold: jika strategi dasar belum tegas, tentukan arah dari posisi harga vs EMA50
-        is_gold = any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"])
+        # Untuk Gold vs Saham IDX:
+        is_idx_stock = ticker.endswith(".JK") or any(k in ticker.upper() for k in ["BBCA", "BBRI", "TLKM", "ASII", "BMRI", "BBNI"])
+        is_gold = (not is_idx_stock) and (any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"]) or (curr_price > 500.0 and "." not in ticker))
+        upper_wick_ratio = float(curr_row.get("upper_wick_ratio", 0.0))
+        shooting_star_val = bool(curr_row.get("pattern_shooting_star", 0)) or (upper_wick_ratio >= 0.35)
+
         if is_buy:
             target_sig_type = "BUY"
         elif is_sell:
             target_sig_type = "SELL"
         elif is_gold:
-            # Biarkan 9 Buku PDF yang menentukan arah berdasarkan posisi harga terhadap EMA 50
-            target_sig_type = "BUY" if curr_price >= snapshot.get("ema_50", curr_price) else "SELL"
+            # Kaidah Section 31 & 33 (Reversal vs Continuation):
+            # Jika ada Sell-Side Sweep + Reclaim + konfirmasi Bullish CHoCH/Rejection, validasi Reversal BUY
+            if smc_liq_buy.has_sweep_and_reclaim and (smc_struct.choch_bullish or snapshot["pinbar"] or snapshot["engulfing"] or snapshot["rejection_wick"] >= 0.35):
+                target_sig_type = "BUY"
+            # Jika ada Buy-Side Sweep + Reclaim + konfirmasi Bearish CHoCH/Rejection, validasi Reversal SELL
+            elif smc_liq_sell.has_sweep_and_reclaim and (smc_struct.choch_bearish or shooting_star_val):
+                target_sig_type = "SELL"
+            else:
+                # Biarkan 9 Buku PDF yang menentukan arah berdasarkan posisi harga terhadap EMA 50
+                target_sig_type = "BUY" if curr_price >= snapshot.get("ema_50", curr_price) else "SELL"
         else:
             target_sig_type = "BUY"
+
+        active_smc_liq = smc_liq_buy if target_sig_type == "BUY" else smc_liq_sell
 
         # 4. Evaluasi Sesi Pasar Global (WIB) & 9 Buku PDF
         bar_dt = curr_row.name if isinstance(curr_row.name, (pd.Timestamp, datetime)) else None
@@ -1612,11 +1711,35 @@ class SignalEngine:
                 # SHORT scalping diizinkan di H4 Bullish, Bearish, maupun Neutral
                 macro_blocked = False
 
+        # TRAP_RISK Filter (Section 11, 30: Pisau jatuh / Jebakan likuiditas dilarang eksekusi)
+        trap_blocked = False
+        trap_block_reason = ""
+        if is_gold and apply_pdf_filter:
+            if active_smc_liq.state == "TRAP_RISK":
+                trap_blocked = True
+                trap_reasons_str = "; ".join(active_smc_liq.trap_reasons) if active_smc_liq.trap_reasons else "Jebakan likuiditas"
+                trap_block_reason = (
+                    f"🛑 [LIQUIDITY TRAP_RISK] {target_sig_type} ditolak: {trap_reasons_str}. "
+                    f"Kaidah Section 11 & 30: Pisau jatuh tanpa sweep + reclaim dilarang dieksekusi."
+                )
+
         if is_buy:
+            active_vetoes = []
             if macro_blocked:
+                active_vetoes.append(macro_block_reason)
+            if trap_blocked:
+                active_vetoes.append(trap_block_reason)
+            if rsi_extreme_reject:
+                active_vetoes.append(rsi_extreme_reason)
+            if judas_trap:
+                active_vetoes.append(judas_reason)
+            if not h1_ok:
+                active_vetoes.append(h1_reason)
+
+            if active_vetoes:
                 signal = "HOLD"
-                reasons = [macro_block_reason]
-            elif rsi_extreme_reject or ema_overextended_reject:
+                reasons = active_vetoes
+            elif ema_overextended_reject:
                 enable_limit_orders = bool(self.config.get("mt5", {}).get("enable_limit_orders", True))
                 always_limit = bool(self.config.get("mt5", {}).get("always_use_limit_orders", False))
                 min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
@@ -1626,9 +1749,6 @@ class SignalEngine:
                     and is_gold
                     and apply_pdf_filter
                     and (pdf_approved or (always_limit and pdf_score >= 65.0) or pdf_score >= 80.0)
-                    and not macro_blocked
-                    and h1_ok
-                    and not judas_trap
                 )
                 ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
                 if can_place_buy_limit and ema20_lvl <= round(curr_price - min_limit_dist, 2):
@@ -1647,9 +1767,6 @@ class SignalEngine:
                         f"Lapis 1 (Otak Utama H4): {macro_bias}",
                         f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)",
                     ]
-                elif rsi_extreme_reject:
-                    signal = "HOLD"
-                    reasons = [rsi_extreme_reason]
                 else:
                     signal = "HOLD"
                     reasons = [ema_overextended_reason]
@@ -1666,12 +1783,6 @@ class SignalEngine:
                     f"Sinyal beli ditahan (Mode Hati-Hati Sesi London). Skor konfluensi {pdf_score:.0f}% < {london_min_score:.0f}% ({setup_grade}). "
                     f"Sesi London sering terjadi manipulasi likuiditas / Judas swing, hanya sinyal Grade A+ kuat (>=75%) yang diizinkan."
                 ]
-            elif not h1_ok:
-                signal = "HOLD"
-                reasons = [h1_reason]
-            elif judas_trap:
-                signal = "HOLD"
-                reasons = [judas_reason]
             else:
                 signal = "BUY"
                 reasons = list(buy_reasons)
@@ -1691,85 +1802,95 @@ class SignalEngine:
                     f"Sinyal jual saham dilewati (Saham IDX khusus mode BUY/Long-Only). "
                     f"RSI={snapshot['rsi']:.1f}, EMA50={snapshot['ema_50']:.0f}"
                 ]
-            elif macro_blocked:
-                signal = "HOLD"
-                reasons = [macro_block_reason]
-            elif rsi_extreme_reject or ema_overextended_reject:
-                enable_limit_orders = bool(self.config.get("mt5", {}).get("enable_limit_orders", True))
-                always_limit = bool(self.config.get("mt5", {}).get("always_use_limit_orders", False))
-                min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
-                min_limit_dist = min_limit_pips / 10.0
-                can_place_sell_limit = (
-                    enable_limit_orders
-                    and is_gold
-                    and apply_pdf_filter
-                    and (pdf_approved or (always_limit and pdf_score >= 65.0) or pdf_score >= 80.0)
-                    and not macro_blocked
-                    and h1_ok
-                    and not judas_trap
-                )
-                ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
-                if can_place_sell_limit and ema20_lvl >= round(curr_price + min_limit_dist, 2):
-                    signal = "SELL_LIMIT"
-                    limit_price_val = ema20_lvl
-                    is_limit_order_sig = True
-                    limit_order_type_val = "SELL_LIMIT"
-                    sl_dist_lim = max(6.00, sl_distance)
-                    tp_dist_lim = max(6.00, max(sl_dist_lim, tp_distance))
-                    sl_price = round(limit_price_val + sl_dist_lim, 2)
-                    tp_price = round(limit_price_val - tp_dist_lim, 2)
-                    rrr = round(tp_dist_lim / sl_dist_lim, 2)
-                    reasons = [
-                        f"🟡 [PENDING ORDER SNIPER] SELL LIMIT dipasang di ${limit_price_val:,.2f} (Retest 20 EMA Resistance)",
-                        f"🛡️ Kaidah Anti-Kejar Lilin Bob Volman: Harga live (${curr_price:,.2f}) overextended. Order limit dipasang di atas menjemput pullback retest!",
-                        f"Lapis 1 (Otak Utama H4): {macro_bias}",
-                        f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)",
-                    ]
-                elif rsi_extreme_reject:
-                    signal = "HOLD"
-                    reasons = [rsi_extreme_reason]
-                else:
-                    signal = "HOLD"
-                    reasons = [ema_overextended_reason]
-            elif apply_pdf_filter and not pdf_approved and is_gold:
-                # Sinyal Short Gold ditahan jika konfluensi sell belum tembus Grade A (65%)
-                signal = "HOLD"
-                reasons = [
-                    f"Sinyal short ditahan (Filter 9 Buku PDF). Skor konfluensi {pdf_score:.0f}% < 65% ({setup_grade}). "
-                    f"Menunggu konfirmasi pembalikan arah yang lebih solid demi menjaga Win Rate tinggi."
-                ]
-            elif london_rejected:
-                signal = "HOLD"
-                reasons = [
-                    f"Sinyal short ditahan (Mode Hati-Hati Sesi London). Skor konfluensi {pdf_score:.0f}% < {london_min_score:.0f}% ({setup_grade}). "
-                    f"Sesi London sering terjadi manipulasi likuiditas / Judas swing, hanya sinyal Grade A+ kuat (>=75%) yang diizinkan."
-                ]
-            elif not h1_ok:
-                signal = "HOLD"
-                reasons = [h1_reason]
-            elif judas_trap:
-                signal = "HOLD"
-                reasons = [judas_reason]
             else:
-                signal = "SELL"
-                reasons = list(sell_reasons)
-                reasons.append(f"Lapis 1 (Otak Utama H4): {macro_bias}")
-                reasons.append(f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)")
-                if is_london_session:
-                    reasons.append(f"🛡️ Sesi London: Terkonfirmasi Kuat ({pdf_score:.0f}% >= 75%) Lolos Filter Anti-Manipulasi")
-                    if h1_reason:
-                        reasons.append(h1_reason)
+                active_vetoes = []
+                if macro_blocked:
+                    active_vetoes.append(macro_block_reason)
+                if trap_blocked:
+                    active_vetoes.append(trap_block_reason)
+                if rsi_extreme_reject:
+                    active_vetoes.append(rsi_extreme_reason)
+                if judas_trap:
+                    active_vetoes.append(judas_reason)
+                if not h1_ok:
+                    active_vetoes.append(h1_reason)
+
+                if active_vetoes:
+                    signal = "HOLD"
+                    reasons = active_vetoes
+                elif ema_overextended_reject:
+                    enable_limit_orders = bool(self.config.get("mt5", {}).get("enable_limit_orders", True))
+                    always_limit = bool(self.config.get("mt5", {}).get("always_use_limit_orders", False))
+                    min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
+                    min_limit_dist = min_limit_pips / 10.0
+                    can_place_sell_limit = (
+                        enable_limit_orders
+                        and is_gold
+                        and apply_pdf_filter
+                        and (pdf_approved or (always_limit and pdf_score >= 65.0) or pdf_score >= 80.0)
+                    )
+                    ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
+                    if can_place_sell_limit and ema20_lvl >= round(curr_price + min_limit_dist, 2):
+                        signal = "SELL_LIMIT"
+                        limit_price_val = ema20_lvl
+                        is_limit_order_sig = True
+                        limit_order_type_val = "SELL_LIMIT"
+                        sl_dist_lim = max(6.00, sl_distance)
+                        tp_dist_lim = max(6.00, max(sl_dist_lim, tp_distance))
+                        sl_price = round(limit_price_val + sl_dist_lim, 2)
+                        tp_price = round(limit_price_val - tp_dist_lim, 2)
+                        rrr = round(tp_dist_lim / sl_dist_lim, 2)
+                        reasons = [
+                            f"🟡 [PENDING ORDER SNIPER] SELL LIMIT dipasang di ${limit_price_val:,.2f} (Retest 20 EMA Resistance)",
+                            f"🛡️ Kaidah Anti-Kejar Lilin Bob Volman: Harga live (${curr_price:,.2f}) overextended. Order limit dipasang di atas menjemput pullback retest!",
+                            f"Lapis 1 (Otak Utama H4): {macro_bias}",
+                            f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)",
+                        ]
+                    else:
+                        signal = "HOLD"
+                        reasons = [ema_overextended_reason]
+                elif apply_pdf_filter and not pdf_approved:
+                    # Sinyal Short Gold ditahan jika konfluensi sell belum tembus Grade A (65%)
+                    signal = "HOLD"
+                    reasons = [
+                        f"Sinyal short ditahan (Filter 9 Buku PDF). Skor konfluensi {pdf_score:.0f}% < 65% ({setup_grade}). "
+                        f"Menunggu konfirmasi pembalikan arah yang lebih solid demi menjaga Win Rate tinggi."
+                    ]
+                elif london_rejected:
+                    signal = "HOLD"
+                    reasons = [
+                        f"Sinyal short ditahan (Mode Hati-Hati Sesi London). Skor konfluensi {pdf_score:.0f}% < {london_min_score:.0f}% ({setup_grade}). "
+                        f"Sesi London sering terjadi manipulasi likuiditas / Judas swing, hanya sinyal Grade A+ kuat (>=75%) yang diizinkan."
+                    ]
+                else:
+                    signal = "SELL"
+                    reasons = list(sell_reasons)
+                    reasons.append(f"Lapis 1 (Otak Utama H4): {macro_bias}")
+                    reasons.append(f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)")
+                    if is_london_session:
+                        reasons.append(f"🛡️ Sesi London: Terkonfirmasi Kuat ({pdf_score:.0f}% >= 75%) Lolos Filter Anti-Manipulasi")
+                        if h1_reason:
+                            reasons.append(h1_reason)
         else:
             # Jika sinyal dasar masih netral namun telaah 9 Buku PDF membuktikan Grade A (>=65% atau >=75% di London)
             min_promo_score = london_min_score if is_london_session else 65.0
-            if apply_pdf_filter and pdf_approved and pdf_score >= min_promo_score and is_gold and not rsi_extreme_reject and not ema_overextended_reject and not macro_blocked:
-                if not h1_ok:
-                    signal = "HOLD"
-                    reasons = [h1_reason]
-                elif judas_trap:
-                    signal = "HOLD"
-                    reasons = [judas_reason]
-                elif target_sig_type == "BUY" and curr_price >= snapshot.get("ema_50", 0.0):
+            active_vetoes = []
+            if macro_blocked:
+                active_vetoes.append(macro_block_reason)
+            if trap_blocked:
+                active_vetoes.append(trap_block_reason)
+            if rsi_extreme_reject:
+                active_vetoes.append(rsi_extreme_reason)
+            if judas_trap:
+                active_vetoes.append(judas_reason)
+            if not h1_ok:
+                active_vetoes.append(h1_reason)
+
+            if active_vetoes:
+                signal = "HOLD"
+                reasons = active_vetoes
+            elif apply_pdf_filter and pdf_approved and pdf_score >= min_promo_score and is_gold and not ema_overextended_reject:
+                if target_sig_type == "BUY" and curr_price >= snapshot.get("ema_50", 0.0):
                     signal = "BUY"
                     reasons = [
                         f"Lapis 1 (Otak Utama H4): {macro_bias}",
@@ -1802,7 +1923,7 @@ class SignalEngine:
                         f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
                         f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
                     ]
-            elif (ema_overextended_reject or rsi_extreme_reject) and is_gold and bool(self.config.get("mt5", {}).get("enable_limit_orders", True)) and apply_pdf_filter and (pdf_approved or (bool(self.config.get("mt5", {}).get("always_use_limit_orders", False)) and pdf_score >= 65.0) or pdf_score >= 80.0) and not macro_blocked and h1_ok and not judas_trap:
+            elif ema_overextended_reject and is_gold and bool(self.config.get("mt5", {}).get("enable_limit_orders", True)) and apply_pdf_filter and (pdf_approved or (bool(self.config.get("mt5", {}).get("always_use_limit_orders", False)) and pdf_score >= 65.0) or pdf_score >= 80.0):
                 min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
                 min_limit_dist = min_limit_pips / 10.0
                 ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
@@ -1844,14 +1965,10 @@ class SignalEngine:
             else:
                 signal = "HOLD"
                 reasons = [
-                    macro_block_reason if macro_blocked else (
-                        rsi_extreme_reason if rsi_extreme_reject else (
-                            ema_overextended_reason if ema_overextended_reject else (
-                                f"Kondisi netral / menunggu konfluensi waktu masuk. RSI={snapshot['rsi']:.1f}, "
-                                f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
-                                f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
-                            )
-                        )
+                    ema_overextended_reason if ema_overextended_reject else (
+                        f"Kondisi netral / menunggu konfluensi waktu masuk. RSI={snapshot['rsi']:.1f}, "
+                        f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
+                        f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
                     )
                 ]
 
@@ -2058,6 +2175,103 @@ class SignalEngine:
         if is_actionable and market_regime:
             reasons.append(f"Regime Pasar: {market_regime}")
 
+        # ─── RANGKUMAN MASTER TRADING SPEC 43 BAGIAN ─────────────────────────
+        selected_method = SMCLiquidityEngine.select_trading_method(
+            structure=smc_struct,
+            liquidity=active_smc_liq,
+            direction=target_sig_type,
+            is_retest=is_retest_sig,
+        )
+
+        h1_ctx = "NEUTRAL"
+        if df_h1 is not None and not df_h1.empty:
+            h1_struct_res = SMCLiquidityEngine.analyze_market_structure(df_h1)
+            h1_ctx = h1_struct_res.trend
+        else:
+            h1_ctx = macro_bias
+
+        if active_smc_liq.has_sweep_and_reclaim and active_smc_liq.sweep_type == "SELL_SIDE":
+            m15_setup_desc = "SELL-SIDE LIQUIDITY SWEEP"
+        elif active_smc_liq.has_sweep_and_reclaim and active_smc_liq.sweep_type == "BUY_SIDE":
+            m15_setup_desc = "BUY-SIDE LIQUIDITY SWEEP"
+        elif smc_struct.trend == "BEARISH":
+            m15_setup_desc = "BEARISH CONTINUATION"
+        elif smc_struct.trend == "BULLISH":
+            m15_setup_desc = "BULLISH CONTINUATION"
+        elif smc_struct.trend == "RANGE":
+            m15_setup_desc = "RANGE EDGE"
+        else:
+            m15_setup_desc = "NORMAL"
+
+        m5_trig_desc = "NO_TRIGGER"
+        if df_m5 is not None and not df_m5.empty:
+            m5_struct_res = SMCLiquidityEngine.analyze_market_structure(df_m5)
+            if target_sig_type == "BUY" and (m5_struct_res.choch_bullish or m5_struct_res.bos_bullish):
+                m5_trig_desc = "BULLISH CHoCH + DISPLACEMENT + RETEST" if m5_struct_res.choch_bullish else "BULLISH BOS"
+            elif target_sig_type == "SELL" and (m5_struct_res.choch_bearish or m5_struct_res.bos_bearish):
+                m5_trig_desc = "BEARISH CHoCH + DISPLACEMENT + RETEST" if m5_struct_res.choch_bearish else "BEARISH BOS"
+        elif active_smc_liq.has_sweep_and_reclaim and smc_struct.choch_bullish:
+            m5_trig_desc = "BULLISH CHoCH + DISPLACEMENT + RETEST"
+        elif active_smc_liq.has_sweep_and_reclaim and smc_struct.choch_bearish:
+            m5_trig_desc = "BEARISH CHoCH + DISPLACEMENT + RETEST"
+        elif target_sig_type == "BUY" and smc_struct.bos_bullish:
+            m5_trig_desc = "BULLISH BOS + RETEST"
+        elif target_sig_type == "SELL" and smc_struct.bos_bearish:
+            m5_trig_desc = "BEARISH BOS + RETEST"
+        elif snapshot["pinbar"] or snapshot["rejection_wick"] >= 0.35:
+            m5_trig_desc = "MOMENTUM REJECTION WICK"
+
+        anti_chase_eval = SMCLiquidityEngine.evaluate_anti_chase(
+            curr_price=curr_price,
+            ema20=float(snapshot.get("ema_20", curr_price)),
+            atr=float(curr_row.get("atr", 3.0)),
+            is_london=is_london_session,
+        )
+
+        anti_chase_status = "PASS" if anti_chase_eval.passed else anti_chase_eval.status
+        trap_risk_val = "HIGH" if active_smc_liq.state == "TRAP_RISK" else ("MEDIUM" if active_smc_liq.state == "CAUTION" else "LOW")
+        spread_val = float(curr_row.get("spread_pips", 3.4) or 3.4)
+        risk_lvl = "NORMAL"
+
+        # Hitung skor konfluensi komprehensif SMC
+        smc_conf = SMCLiquidityEngine.score_confluence(
+            structure=smc_struct,
+            liquidity=active_smc_liq,
+            anti_chase=anti_chase_eval,
+            m5_trigger_valid=(m5_trig_desc != "NO_TRIGGER"),
+            price_action_confirmed=bool(snapshot["pinbar"] or snapshot["engulfing"] or snapshot["rejection_wick"] >= 0.35),
+            displacement_confirmed=bool(float(snapshot.get("volume_ratio", 1.0)) >= 1.15),
+            rr_val=rrr if is_actionable else 1.0,
+            direction=target_sig_type,
+            macro_bias_h4=macro_bias,
+        )
+
+        final_verdict = f"EXECUTE {trade_type} {target_sig_type}" if is_actionable else "WAIT"
+        final_reason = reasons[0] if reasons else ("Setup valid terkonfirmasi konfluensi SMC." if is_actionable else "Menunggu konfirmasi setup pasar yang valid.")
+
+        spec_report_txt = SMCLiquidityEngine.format_master_trading_spec_report(
+            style=trade_type,
+            direction=target_sig_type if is_actionable else "WAIT",
+            method=selected_method,
+            h4=macro_bias,
+            h1=h1_ctx,
+            m15=m15_setup_desc,
+            m5=m5_trig_desc,
+            structure=smc_struct.description,
+            liquidity=active_smc_liq.description,
+            liquidity_state=active_smc_liq.state,
+            anti_chase=anti_chase_status,
+            trap_risk=trap_risk_val,
+            confluence_score=pdf_score if pdf_score > 0 else smc_conf.total_score,
+            spread=spread_val,
+            risk=risk_lvl,
+            sl=sl_price if is_actionable else None,
+            tp=tp_price if is_actionable else None,
+            rr=rrr if is_actionable else None,
+            verdict=final_verdict,
+            reason=final_reason,
+        )
+
         logger.debug(
             f"Evaluasi {ticker} ({target_strategy.name}) @ {candle_time}: "
             f"Signal={signal}, Price={final_price}, Reasons={reasons}"
@@ -2091,6 +2305,23 @@ class SignalEngine:
             limit_price=limit_price_val if is_limit_type else None,
             limit_expiry_minutes=int(self.config.get("mt5", {}).get("limit_order_expiry_mins", 120)),
             ladder_limit_orders=ladder_orders,
+            style=trade_type,
+            method=selected_method,
+            h4_context=macro_bias,
+            h1_context=h1_ctx,
+            m15_setup=m15_setup_desc,
+            m5_trigger=m5_trig_desc,
+            structure_desc=smc_struct.description,
+            liquidity_desc=active_smc_liq.description,
+            liquidity_state=active_smc_liq.state,
+            anti_chase=anti_chase_status,
+            trap_risk=trap_risk_val,
+            confluence_score=pdf_score if pdf_score > 0 else smc_conf.total_score,
+            spread_pips=spread_val,
+            risk_level=risk_lvl,
+            verdict=final_verdict,
+            verdict_reason=final_reason,
+            spec_report=spec_report_txt,
         )
 
     def evaluate_all_strategies(
