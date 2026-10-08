@@ -469,7 +469,8 @@ def test_anti_hedging_blocks_duplicate_and_cancels_broadcast():
         assert is_dup is True
         assert "Anti-Hedging Guard" in dup_reason or "Posisi berlawanan" in dup_reason
 
-        # Sinyal BUY baru dengan konfluensi 90%+ (Reversal Flip terkonfirmasi 9 Buku PDF)
+        # Sinyal BUY baru dengan konfluensi 90%+ (Reversal Flip terkonfirmasi 9 Buku PDF saat diaktifkan)
+        runner.config.setdefault("mt5", {})["enable_reversal_flip"] = True
         flip_sig = SignalResult(
             ticker="XAUUSD",
             strategy_name="Master_Confluence",
@@ -486,10 +487,12 @@ def test_anti_hedging_blocks_duplicate_and_cancels_broadcast():
 
 
 def test_reversal_flip_in_execute_signal():
-    """Menguji bahwa sinyal pembalikan 90%+ menutup posisi lawan dan mengeksekusi order baru."""
+    """Menguji bahwa sinyal pembalikan 90%+ menutup posisi lawan dan mengeksekusi order baru saat fitur diaktifkan."""
     bridge = MT5Bridge(simulation_mode=True)
     bridge.enabled = True
     bridge.trading_hours = "all"
+    bridge.config.setdefault("mt5", {})["enable_reversal_flip"] = True
+    bridge.config.setdefault("mt5", {})["min_flip_position_age_minutes"] = 0.0
     bridge._simulated_positions = [
         {"ticket": 99999, "type": "SELL", "price_open": 2750.0, "symbol": "XAUUSDc", "volume": 0.05, "tp": 2720.0, "sl": 2770.0}
     ]

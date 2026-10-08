@@ -1187,11 +1187,26 @@ class MT5Bridge:
         if opposite_positions:
             cfg = getattr(self, "config", None) or load_config()
             cfg_mt5 = cfg.get("mt5", {})
-            enable_flip = bool(cfg_mt5.get("enable_reversal_flip", True))
-            min_flip_score = float(cfg_mt5.get("min_reversal_flip_score", 90.0))
+            enable_flip = bool(cfg_mt5.get("enable_reversal_flip", False))
+            min_flip_score = float(cfg_mt5.get("min_reversal_flip_score", 95.0))
             pdf_score = float(getattr(sig, "pdf_confluence_score", 0.0) or 0.0)
 
-            if enable_flip and pdf_score >= min_flip_score:
+            # Usia minimal posisi yang boleh di-flip (default minimal 15 menit = 900 detik)
+            # DILARANG KERAS menutup posisi yang baru berumur hitungan detik/menit (mencegah whipsaw)
+            min_flip_age_sec = float(cfg_mt5.get("min_flip_position_age_minutes", 15.0)) * 60.0
+            import time as _time
+            now_ts = _time.time()
+            all_aged_enough = True
+            youngest_age = 999999.0
+            for p in opposite_positions:
+                p_time = float(p.get("time", now_ts))
+                age_sec = max(0.0, now_ts - p_time)
+                if age_sec < youngest_age:
+                    youngest_age = age_sec
+                if age_sec < min_flip_age_sec:
+                    all_aged_enough = False
+
+            if enable_flip and pdf_score >= min_flip_score and all_aged_enough:
                 opp_summary = ", ".join(f"#{p['ticket']} ({p['type']} @ {p['price_open']})" for p in opposite_positions)
                 logger.info(
                     f"🔄 [REVERSAL FLIP 90-100% 9 BUKU PDF] Terdeteksi sinyal pembalikan arah {sig_type} super kuat "
@@ -1204,8 +1219,7 @@ class MT5Bridge:
                     f"🔄 Reversal Flip (9 Buku PDF): Posisi lawan [{opp_summary}] ditutup otomatis (Cut Loss/SL Dini) "
                     f"karena konfluensi pembalikan arah mencapai {pdf_score:.0f}%."
                 )
-                import time
-                time.sleep(0.5)
+                _time.sleep(0.5)
 
                 # Refresh daftar posisi terbuka setelah penutupan posisi lawan
                 open_positions = self.get_open_positions()
@@ -1216,9 +1230,16 @@ class MT5Bridge:
                 ]
             else:
                 opp_summary = ", ".join(f"#{p['ticket']} ({p['type']} @ {p['price_open']})" for p in opposite_positions)
+                if not enable_flip:
+                    reason_msg = "fitur reversal flip dinonaktifkan (membiarkan posisi bernapas ke TP/SL)"
+                elif not all_aged_enough:
+                    reason_msg = f"posisi baru berumur {youngest_age:.0f}s (< {min_flip_age_sec/60:.0f}m) dilarang cut loss kilat"
+                else:
+                    reason_msg = f"skor {pdf_score}% < batas pembalikan {min_flip_score}%"
+
                 msg = (
                     f"⏸️ [ANTI-HEDGING GUARD] Sinyal {sig_type} dilewati: Masih ada posisi berlawanan aktif "
-                    f"[{opp_summary}] yang sedang berjalan menuju TP/SL (Skor {pdf_score}% < batas pembalikan 90%). "
+                    f"[{opp_summary}] yang sedang berjalan menuju TP/SL ({reason_msg}). "
                     f"Menghindari whipsawing / tabrakan order."
                 )
                 logger.info(msg)

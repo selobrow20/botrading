@@ -1577,10 +1577,10 @@ class PipelineRunner:
                 volume = float(pos["volume"])
                 pos_time = float(pos.get("time", 0))
 
-                # Pengamanan anti-premature: Posisi yang baru buka (< 45 detik) diberi ruang bernapas awal
+                # Pengamanan anti-premature: Posisi yang baru buka (< 15 menit / 900 detik) wajib diberi ruang bernapas ke TP/SL
                 pos_age_sec = (now_epoch - pos_time) if pos_time > 0 else 9999
-                if pos_age_sec < 45:
-                    logger.debug(f"Posisi #{ticket} baru berjalan {int(pos_age_sec)} detik. Dalam masa observasi awal.")
+                if pos_age_sec < 900:
+                    logger.debug(f"Posisi #{ticket} baru berjalan {int(pos_age_sec)} detik (< 15 menit). Dalam masa observasi / bernapas ke TP/SL.")
                     continue
 
                 # Hitung persentase pergerakan
