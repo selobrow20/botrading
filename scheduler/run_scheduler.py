@@ -502,10 +502,30 @@ class PipelineRunner:
                         if not c_pred and hasattr(sig_result, "meta"):
                             c_pred = str(sig_result.meta.get("prediction_summary", ""))
 
-                        is_a_plus = ("Grade A+" in c_grade or c_score >= 80.0)
-                        # DISIPLIN 9 BUKU: Haram memaksakan auto-open jika ada veto mutlak atau penolakan overextended Bob Volman
                         r_text = " ".join(str(r) for r in (sig_result.reasons or []))
-                        is_hard_veto = any(
+                        all_desc = (c_grade + " " + r_text).upper()
+                        is_weak_or_no_wick = any(
+                            k in all_desc for k in [
+                                "GRADE B",
+                                "GRADE C",
+                                "KETIADAAN REJECTION WICK",
+                            ]
+                        )
+                        is_a_plus = ("Grade A+" in c_grade or (c_score >= 80.0 and "Grade A" in c_grade)) and not is_weak_or_no_wick
+
+                        # DISIPLIN 9 BUKU & HARD RULES VETO:
+                        # Haram memaksakan auto-open jika ada veto mutlak, ketiadaan rejection wick, grade rendah, atau kontradiksi H4
+                        h4_context_str = str(
+                            getattr(sig_result, "macro_bias_h4", "")
+                            or getattr(sig_result, "h4_context", "")
+                            or ""
+                        ).upper()
+                        if not h4_context_str and df_h4_ind is not None and not df_h4_ind.empty:
+                            c_h4 = df_h4_ind["Close"].iloc[-1]
+                            e50_h4 = df_h4_ind["EMA_50"].iloc[-1] if "EMA_50" in df_h4_ind.columns else c_h4
+                            h4_context_str = "BEARISH" if c_h4 < e50_h4 else "BULLISH"
+
+                        is_hard_veto = is_weak_or_no_wick or any(
                             k in r_text for k in [
                                 "FILTER ANTI-KEJAR LILIN BOB VOLMAN",
                                 "Overextended",
@@ -518,28 +538,45 @@ class PipelineRunner:
                         )
                         if is_a_plus and not is_hard_veto and ("Bearish" in c_pred or "Bullish" in c_pred):
                             c_action = "SELL" if "Bearish" in c_pred else "BUY"
+
+                            # Kunci Satu Arah Sesuai Tren H4:
+                            if ("BEAR" in h4_context_str and c_action == "BUY") or ("BULL" in h4_context_str and c_action == "SELL"):
+                                logger.info(f"🚫 [H4 TREND LOCK] Auto-open {c_action} dibatalkan karena berlawanan arah dengan H4 ({h4_context_str}).")
+                                continue
+
                             c_time_key = f"{ticker}_{sig_result.candle_time}_{c_action}"
 
                             # Deduplikasi agar tidak spam setiap siklus pada candle yang sama
                             if self._last_chart_alert_time.get(ticker) != c_time_key:
-                                # Hitung TP & SL dengan batas lantai minimal 60 pips ($6.00 USD) 1:1
+                                # Hitung TP & SL dinamis berbasis struktur swing & ATR (RR minimal 1:1.5)
                                 entry_p = float(sig_result.price)
-                                MIN_GOLD_USD = 6.00  # Minimal 60 pips ($6.00 USD)
-                                if getattr(sig_result, "take_profit_price", 0.0) and getattr(sig_result, "stop_loss_price", 0.0):
-                                    tp_dist = abs(float(sig_result.take_profit_price) - entry_p)
-                                    sl_dist = abs(entry_p - float(sig_result.stop_loss_price))
-                                    sl_dist = max(MIN_GOLD_USD, sl_dist)
-                                    tp_dist = max(MIN_GOLD_USD, max(sl_dist, tp_dist))
-                                else:
-                                    tp_dist = MIN_GOLD_USD
-                                    sl_dist = MIN_GOLD_USD
+                                atr_val = float(df_ind["ATR"].iloc[-1]) if "ATR" in df_ind.columns else 4.0
+                                buffer_usd = max(1.50, round(atr_val * 0.4, 2))
+                                recent_slice = df_ind.tail(20) if len(df_ind) >= 20 else df_ind
 
-                                if c_action == "BUY":
-                                    c_tp = round(entry_p + tp_dist, 2)
-                                    c_sl = round(entry_p - sl_dist, 2)
+                                if getattr(sig_result, "take_profit_price", 0.0) and getattr(sig_result, "stop_loss_price", 0.0):
+                                    c_tp = float(sig_result.take_profit_price)
+                                    c_sl = float(sig_result.stop_loss_price)
+                                    sl_dist = abs(entry_p - c_sl)
+                                    tp_dist = abs(c_tp - entry_p)
+                                    if sl_dist > 0 and (tp_dist / sl_dist) < 1.45:
+                                        tp_dist = round(sl_dist * 1.5, 2)
+                                        c_tp = round(entry_p + tp_dist if c_action == "BUY" else entry_p - tp_dist, 2)
                                 else:
-                                    c_tp = round(entry_p - tp_dist, 2)
-                                    c_sl = round(entry_p + sl_dist, 2)
+                                    if c_action == "BUY":
+                                        swing_low = float(recent_slice["Low"].min()) if "Low" in recent_slice.columns else (entry_p - 4.0)
+                                        c_sl = round(swing_low - buffer_usd, 2)
+                                        sl_dist = max(round(entry_p - c_sl, 2), max(4.0, round(atr_val * 1.5, 2)))
+                                        c_sl = round(entry_p - sl_dist, 2)
+                                        tp_dist = round(sl_dist * 1.5, 2)
+                                        c_tp = round(entry_p + tp_dist, 2)
+                                    else:
+                                        swing_high = float(recent_slice["High"].max()) if "High" in recent_slice.columns else (entry_p + 4.0)
+                                        c_sl = round(swing_high + buffer_usd, 2)
+                                        sl_dist = max(round(c_sl - entry_p, 2), max(4.0, round(atr_val * 1.5, 2)))
+                                        c_sl = round(entry_p + sl_dist, 2)
+                                        tp_dist = round(sl_dist * 1.5, 2)
+                                        c_tp = round(entry_p - tp_dist, 2)
 
                                 # Buat visual grafik chart konfirmasi
                                 chart_img = None
@@ -570,7 +607,7 @@ class PipelineRunner:
                                     reasons=[
                                         f"🚀 Eksekusi Otomatis Momen Sangat Bagus ({c_grade}, Skor {c_score:.0f}%)",
                                         f"🎯 Prediksi Arah: {c_pred}",
-                                        f"⚖️ Target TP ${c_tp:.2f} & SL ${c_sl:.2f} (Floor Min 60 Pips 1:1)",
+                                        f"⚖️ Target TP ${c_tp:.2f} & SL ${c_sl:.2f} (Struktural Dynamic R:R {tp_dist/max(sl_dist, 0.01):.1f}:1)",
                                     ] + (sig_result.reasons or []),
                                     take_profit_price=c_tp,
                                     stop_loss_price=c_sl,
@@ -738,19 +775,48 @@ class PipelineRunner:
         sell_limits = [o for o in active_pending if "SELL" in o.get("type", "")]
         max_levels = int(cfg_mt5.get("max_limit_levels", 2))
 
-        enable_dual = bool(cfg_mt5.get("enable_dual_sided_limits", True))
-        if enable_dual:
-            needs_buy = len(buy_limits) < max_levels
+        # HARD RULE 1: Kunci Satu Arah Sesuai Tren H4 & Batalkan Antrean Berlawanan
+        curr_p = float(sig_result.price) if sig_result and getattr(sig_result, "price", 0.0) else float(df_ind["Close"].iloc[-1])
+        curr_row = df_ind.iloc[-1] if not df_ind.empty else pd.Series()
+        macro_bias, _ = self.signal_engine.evaluate_macro_bias_h4(df_h4=df_h4_ind, curr_row=curr_row, curr_price=curr_p)
+        if not macro_bias or macro_bias == "NETRAL":
+            if sig_result and getattr(sig_result, "macro_bias_h4", ""):
+                macro_bias = str(sig_result.macro_bias_h4).upper()
+
+        if macro_bias == "BEARISH":
+            # Tren Turun: Nonaktifkan total BUY LIMIT (Anti-Pisau Jatuh). Batalkan jika ada yang menggantung!
+            for bo in buy_limits:
+                b.cancel_order(bo["ticket"])
+                logger.info(f"🛑 [TREND LOCK H4] Membatalkan BUY LIMIT #{bo['ticket']} karena tren H4 = BEARISH.")
+            buy_limits = []
+            needs_buy = False
             needs_sell = len(sell_limits) < max_levels
+        elif macro_bias == "BULLISH":
+            # Tren Naik: Nonaktifkan total SELL LIMIT (Anti-Hadang Kereta). Batalkan jika ada yang menggantung!
+            for so in sell_limits:
+                b.cancel_order(so["ticket"])
+                logger.info(f"🛑 [TREND LOCK H4] Membatalkan SELL LIMIT #{so['ticket']} karena tren H4 = BULLISH.")
+            sell_limits = []
+            needs_buy = len(buy_limits) < max_levels
+            needs_sell = False
         else:
-            needs_buy = len(buy_limits) == 0
-            needs_sell = len(sell_limits) == 0
+            enable_dual = bool(cfg_mt5.get("enable_dual_sided_limits", False))
+            if enable_dual:
+                needs_buy = len(buy_limits) < max_levels
+                needs_sell = len(sell_limits) < max_levels
+            else:
+                ema50_val = float(df_ind["EMA_50"].iloc[-1]) if "EMA_50" in df_ind.columns else curr_p
+                if curr_p >= ema50_val:
+                    needs_buy = len(buy_limits) < max_levels
+                    needs_sell = False
+                else:
+                    needs_buy = False
+                    needs_sell = len(sell_limits) < max_levels
 
         if not needs_buy and not needs_sell:
             return
 
         # 4. Analisis ulang pasar terkini untuk mendapatkan level baru
-        curr_p = float(sig_result.price) if sig_result and getattr(sig_result, "price", 0.0) else float(df_ind["Close"].iloc[-1])
         ladder_orders = getattr(sig_result, "ladder_limit_orders", [])
         if not ladder_orders:
             snapshot = self.signal_engine._extract_snapshot(df_ind, -1)

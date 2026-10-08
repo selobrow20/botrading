@@ -251,8 +251,143 @@ def get_trading_session(dt: Optional[Any] = None) -> Tuple[str, str]:
         return "ASIA", "Sesi Asia (Tokyo/Sydney)"
 
 
+def _notify_veto(reason: str, notifier: Optional[Any] = None) -> None:
+    """Mengirim pesan notifikasi pembatalan trade (veto) ke Telegram."""
+    alert_text = f"⚠️ <b>Trade Dibatalkan (Veto):</b> {reason}"
+    logger.warning(f"🛑 [TRADE VETO] {reason}")
+    try:
+        if notifier is not None and hasattr(notifier, "send_message"):
+            notifier.send_message(alert_text)
+        else:
+            from notify.telegram_bot import TelegramNotifier
+            tb = TelegramNotifier()
+            tb.send_message(alert_text)
+    except Exception as e:
+        logger.debug(f"Pemberitahuan veto ke Telegram dilewati/gagal: {e}")
+
+
+def filter_and_validate_signal(
+    sig: Any,
+    df: Optional[pd.DataFrame] = None,
+    h4_trend: Optional[str] = None,
+    notifier: Optional[Any] = None,
+) -> Tuple[bool, str]:
+    """
+    Validasi Ketat Kondisi Trading (Hard Rules Veto Engine).
+    Mencegah eksekusi posisi janggal, kontradiksi tren H4, sinyal lemah, dan SL konyol.
+
+    Hard Rules Wajib:
+    1. Kunci Satu Arah Sesuai Tren H4:
+       - H4 = BEARISH: Nonaktifkan total BUY / BUY LIMIT. Hanya izinkan SELL / SELL LIMIT.
+       - H4 = BULLISH: Nonaktifkan total SELL / SELL LIMIT. Hanya izinkan BUY / BUY LIMIT.
+    2. Hard Veto untuk Ketiadaan Rejection & Sinyal Lemah:
+       - Jika candle belum mencetak ekor penolakan valid (muncul status 'Ketiadaan Rejection Wick')
+         ATAU grade sinyal bernilai GRADE B atau GRADE C, eksekusi fungsi order_send() ke MT5 WAJIB dibatalkan total.
+    3. Validasi Rasio Risk-to-Reward (RR Minimal 1:1.5):
+       - R:R wajib >= 1.5.
+
+    Returns:
+        (is_valid: bool, veto_reason: str)
+    """
+    if sig is None:
+        return False, "Sinyal kosong (None)."
+
+    action = str(getattr(sig, "signal", "") or getattr(sig, "direction", "")).upper()
+    if action in ["HOLD", ""]:
+        return False, "Sinyal berstatus HOLD atau kosong."
+
+    grade = str(getattr(sig, "setup_grade", "") or "").upper()
+    reasons = [str(r) for r in getattr(sig, "reasons", [])]
+    details = [str(d) for d in getattr(sig, "pdf_confluence_details", [])]
+    all_reasons_text = " ".join(reasons + details).upper()
+    snapshot = getattr(sig, "indicators_snapshot", {}) or {}
+
+    # ─────────────────────────────────────────────────────────────────
+    # ATURAN 1: Kunci Satu Arah Sesuai Tren H4 (Anti-Kontradiksi Tren)
+    # ─────────────────────────────────────────────────────────────────
+    h4 = str(
+        h4_trend
+        or getattr(sig, "macro_bias_h4", "")
+        or getattr(sig, "h4_context", "")
+        or ""
+    ).upper()
+
+    if "BEAR" in h4:
+        if "BUY" in action:
+            msg = "Kontradiksi Tren: Tren H4 = BEARISH melarang keras posisi/order BUY (Anti-Pisau Jatuh)."
+            _notify_veto(msg, notifier)
+            return False, msg
+    elif "BULL" in h4:
+        if "SELL" in action:
+            msg = "Kontradiksi Tren: Tren H4 = BULLISH melarang keras posisi/order SELL (Anti-Hadang Kereta)."
+            _notify_veto(msg, notifier)
+            return False, msg
+
+    # ─────────────────────────────────────────────────────────────────
+    # ATURAN 2: Hard Veto untuk Ketiadaan Rejection Wick & Sinyal Lemah
+    # ─────────────────────────────────────────────────────────────────
+    # Veto jika grade bernilai Grade B atau Grade C
+    if any(g in grade for g in ["GRADE B", "GRADE C"]):
+        msg = f"Tidak ada konfirmasi candle rejection yang valid (Grade Rendah: {grade})."
+        _notify_veto(msg, notifier)
+        return False, msg
+
+    # Veto jika terdeteksi status 'Ketiadaan Rejection Wick'
+    if "KETIADAAN REJECTION WICK" in all_reasons_text or "KETIADAAN REJECTION WICK" in grade:
+        msg = "Tidak ada konfirmasi candle rejection yang valid (Ketiadaan Rejection Wick)."
+        _notify_veto(msg, notifier)
+        return False, msg
+
+    # Pengecekan ekor rejection pada candle aktual jika bukan limit order
+    is_limit = bool(getattr(sig, "is_limit_order", False) or "LIMIT" in action)
+    if not is_limit and snapshot:
+        wick_ratio = float(snapshot.get("rejection_wick_ratio", 0.0) or 0.0)
+        upper_wick_ratio = float(snapshot.get("upper_wick_ratio", 0.0) or 0.0)
+        pinbar = bool(snapshot.get("pattern_pinbar", 0))
+        shooting_star = bool(snapshot.get("pattern_shooting_star", 0))
+        engulfing = bool(snapshot.get("pattern_engulfing", 0))
+
+        if "BUY" in action and not pinbar and not engulfing and wick_ratio < 0.25:
+            msg = f"Tidak ada konfirmasi candle rejection yang valid (Ekor bawah {wick_ratio*100:.0f}% < 25%)."
+            _notify_veto(msg, notifier)
+            return False, msg
+        elif "SELL" in action and not shooting_star and upper_wick_ratio < 0.25:
+            msg = f"Tidak ada konfirmasi candle rejection yang valid (Ekor atas {upper_wick_ratio*100:.0f}% < 25%)."
+            _notify_veto(msg, notifier)
+            return False, msg
+
+    # ─────────────────────────────────────────────────────────────────
+    # ATURAN 3: Validasi Rasio Risk-to-Reward Dinamis (RR Minimal 1:1.5)
+    # ─────────────────────────────────────────────────────────────────
+    entry_p = float(getattr(sig, "price", 0.0) or 0.0)
+    sl_p = float(getattr(sig, "stop_loss_price", 0.0) or 0.0)
+    tp_p = float(getattr(sig, "take_profit_price", 0.0) or 0.0)
+
+    if entry_p > 0 and sl_p > 0 and tp_p > 0:
+        if "BUY" in action:
+            sl_dist = entry_p - sl_p
+            tp_dist = tp_p - entry_p
+        else:
+            sl_dist = sl_p - entry_p
+            tp_dist = entry_p - tp_p
+
+        if sl_dist <= 0:
+            msg = f"Level Stop Loss tidak valid ({sl_p} vs Entry {entry_p})."
+            _notify_veto(msg, notifier)
+            return False, msg
+
+        calculated_rr = round(tp_dist / sl_dist, 2)
+        if calculated_rr < 1.45:
+            msg = f"Rasio Risk-to-Reward tidak memadai ({calculated_rr:.2f} < 1.50). Minimal R:R adalah 1:1.5."
+            _notify_veto(msg, notifier)
+            return False, msg
+
+    return True, "Validasi lolos. Sinyal memenuhi seluruh Hard Rules."
+
+
 class SignalEngine:
     """Engine evaluasi aturan strategi untuk menghasilkan sinyal BUY/SELL/HOLD."""
+    filter_and_validate_signal = staticmethod(filter_and_validate_signal)
 
     def __init__(self, strategies: Optional[List[Strategy]] = None, config: Optional[Dict[str, Any]] = None):
         self.config = config if config is not None else load_config()
@@ -1322,10 +1457,8 @@ class SignalEngine:
             except Exception:
                 order_lot = float(cfg_mt5.get("limit_order_lot", 0.05))
 
-        MIN_GOLD_USD = 6.00
-        sl_dist = MIN_GOLD_USD
-        tp_dist = max(18.00, MIN_GOLD_USD * 3.0) if trade_type == "LONG" else MIN_GOLD_USD
-        rrr = 3.0 if trade_type == "LONG" else 1.0
+        atr_val = float(snapshot.get("atr", 3.0) or (df["atr"].iloc[-1] if "atr" in df.columns else 3.0) or 3.0)
+        buffer_usd = max(1.50, round(atr_val * 0.4, 2))
 
         ema20_raw = float(snapshot.get("ema_20", curr_price) or curr_price)
         ema50_raw = float(snapshot.get("ema_50", curr_price) or curr_price)
@@ -1345,8 +1478,13 @@ class SignalEngine:
                 buy1_p = max_buy1
             buy1_lbl = "BUY LIMIT L1 (Demand Rebound / Diskon)"
 
-        buy1_sl = round(buy1_p - sl_dist, 2)
-        buy1_tp = round(buy1_p + tp_dist, 2)
+        # Stop Loss Dinamis Berbasis Struktur Swing Low (Bukan Statis $6)
+        base_buy_sl = round(recent_low - buffer_usd, 2)
+        sl_dist1_buy = max(round(buy1_p - base_buy_sl, 2), max(4.0, round(atr_val * 1.5, 2)))
+        buy1_sl = round(buy1_p - sl_dist1_buy, 2)
+        tp_dist1_buy = round(sl_dist1_buy * (3.0 if trade_type == "LONG" else 1.5), 2)
+        buy1_tp = round(buy1_p + tp_dist1_buy, 2)
+        buy1_rrr = round(tp_dist1_buy / max(sl_dist1_buy, 0.01), 2)
 
         max_buy2 = round(buy1_p - min_spacing_usd, 2)
         if ema50_raw <= max_buy2:
@@ -1356,8 +1494,11 @@ class SignalEngine:
             buy2_p = max_buy2
             buy2_lbl = "BUY LIMIT L2 (Deep Floor S2 / Demand)"
 
-        buy2_sl = round(buy2_p - sl_dist, 2)
-        buy2_tp = round(buy2_p + tp_dist, 2)
+        sl_dist2_buy = max(round(buy2_p - base_buy_sl, 2), max(4.0, round(atr_val * 1.5, 2)))
+        buy2_sl = round(buy2_p - sl_dist2_buy, 2)
+        tp_dist2_buy = round(sl_dist2_buy * (3.0 if trade_type == "LONG" else 1.5), 2)
+        buy2_tp = round(buy2_p + tp_dist2_buy, 2)
+        buy2_rrr = round(tp_dist2_buy / max(sl_dist2_buy, 0.01), 2)
 
         # ─── 2. SISI SELL LIMIT (Atap Resisten / Premium) ───
         min_sell1 = round(curr_price + min_dist, 2)
@@ -1370,8 +1511,13 @@ class SignalEngine:
                 sell1_p = min_sell1
             sell1_lbl = "SELL LIMIT L1 (Supply Pullback / Premium)"
 
-        sell1_sl = round(sell1_p + sl_dist, 2)
-        sell1_tp = round(sell1_p - tp_dist, 2)
+        # Stop Loss Dinamis Berbasis Struktur Swing High (Bukan Statis $6)
+        base_sell_sl = round(recent_high + buffer_usd, 2)
+        sl_dist1_sell = max(round(base_sell_sl - sell1_p, 2), max(4.0, round(atr_val * 1.5, 2)))
+        sell1_sl = round(sell1_p + sl_dist1_sell, 2)
+        tp_dist1_sell = round(sl_dist1_sell * (3.0 if trade_type == "LONG" else 1.5), 2)
+        sell1_tp = round(sell1_p - tp_dist1_sell, 2)
+        sell1_rrr = round(tp_dist1_sell / max(sl_dist1_sell, 0.01), 2)
 
         min_sell2 = round(sell1_p + min_spacing_usd, 2)
         if ema50_raw >= min_sell2:
@@ -1381,11 +1527,53 @@ class SignalEngine:
             sell2_p = min_sell2
             sell2_lbl = "SELL LIMIT L2 (Deep Ceiling R2 / Supply)"
 
-        sell2_sl = round(sell2_p + sl_dist, 2)
-        sell2_tp = round(sell2_p - tp_dist, 2)
+        sl_dist2_sell = max(round(base_sell_sl - sell2_p, 2), max(4.0, round(atr_val * 1.5, 2)))
+        sell2_sl = round(sell2_p + sl_dist2_sell, 2)
+        tp_dist2_sell = round(sl_dist2_sell * (3.0 if trade_type == "LONG" else 1.5), 2)
+        sell2_tp = round(sell2_p - tp_dist2_sell, 2)
+        sell2_rrr = round(tp_dist2_sell / max(sl_dist2_sell, 0.01), 2)
 
-        orders = [
-            {
+        # ─── HARD RULE 1: Kunci Satu Arah Sesuai Tren H4 ───
+        # H4 = BEARISH -> Nonaktifkan total BUY LIMIT (Anti-Pisau Jatuh). Hanya SELL LIMIT.
+        # H4 = BULLISH -> Nonaktifkan total SELL LIMIT (Anti-Hadang Kereta). Hanya BUY LIMIT.
+        # Dilarang memasang Buy Limit dan Sell Limit secara bersamaan di rentang swing yang sama.
+        curr_row = df.iloc[-1] if not df.empty else pd.Series()
+        macro_bias, _ = self.evaluate_macro_bias_h4(df_h4=df_h4, curr_row=curr_row, curr_price=curr_price)
+        allow_buy = True
+        allow_sell = True
+
+        force_dual = bool(cfg_mt5.get("force_dual_bracket_test", False))
+        if not force_dual:
+            if macro_bias == "BEARISH":
+                allow_buy = False
+                allow_sell = True
+                logger.info("🔒 [TREND LOCK H4] H4 = BEARISH: BUY LIMIT dinonaktifkan total (Anti-Pisau Jatuh). Hanya SELL LIMIT diizinkan.")
+            elif macro_bias == "BULLISH":
+                allow_buy = True
+                allow_sell = False
+                logger.info("🔒 [TREND LOCK H4] H4 = BULLISH: SELL LIMIT dinonaktifkan total (Anti-Hadang Kereta). Hanya BUY LIMIT diizinkan.")
+            else:
+                # H4 Netral: Cek H1 atau arah harga terhadap EMA50
+                h1_bias = "NETRAL"
+                if df_h1 is not None and not df_h1.empty:
+                    h1_bias, _ = self.evaluate_macro_bias_h4(df_h4=df_h1, curr_row=curr_row, curr_price=curr_price)
+                if h1_bias == "BEARISH":
+                    allow_buy = False
+                    allow_sell = True
+                elif h1_bias == "BULLISH":
+                    allow_buy = True
+                    allow_sell = False
+                else:
+                    if curr_price >= ema50_raw:
+                        allow_buy = True
+                        allow_sell = False
+                    else:
+                        allow_buy = False
+                        allow_sell = True
+
+        orders = []
+        if allow_buy:
+            orders.append({
                 "level": 1,
                 "label": buy1_lbl,
                 "signal": "BUY_LIMIT",
@@ -1393,10 +1581,10 @@ class SignalEngine:
                 "price": buy1_p,
                 "tp": buy1_tp,
                 "sl": buy1_sl,
-                "rrr": rrr,
+                "rrr": buy1_rrr,
                 "lot": order_lot,
-            },
-            {
+            })
+            orders.append({
                 "level": 2,
                 "label": buy2_lbl,
                 "signal": "BUY_LIMIT",
@@ -1404,32 +1592,32 @@ class SignalEngine:
                 "price": buy2_p,
                 "tp": buy2_tp,
                 "sl": buy2_sl,
-                "rrr": rrr,
+                "rrr": buy2_rrr,
                 "lot": order_lot,
-            },
-            {
-                "level": 3,
+            })
+        if allow_sell:
+            orders.append({
+                "level": 1 if not allow_buy else 3,
                 "label": sell1_lbl,
                 "signal": "SELL_LIMIT",
                 "type": "SELL_LIMIT",
                 "price": sell1_p,
                 "tp": sell1_tp,
                 "sl": sell1_sl,
-                "rrr": rrr,
+                "rrr": sell1_rrr,
                 "lot": order_lot,
-            },
-            {
-                "level": 4,
+            })
+            orders.append({
+                "level": 2 if not allow_buy else 4,
                 "label": sell2_lbl,
                 "signal": "SELL_LIMIT",
                 "type": "SELL_LIMIT",
                 "price": sell2_p,
                 "tp": sell2_tp,
                 "sl": sell2_sl,
-                "rrr": rrr,
+                "rrr": sell2_rrr,
                 "lot": order_lot,
-            },
-        ]
+            })
         return orders
 
     def evaluate_bar(
@@ -1648,64 +1836,62 @@ class SignalEngine:
             else:
                 trade_type = "SHORT"
 
-            if trade_type == "SHORT":
-                # SHORT ENGINE — SCALPING (Karakter Cepat 60/60 Pips)
-                # Quick in / quick out: SL 60 pips ($6.00 USD), TP 60 pips ($6.00 USD), R:R 1:1
-                sl_distance = MIN_GOLD_SL_USD
-                tp_distance = MIN_GOLD_TP_USD
-                eff_rr = 1.0
-                market_regime = f"{session_name} SHORT Scalping Cepat (TP 60 Pips & SL 60 Pips, R:R 1:1)"
-            else:
-                # LONG ENGINE — INTRADAY / SWING TRADE (Dynamic SL/TP & R:R 3:1)
-                sl_distance_atr = round(atr_safe * 1.3, 2)
-                sl_distance = round(max(MIN_GOLD_SL_USD, max(long_sl_usd, min(12.00, sl_distance_atr))), 2)
+            # ─────────────────────────────────────────────────────────────
+            # PERHITUNGAN STOP LOSS DINAMIS BERBASIS STRUKTUR (9 BUKU PDF & SMC):
+            # Hapus penggunaan jarak SL statis $6 (60 pips).
+            # - Untuk posisi SELL: Letakkan SL di atas swing high candle rejection / swing resistance.
+            # - Untuk posisi BUY: Letakkan SL di bawah swing low terdekat.
+            # - Rasio Risk-to-Reward (RR) minimal 1:1.5 mutlak!
+            # ─────────────────────────────────────────────────────────────
+            n_rows = len(df_with_ind)
+            curr_pos = bar_idx if bar_idx >= 0 else (n_rows + bar_idx)
+            start_pos = max(0, curr_pos - 15)
+            recent_slice = df_with_ind.iloc[start_pos:curr_pos] if n_rows > 0 else pd.DataFrame()
 
-                # Anchor SL ke swing struktural 15 bar terakhir
-                n_rows = len(df_with_ind)
-                curr_pos = bar_idx if bar_idx >= 0 else (n_rows + bar_idx)
-                start_pos = max(0, curr_pos - 15)
-                recent_slice = df_with_ind.iloc[start_pos:curr_pos]
+            buffer_pips_usd = max(1.50, round(atr_safe * 0.4, 2))  # Buffer 15 - 25 pips di luar swing
 
-                if target_sig_type == "BUY":
-                    swing_low = float(recent_slice["Low"].min()) if not recent_slice.empty else float(curr_row.get("Low", curr_price))
-                    curr_low = float(curr_row.get("Low", curr_price))
-                    structural_support = min(swing_low, curr_low)
-                    sl_dist_structural = round(curr_price - (structural_support - 1.20), 2)
-                    sl_distance = max(sl_distance, sl_dist_structural)
-                elif target_sig_type == "SELL":
-                    swing_high = float(recent_slice["High"].max()) if not recent_slice.empty else float(curr_row.get("High", curr_price))
-                    curr_high = float(curr_row.get("High", curr_price))
-                    structural_resistance = max(swing_high, curr_high)
-                    sl_dist_structural = round((structural_resistance + 1.20) - curr_price, 2)
-                    sl_distance = max(sl_distance, sl_dist_structural)
+            if target_sig_type == "SELL":
+                if not recent_slice.empty and "High" in recent_slice.columns:
+                    swing_high = float(recent_slice["High"].max())
+                else:
+                    swing_high = float(curr_row.get("High", curr_price))
+                curr_high = float(curr_row.get("High", curr_price))
+                structural_resistance = max(swing_high, curr_high)
+                sl_dist_structural = round((structural_resistance + buffer_pips_usd) - curr_price, 2)
+                sl_distance = max(sl_dist_structural, round(atr_safe * 1.5, 2), 4.00)
+                sl_price = round(curr_price + sl_distance, 2)
+            else:  # BUY
+                if not recent_slice.empty and "Low" in recent_slice.columns:
+                    swing_low = float(recent_slice["Low"].min())
+                else:
+                    swing_low = float(curr_row.get("Low", curr_price))
+                curr_low = float(curr_row.get("Low", curr_price))
+                structural_support = min(swing_low, curr_low)
+                sl_dist_structural = round(curr_price - (structural_support - buffer_pips_usd), 2)
+                sl_distance = max(sl_dist_structural, round(atr_safe * 1.5, 2), 4.00)
+                sl_price = round(curr_price - sl_distance, 2)
 
-                sl_distance = min(12.00, max(MIN_GOLD_SL_USD, sl_distance))
-                tp_distance = round(sl_distance * 3.0, 2)
-                eff_rr = round(tp_distance / max(sl_distance, 0.01), 1)
-                market_regime = (
-                    f"{session_name} LONG Intraday/Swing Momentum (TP {int(tp_distance*10)} Pips & SL {int(sl_distance*10)} Pips, R:R {eff_rr}:1, BE +60p)"
-                    + (" [HIGH-VOL]" if is_high_vol else "")
-                )
-
-            # HARD FLOOR CONSTRAINT MUTLAK PENGGUNA:
-            # DILARANG KERAS SL ATAU TP DI BAWAH 60 PIPS (6.00 USD) & R:R MINIMAL 1:1
-            sl_distance = max(MIN_GOLD_SL_USD, sl_distance)
-            tp_distance = max(MIN_GOLD_TP_USD, max(sl_distance, tp_distance))
-
-            if is_retest_sig:
-                retest_badge = "[RETEST DISKON] " if target_sig_type == "BUY" else "[RETEST PREMIUM] "
-                market_regime = f"{retest_badge}{market_regime}"
+            # Target Take Profit dengan rasio Risk-to-Reward (RR) minimal 1:1.5
+            rr_target = 3.0 if trade_type == "LONG" else 1.5
+            tp_distance = round(sl_distance * rr_target, 2)
 
             if target_sig_type == "SELL":
                 tp_price = round(curr_price - tp_distance, 2)
-                sl_price = round(curr_price + sl_distance, 2)
                 risk_dist = max(sl_price - curr_price, 0.01)
                 rrr = round((curr_price - tp_price) / risk_dist, 2)
             else:
                 tp_price = round(curr_price + tp_distance, 2)
-                sl_price = round(curr_price - sl_distance, 2)
                 risk_dist = max(curr_price - sl_price, 0.01)
                 rrr = round((tp_price - curr_price) / risk_dist, 2)
+
+            market_regime = (
+                f"{session_name} {trade_type} Struktural (TP {int(tp_distance*10)}p & SL {int(sl_distance*10)}p, R:R {rrr:.1f}:1)"
+                + (" [HIGH-VOL]" if is_high_vol else "")
+            )
+
+            if is_retest_sig:
+                retest_badge = "[RETEST DISKON] " if target_sig_type == "BUY" else "[RETEST PREMIUM] "
+                market_regime = f"{retest_badge}{market_regime}"
         else:
             market_regime = "Saham Reguler"
             trading_cfg = self.config.get("trading", {})

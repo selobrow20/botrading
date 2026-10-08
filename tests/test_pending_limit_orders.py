@@ -658,7 +658,7 @@ def test_limit_orders_lot_size_usd_vs_cent():
     from strategy.signal_engine import SignalEngine, SignalResult
     from trading.mt5_bridge import MT5Bridge
 
-    engine = SignalEngine(config={"mt5": {"limit_order_lot_cent": 0.05, "limit_order_lot_usd": 0.01}})
+    engine = SignalEngine(config={"mt5": {"limit_order_lot_cent": 0.05, "limit_order_lot_usd": 0.01, "force_dual_bracket_test": True}})
     df_dummy = pd.DataFrame({
         "Open": [4100.0] * 35,
         "High": [4115.0] * 35,

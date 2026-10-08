@@ -1159,6 +1159,20 @@ class MT5Bridge:
                 "message": msg,
             }
 
+        # 3b. HARD RULES VETO ENGINE (Anti-Kontradiksi Tren, Grade B/C, Ketiadaan Rejection Wick, SL Konyol)
+        try:
+            from strategy.signal_engine import filter_and_validate_signal
+            is_valid, veto_msg = filter_and_validate_signal(sig, notifier=getattr(self, "notifier", None))
+            if not is_valid:
+                logger.warning(f"🛑 [MT5 EXECUTION VETO] {veto_msg}")
+                return {
+                    "success": False,
+                    "status": "veto_rejected",
+                    "message": veto_msg,
+                }
+        except Exception as e_veto:
+            logger.debug(f"Pemeriksaan filter_and_validate_signal: {e_veto}")
+
         # 4. Validasi level TP & SL (PDF Section 27 & Test 25)
         sltp_ok, sltp_msg = self.validate_sl_tp(sig_type, price, sl, tp)
         if not sltp_ok:
@@ -1684,6 +1698,20 @@ class MT5Bridge:
                 "status": "rejected",
                 "message": f"Sinyal {sig_type} bukan tipe Pending Limit Order.",
             }
+
+        # HARD RULES VETO ENGINE (Anti-Kontradiksi Tren, Grade B/C, Ketiadaan Rejection Wick, SL Konyol)
+        try:
+            from strategy.signal_engine import filter_and_validate_signal
+            is_valid, veto_msg = filter_and_validate_signal(sig, notifier=getattr(self, "notifier", None))
+            if not is_valid:
+                logger.warning(f"🛑 [MT5 PENDING LIMIT VETO] {veto_msg}")
+                return {
+                    "success": False,
+                    "status": "veto_rejected",
+                    "message": veto_msg,
+                }
+        except Exception as e_veto:
+            logger.debug(f"Pemeriksaan filter_and_validate_signal limit order: {e_veto}")
 
         cfg = getattr(self, "config", None) or load_config()
         cfg_mt5 = cfg.get("mt5", {})
@@ -2341,17 +2369,22 @@ class MT5Bridge:
             label = ord_info.get("label", cur_sig)
 
             # Validasi harga limit terhadap tick live (MT5 rule: BUY_LIMIT < ask, SELL_LIMIT > bid)
+            sl_dist = abs(p_val - sl_val)
+            if sl_dist < 4.0:
+                sl_dist = 6.0
+            tp_dist = round(sl_dist * 1.5, 2)
+
             if "BUY" in cur_sig:
                 if p_val >= tick.ask - 1.00:
                     p_val = round(tick.ask - 1.50, 2)
-                    sl_val = round(p_val - 6.00, 2)
-                    tp_val = round(p_val + 6.00, 2)
+                    sl_val = round(p_val - sl_dist, 2)
+                    tp_val = round(p_val + tp_dist, 2)
                 order_raw_type = mt5.ORDER_TYPE_BUY_LIMIT
             else:
                 if p_val <= tick.bid + 1.00:
                     p_val = round(tick.bid + 1.50, 2)
-                    sl_val = round(p_val + 6.00, 2)
-                    tp_val = round(p_val - 6.00, 2)
+                    sl_val = round(p_val + sl_dist, 2)
+                    tp_val = round(p_val - tp_dist, 2)
                 order_raw_type = mt5.ORDER_TYPE_SELL_LIMIT
 
             # Anti-duplicate check: jika sudah ada pending order dengan tipe sama dalam jarak $1.50 USD
