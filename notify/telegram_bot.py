@@ -76,6 +76,10 @@ class TelegramNotifier:
         )
         self.is_configured = not is_placeholder
 
+        # Proteksi mutlak: Jangan pernah kirim pesan riil ke Telegram saat berjalan dalam unit test (pytest)
+        if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("IS_TESTING") == "true":
+            self.is_configured = False
+
         if not self.is_configured:
             logger.warning(
                 "Kredensial Telegram (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belum disetel di .env. "
@@ -363,10 +367,6 @@ class TelegramNotifier:
         reply_markup: Optional[InlineKeyboardMarkup] = None,
     ) -> bool:
         """Mengirim pesan teks secara paralel/konkuren ke seluruh chat ID target (0 Delay)."""
-        if not self.is_configured:
-            logger.info(f"[SIMULASI TELEGRAM BROADCAST]\n{text}")
-            return True
-
         tasks = [self._async_send_text(text, target_chat_id=str(cid).strip(), reply_markup=reply_markup) for cid in target_chat_ids]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         return any(r is True for r in results)
@@ -434,10 +434,6 @@ class TelegramNotifier:
         reply_markup: Optional[InlineKeyboardMarkup] = None,
     ) -> bool:
         """Mengirim foto + caption secara paralel/konkuren ke seluruh chat ID target (0 Delay)."""
-        if not self.is_configured:
-            logger.info(f"[SIMULASI TELEGRAM PHOTO BROADCAST] {photo_path}\n{caption}")
-            return True
-
         tasks = [self._async_send_photo(photo_path, caption, target_chat_id=str(cid).strip(), reply_markup=reply_markup) for cid in target_chat_ids]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         return any(r is True for r in results)
