@@ -764,6 +764,8 @@ class MT5Bridge:
             logger.error(err_msg)
             return {"success": False, "ticket": ticket, "message": err_msg}
 
+    cancel_order = cancel_pending_order
+
     def cancel_stale_pending_orders(self, max_age_minutes: Optional[int] = None) -> List[int]:
         """
         Membatalkan pending order yang sudah terlalu lama tidak terisi (stale/expired).

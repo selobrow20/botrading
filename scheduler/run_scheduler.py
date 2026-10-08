@@ -786,7 +786,7 @@ class PipelineRunner:
         if macro_bias == "BEARISH":
             # Tren Turun: Nonaktifkan total BUY LIMIT (Anti-Pisau Jatuh). Batalkan jika ada yang menggantung!
             for bo in buy_limits:
-                b.cancel_order(bo["ticket"])
+                b.cancel_pending_order(bo["ticket"])
                 logger.info(f"🛑 [TREND LOCK H4] Membatalkan BUY LIMIT #{bo['ticket']} karena tren H4 = BEARISH.")
             buy_limits = []
             needs_buy = False
@@ -794,7 +794,7 @@ class PipelineRunner:
         elif macro_bias == "BULLISH":
             # Tren Naik: Nonaktifkan total SELL LIMIT (Anti-Hadang Kereta). Batalkan jika ada yang menggantung!
             for so in sell_limits:
-                b.cancel_order(so["ticket"])
+                b.cancel_pending_order(so["ticket"])
                 logger.info(f"🛑 [TREND LOCK H4] Membatalkan SELL LIMIT #{so['ticket']} karena tren H4 = BULLISH.")
             sell_limits = []
             needs_buy = len(buy_limits) < max_levels
