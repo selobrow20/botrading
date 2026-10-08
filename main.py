@@ -225,7 +225,10 @@ def ensure_single_instance() -> None:
                     logger.info(f"🔄 Terdeteksi instance bot lama (PID {pid}). Menutup instance lama agar proses baru mengambil alih...")
                     p = psutil.Process(pid)
                     p.terminate()
-                    p.wait(timeout=3)
+                    try:
+                        p.wait(timeout=3)
+                    except Exception:
+                        p.kill()
             except Exception:
                 pass
     except Exception:
@@ -238,8 +241,10 @@ def cmd_run_all(args: argparse.Namespace) -> None:
     import time
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.interval import IntervalTrigger
+    from apscheduler.triggers.cron import CronTrigger
+    from zoneinfo import ZoneInfo
     from notify.telegram_bot import build_telegram_application
-    from scheduler.run_scheduler import PipelineRunner
+    from scheduler.run_scheduler import PipelineRunner, is_gold_market_open
 
     print("🚀 Menjalankan Scheduler & Bot Telegram secara paralel...")
     cfg = load_config()
@@ -255,6 +260,24 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         name="Analisis Saham Berkala IDX",
         replace_existing=True,
     )
+
+    # Jadwalkan pemindaian khusus Gold XAU/USD real-time tiap 30 detik (0 Delay)
+    def scan_gold_job():
+        try:
+            gold_open, _ = is_gold_market_open(config=runner.config)
+            if gold_open:
+                runner.run_pipeline(watchlist=["XAUUSD"], force_run=False)
+        except Exception as ex_g:
+            logger.debug(f"Pengecekan real-time Gold: {ex_g}")
+
+    scheduler.add_job(
+        scan_gold_job,
+        trigger=IntervalTrigger(seconds=30),
+        id="gold_realtime_job",
+        name="Pemindaian Real-Time Gold XAU/USD (30 Detik)",
+        replace_existing=True,
+    )
+
     scheduler.add_job(
         runner.check_upcoming_news_job,
         trigger=IntervalTrigger(minutes=1),
@@ -267,6 +290,15 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         trigger=IntervalTrigger(seconds=3),
         id="mt5_deal_watcher_job",
         name="Pemantauan Real-Time TP/SL MT5",
+        replace_existing=True,
+    )
+
+    # Jadwalkan laporan penutupan pasar saham IDX simpel (16:05 WIB, Senin-Jumat)
+    scheduler.add_job(
+        runner.run_market_close_job,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=16, minute=5, timezone=ZoneInfo("Asia/Jakarta")),
+        id="idx_market_close_report_job",
+        name="Laporan Penutupan Pasar Saham IDX Simpel",
         replace_existing=True,
     )
 
@@ -291,7 +323,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         logger.info(f"Git Auto-Puller aktif: memeriksa commit origin/{git_cfg.get('branch', 'main')} tiap {pull_interval_mins} menit.")
 
     scheduler.start()
-    logger.info(f"BackgroundScheduler aktif (interval: {interval_mins}m, news: 1m, MT5 watcher: 3s LIVE, git auto-pull: 5m).")
+    logger.info(f"BackgroundScheduler aktif (idx: {interval_mins}m, gold: 30s LIVE, news: 1m, MT5 watcher: 3s LIVE, git auto-pull: 5m).")
 
     # Jalankan initial run & sync kalender di thread terpisah agar tidak menahan startup listener Telegram
     def _initial_startup_tasks():

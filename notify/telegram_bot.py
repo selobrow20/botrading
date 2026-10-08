@@ -322,6 +322,14 @@ class TelegramNotifier:
 
         return "\n".join(lines)
 
+    def get_bot(self) -> Optional[Bot]:
+        """Mendapatkan instance Bot Telegram yang di-cache untuk connection pooling."""
+        if not self.is_configured:
+            return None
+        if not hasattr(self, "_cached_bot") or self._cached_bot is None:
+            self._cached_bot = Bot(token=self.token)
+        return self._cached_bot
+
     async def _async_send_text(
         self,
         text: str,
@@ -333,7 +341,7 @@ class TelegramNotifier:
             logger.info(f"[SIMULASI TELEGRAM]\n{text}")
             return True
 
-        bot = Bot(token=self.token)
+        bot = self.get_bot() or Bot(token=self.token)
         cid = str(target_chat_id or self.chat_id).strip()
         try:
             await bot.send_message(
@@ -348,6 +356,21 @@ class TelegramNotifier:
             logger.error(f"Gagal mengirim pesan ke Telegram ({cid}): {e}")
             return False
 
+    async def _async_broadcast_text(
+        self,
+        text: str,
+        target_chat_ids: List[str],
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
+    ) -> bool:
+        """Mengirim pesan teks secara paralel/konkuren ke seluruh chat ID target (0 Delay)."""
+        if not self.is_configured:
+            logger.info(f"[SIMULASI TELEGRAM BROADCAST]\n{text}")
+            return True
+
+        tasks = [self._async_send_text(text, target_chat_id=str(cid).strip(), reply_markup=reply_markup) for cid in target_chat_ids]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        return any(r is True for r in results)
+
     async def _async_send_photo(
         self,
         photo_path: str,
@@ -360,7 +383,7 @@ class TelegramNotifier:
             logger.info(f"[SIMULASI TELEGRAM PHOTO] {photo_path}\n{caption}")
             return True
 
-        bot = Bot(token=self.token)
+        bot = self.get_bot() or Bot(token=self.token)
         cid = str(target_chat_id or self.chat_id).strip()
         try:
             safe_caption = caption
@@ -402,6 +425,51 @@ class TelegramNotifier:
             except Exception as e2:
                 logger.error(f"Fallback teks juga gagal: {e2}")
                 return False
+
+    async def _async_broadcast_photo(
+        self,
+        photo_path: str,
+        caption: str,
+        target_chat_ids: List[str],
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
+    ) -> bool:
+        """Mengirim foto + caption secara paralel/konkuren ke seluruh chat ID target (0 Delay)."""
+        if not self.is_configured:
+            logger.info(f"[SIMULASI TELEGRAM PHOTO BROADCAST] {photo_path}\n{caption}")
+            return True
+
+        tasks = [self._async_send_photo(photo_path, caption, target_chat_id=str(cid).strip(), reply_markup=reply_markup) for cid in target_chat_ids]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        return any(r is True for r in results)
+
+    def broadcast_text(
+        self,
+        text: str,
+        target_chat_ids: Optional[List[str]] = None,
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
+    ) -> bool:
+        """Kirim teks ke seluruh penerima sekaligus secara paralel dalam 1 event loop (0 Delay)."""
+        cids = target_chat_ids or self.storage.get_approved_chat_ids(admin_id=self.chat_id) or [self.chat_id]
+        try:
+            return asyncio.run(self._async_broadcast_text(text, cids, reply_markup=reply_markup))
+        except Exception as e:
+            logger.error(f"Error saat broadcast_text: {e}")
+            return False
+
+    def broadcast_photo(
+        self,
+        photo_path: str,
+        caption: str,
+        target_chat_ids: Optional[List[str]] = None,
+        reply_markup: Optional[InlineKeyboardMarkup] = None,
+    ) -> bool:
+        """Kirim foto ke seluruh penerima sekaligus secara paralel dalam 1 event loop (0 Delay)."""
+        cids = target_chat_ids or self.storage.get_approved_chat_ids(admin_id=self.chat_id) or [self.chat_id]
+        try:
+            return asyncio.run(self._async_broadcast_photo(photo_path, caption, cids, reply_markup=reply_markup))
+        except Exception as e:
+            logger.error(f"Error saat broadcast_photo: {e}")
+            return False
 
     async def _async_send_document(
         self,
@@ -570,19 +638,9 @@ class TelegramNotifier:
             InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(sig.ticker))
         ]])
 
-        success = True
-        for cid in approved_ids:
-            try:
-                if photo_path and Path(photo_path).exists():
-                    res = asyncio.run(self._async_send_photo(photo_path, msg, target_chat_id=cid, reply_markup=tv_markup))
-                else:
-                    res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
-                if not res:
-                    success = False
-            except Exception as e:
-                logger.error(f"Error saat broadcast sinyal ke {cid}: {e}")
-                success = False
-        return success
+        if photo_path and Path(photo_path).exists():
+            return self.broadcast_photo(photo_path, msg, target_chat_ids=approved_ids, reply_markup=tv_markup)
+        return self.broadcast_text(msg, target_chat_ids=approved_ids, reply_markup=tv_markup)
 
     def format_tp_sl_report(
         self, res_sig: Dict[str, Any], current_stats: Optional[Dict[str, Any]] = None
@@ -736,14 +794,7 @@ class TelegramNotifier:
             InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url(res_sig.get("ticker", "XAUUSD")))
         ]])
 
-        success = False
-        for cid in approved_ids:
-            try:
-                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
-                if res:
-                    success = True
-            except Exception as e:
-                logger.error(f"Error saat broadcast laporan TP/SL ke {cid}: {e}")
+        success = self.broadcast_text(msg, target_chat_ids=approved_ids, reply_markup=tv_markup)
 
         if success or not self.enabled:
             self._reported_outcomes_cache[dedup_key] = now_ts
@@ -813,16 +864,7 @@ class TelegramNotifier:
         if not approved_ids:
             approved_ids = [self.chat_id]
 
-        success = True
-        for cid in approved_ids:
-            try:
-                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
-                if not res:
-                    success = False
-            except Exception as e:
-                logger.error(f"Error kirim laporan eksekusi MT5 ke {cid}: {e}")
-                success = False
-        return success
+        return self.broadcast_text(msg, target_chat_ids=approved_ids)
 
     def format_gold_reversal_alert(self, info: Dict[str, Any]) -> str:
         """
@@ -890,16 +932,7 @@ class TelegramNotifier:
             InlineKeyboardButton("📊 Buka Live Chart TradingView", url=get_tradingview_url("XAUUSD"))
         ]])
 
-        success = True
-        for cid in approved_ids:
-            try:
-                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
-                if not res:
-                    success = False
-            except Exception as e:
-                logger.error(f"Error kirim alert reversal XAUUSD ke {cid}: {e}")
-                success = False
-        return success
+        return self.broadcast_text(msg, target_chat_ids=approved_ids, reply_markup=tv_markup)
 
     def format_early_reversal_warning(self, info: Dict[str, Any]) -> str:
         ticket = info.get("ticket", "-")
@@ -946,16 +979,7 @@ class TelegramNotifier:
             InlineKeyboardButton("📊 Buka Live Chart TradingView", url=get_tradingview_url("XAUUSD"))
         ]])
 
-        success = True
-        for cid in approved_ids:
-            try:
-                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
-                if not res:
-                    success = False
-            except Exception as e:
-                logger.error(f"Error kirim early reversal warning ke {cid}: {e}")
-                success = False
-        return success
+        return self.broadcast_text(msg, target_chat_ids=approved_ids, reply_markup=tv_markup)
 
     def format_trailing_stop_alert(self, info: Dict[str, Any]) -> str:
         ticket = info.get("ticket", "-")
@@ -1012,16 +1036,7 @@ class TelegramNotifier:
             InlineKeyboardButton("📊 Buka Live Chart TradingView", url=get_tradingview_url("XAUUSD"))
         ]])
 
-        success = True
-        for cid in approved_ids:
-            try:
-                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
-                if not res:
-                    success = False
-            except Exception as e:
-                logger.error(f"Error kirim trailing stop alert ke {cid}: {e}")
-                success = False
-        return success
+        return self.broadcast_text(msg, target_chat_ids=approved_ids, reply_markup=tv_markup)
 
     def send_circuit_breaker_alert(self, loss_today: float, max_loss: float, unit: str = "USC") -> bool:
         """Mengirimkan peringatan darurat saat batas maksimal kerugian harian tercapai."""
@@ -1042,16 +1057,7 @@ class TelegramNotifier:
         if not approved_ids:
             approved_ids = [self.chat_id]
 
-        success = True
-        for cid in approved_ids:
-            try:
-                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
-                if not res:
-                    success = False
-            except Exception as e:
-                logger.error(f"Error kirim circuit breaker alert ke {cid}: {e}")
-                success = False
-        return success
+        return self.broadcast_text(msg, target_chat_ids=approved_ids)
 
     def send_midnight_guard_alert(self, loss_midnight: float, max_loss: float, unit: str = "USC") -> bool:
         """Mengirimkan peringatan saat batas kerugian jam tidur tengah malam (02:00 - 04:30 WIB) tercapai."""
@@ -1072,16 +1078,7 @@ class TelegramNotifier:
         if not approved_ids:
             approved_ids = [self.chat_id]
 
-        success = True
-        for cid in approved_ids:
-            try:
-                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
-                if not res:
-                    success = False
-            except Exception as e:
-                logger.error(f"Error kirim midnight guard alert ke {cid}: {e}")
-                success = False
-        return success
+        return self.broadcast_text(msg, target_chat_ids=approved_ids)
 
     def format_market_close_summary(
         self,
@@ -1127,16 +1124,7 @@ class TelegramNotifier:
         if not approved_ids:
             approved_ids = [self.chat_id]
 
-        success = True
-        for cid in approved_ids:
-            try:
-                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid))
-                if not res:
-                    success = False
-            except Exception as e:
-                logger.error(f"Gagal kirim laporan penutupan saham ke {cid}: {e}")
-                success = False
-        return success
+        return self.broadcast_text(msg, target_chat_ids=approved_ids)
 
     def format_news_alert_message(self, analysis: Dict[str, Any]) -> str:
         """Menyusun pesan notifikasi 10 menit sebelum berita rilis dengan rekomendasi BUY/SELL berbasis PDF & Web."""
@@ -1219,19 +1207,9 @@ class TelegramNotifier:
             InlineKeyboardButton("📊 Buka di TradingView", url=get_tradingview_url("XAUUSD"))
         ]])
 
-        success = True
-        for cid in approved_ids:
-            try:
-                if photo_path and Path(photo_path).exists():
-                    res = asyncio.run(self._async_send_photo(photo_path, msg, target_chat_id=cid, reply_markup=tv_markup))
-                else:
-                    res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
-                if not res:
-                    success = False
-            except Exception as e:
-                logger.error(f"Error saat broadcast news alert ke {cid}: {e}")
-                success = False
-        return success
+        if photo_path and Path(photo_path).exists():
+            return self.broadcast_photo(photo_path, msg, target_chat_ids=approved_ids, reply_markup=tv_markup)
+        return self.broadcast_text(msg, target_chat_ids=approved_ids, reply_markup=tv_markup)
 
     def send_news_limit_cancellation_alert(self, event_info: Dict[str, Any], cancelled_tickets: List[int]) -> bool:
         """Mengirimkan kartu resmi Telegram saat seluruh Buy Limit & Sell Limit dibatalkan 10 menit sebelum berita besar."""
@@ -1264,16 +1242,7 @@ class TelegramNotifier:
             InlineKeyboardButton("📊 Pantau Chart di TradingView", url=get_tradingview_url("XAUUSD"))
         ]])
 
-        success = True
-        for cid in approved_ids:
-            try:
-                res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=tv_markup))
-                if not res:
-                    success = False
-            except Exception as e:
-                logger.error(f"Error saat broadcast news guard limit cancellation ke {cid}: {e}")
-                success = False
-        return success
+        return self.broadcast_text(msg, target_chat_ids=approved_ids, reply_markup=tv_markup)
 
     def format_chart_confirmation_message(self, info: Dict[str, Any]) -> str:
         """
@@ -1360,19 +1329,9 @@ class TelegramNotifier:
         if not approved_ids:
             approved_ids = [self.chat_id]
 
-        success = True
-        for cid in approved_ids:
-            try:
-                if photo_path and Path(photo_path).exists():
-                    res = asyncio.run(self._async_send_photo(photo_path, msg, target_chat_id=cid, reply_markup=reply_markup))
-                else:
-                    res = asyncio.run(self._async_send_text(msg, target_chat_id=cid, reply_markup=reply_markup))
-                if not res:
-                    success = False
-            except Exception as e:
-                logger.error(f"Error kirim chart confirmation alert ke {cid}: {e}")
-                success = False
-        return success
+        if photo_path and Path(photo_path).exists():
+            return self.broadcast_photo(photo_path, msg, target_chat_ids=approved_ids, reply_markup=reply_markup)
+        return self.broadcast_text(msg, target_chat_ids=approved_ids, reply_markup=reply_markup)
 
     def send_message(self, text: str) -> bool:
         """Mengirim pesan teks biasa ke Telegram."""

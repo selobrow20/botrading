@@ -1998,9 +1998,9 @@ def start_scheduler() -> None:
 
     scheduler.add_job(
         scan_gold_job,
-        trigger=IntervalTrigger(minutes=1),
+        trigger=IntervalTrigger(seconds=30),
         id="gold_realtime_job",
-        name="Pemindaian Real-Time Gold XAU/USD (1 Menit)",
+        name="Pemindaian Real-Time Gold XAU/USD (30 Detik)",
         replace_existing=True,
     )
 
