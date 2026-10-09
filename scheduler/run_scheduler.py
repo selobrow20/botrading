@@ -308,9 +308,10 @@ class PipelineRunner:
                 # Hitung Indikator
                 df_ind = TechnicalIndicators.add_all_indicators(df)
 
-                # Multi-Timeframe Hierarchy untuk Gold (H4 Context, H1 Structure, M5 Trigger)
+                # Multi-Timeframe Hierarchy untuk Gold (H4 Context, H1 SNR, M30 Trendline, M15 Bias, M5 Sniper)
                 df_h1_ind = None
                 df_h4_ind = None
+                df_m30_ind = None
                 df_m5_ind = None
                 if is_gold:
                     try:
@@ -319,6 +320,13 @@ class PipelineRunner:
                             df_h1_ind = TechnicalIndicators.add_all_indicators(df_h1)
                     except Exception as ex_h1:
                         logger.debug(f"Gagal mengambil data H1 {ticker}: {ex_h1}")
+
+                    try:
+                        df_m30 = self.fetcher.fetch_ohlcv(ticker, interval="30m", period="5d")
+                        if not df_m30.empty and len(df_m30) >= 2:
+                            df_m30_ind = TechnicalIndicators.add_all_indicators(df_m30)
+                    except Exception as ex_m30:
+                        logger.debug(f"Gagal mengambil data M30 {ticker}: {ex_m30}")
 
                     try:
                         df_h4 = self.fetcher.fetch_ohlcv(ticker, interval="4h", period="14d")
@@ -342,6 +350,7 @@ class PipelineRunner:
                     df_h1=df_h1_ind,
                     df_h4=df_h4_ind,
                     df_m5=df_m5_ind,
+                    df_m30=df_m30_ind,
                 )
 
                 # Sesuai arahan pengguna: Saham IDX khusus mode BUY (Long-Only), sinyal SELL ditiadakan

@@ -7,6 +7,13 @@ from config.settings import load_config, setup_logger
 from indicators.technical import TechnicalIndicators
 from strategy.rules import Strategy, RuleCondition, DEFAULT_STRATEGY, get_strategy, register_strategy
 from strategy.smc_liquidity import SMCLiquidityEngine
+from strategy.mtf_engine import (
+    check_h1_snr,
+    check_m30_trendline,
+    get_m15_direction,
+    trigger_m5_entry,
+    run_top_down_mtf_pipeline,
+)
 
 logger = setup_logger("signal_engine")
 
@@ -388,6 +395,11 @@ def filter_and_validate_signal(
 class SignalEngine:
     """Engine evaluasi aturan strategi untuk menghasilkan sinyal BUY/SELL/HOLD."""
     filter_and_validate_signal = staticmethod(filter_and_validate_signal)
+    check_h1_snr = staticmethod(check_h1_snr)
+    check_m30_trendline = staticmethod(check_m30_trendline)
+    get_m15_direction = staticmethod(get_m15_direction)
+    trigger_m5_entry = staticmethod(trigger_m5_entry)
+    run_top_down_mtf_pipeline = staticmethod(run_top_down_mtf_pipeline)
 
     def __init__(self, strategies: Optional[List[Strategy]] = None, config: Optional[Dict[str, Any]] = None):
         self.config = config if config is not None else load_config()
@@ -1630,6 +1642,7 @@ class SignalEngine:
         df_h1: Optional[pd.DataFrame] = None,
         df_h4: Optional[pd.DataFrame] = None,
         df_m5: Optional[pd.DataFrame] = None,
+        df_m30: Optional[pd.DataFrame] = None,
         preferred_trade_type: Optional[str] = None,
     ) -> SignalResult:
         """
@@ -1767,6 +1780,52 @@ class SignalEngine:
         limit_price_val: Optional[float] = None
         is_limit_order_sig: bool = False
         limit_order_type_val: Optional[str] = None
+
+        # ─── MULTI-TIMEFRAME ANALYSIS (MTF) TOP-DOWN (H1 -> M30 -> M15 -> M5) ───
+        if is_gold and target_sig_type in ["BUY", "SELL"]:
+            # 1. H1 SNR Key Support & Resistance (Jarak 15 pips)
+            if df_h1 is not None and not df_h1.empty:
+                h1_chk = check_h1_snr(df_h1, curr_price=curr_price, pip_buffer=1.50)
+                if target_sig_type == "BUY" and not h1_chk.get("can_buy", True):
+                    pdf_approved = False
+                    pdf_checks.append(h1_chk.get("reason", "Veto H1 SNR: Terlalu dekat resisten."))
+                elif target_sig_type == "SELL" and not h1_chk.get("can_sell", True):
+                    pdf_approved = False
+                    pdf_checks.append(h1_chk.get("reason", "Veto H1 SNR: Terlalu dekat support."))
+
+            # 2. M30 Dynamic Trendline
+            if df_m30 is not None and not df_m30.empty:
+                m30_chk = check_m30_trendline(df_m30, curr_price=curr_price)
+                if target_sig_type == "BUY" and m30_chk.get("trendline_bias") == "SELL" and m30_chk.get("condition") in ["BOUNCE_RESISTANCE", "BREAKOUT_DOWN"]:
+                    pdf_approved = False
+                    pdf_checks.append(f"Veto M30 Trendline: {m30_chk.get('status')}")
+                elif target_sig_type == "SELL" and m30_chk.get("trendline_bias") == "BUY" and m30_chk.get("condition") in ["BOUNCE_SUPPORT", "BREAKOUT_UP"]:
+                    pdf_approved = False
+                    pdf_checks.append(f"Veto M30 Trendline: {m30_chk.get('status')}")
+
+            # 3. M15 Trend Direction Lock
+            m15_chk = get_m15_direction(df_with_ind, curr_price=curr_price)
+            if m15_chk.get("direction") == "BUY" and target_sig_type == "SELL":
+                pdf_approved = False
+                pdf_checks.append(f"Veto M15 Lock: Tren M15 terkunci BUY ({m15_chk.get('status')}).")
+            elif m15_chk.get("direction") == "SELL" and target_sig_type == "BUY":
+                pdf_approved = False
+                pdf_checks.append(f"Veto M15 Lock: Tren M15 terkunci SELL ({m15_chk.get('status')}).")
+
+            # 4. M5 Rejection Gatekeeper (Wick >= 30%)
+            if df_m5 is not None and not df_m5.empty and pdf_approved:
+                m5_chk = trigger_m5_entry(
+                    df_m5=df_m5,
+                    h1_res=h1_chk if 'h1_chk' in locals() else {"can_buy": True, "can_sell": True},
+                    m30_res=m30_chk if 'm30_chk' in locals() else {"trendline_bias": "NEUTRAL", "condition": "INSIDE_CHANNEL"},
+                    m15_res=m15_chk,
+                    curr_price=curr_price,
+                    min_wick_ratio=0.30,
+                    min_rr_ratio=2.0,
+                )
+                if not m5_chk.get("can_execute", False):
+                    pdf_approved = False
+                    pdf_checks.append(m5_chk.get("reason", "Veto M5 Rejection Wick."))
 
         # 5. Hitung Manajemen Risiko Trading Harian (TP / SL / RRR)
         # Sesuai Arahan Mutlak Pengguna:
