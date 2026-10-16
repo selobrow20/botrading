@@ -84,6 +84,31 @@ class ChatAgent:
             if re.search(pat, text_lower):
                 return "XAUUSD"
 
+        # 1b. Cek Cryptocurrency (Major, Altcoin, & Meme Coin)
+        crypto_patterns = [
+            (r"\b(btc|bitcoin|btc/usdt|btcusdt)\b", "BTC-USD"),
+            (r"\b(eth|ethereum|eth/usdt|ethusdt)\b", "ETH-USD"),
+            (r"\b(sol|solana|sol/usdt|solusdt)\b", "SOL-USD"),
+            (r"\b(xrp|ripple|xrp/usdt|xrpusdt)\b", "XRP-USD"),
+            (r"\b(doge|dogecoin|doge/usdt)\b", "DOGE-USD"),
+            (r"\b(bnb|binance\s*coin)\b", "BNB-USD"),
+            (r"\b(pepe|pepe/usdt|pepeusdt)\b", "PEPEUSDT"),
+            (r"\b(bome|bome/usdt|bomeusdt)\b", "BOMEUSDT"),
+            (r"\b(bonk|bonk/usdt|bonkusdt)\b", "BONKUSDT"),
+            (r"\b(wif|wif/usdt|wifusdt)\b", "WIFUSDT"),
+            (r"\b(floki|floki/usdt|flokiusdt)\b", "FLOKIUSDT"),
+            (r"\b(shib|shiba|shib/usdt|shibusdt)\b", "SHIBUSDT"),
+            (r"\b(neiro|neiro/usdt|neirousdt)\b", "NEIROUSDT"),
+            (r"\b(turbo|turbo/usdt|turbousdt)\b", "TURBOUSDT"),
+            (r"\b(sui|sui/usdt|suiusdt)\b", "SUIUSDT"),
+            (r"\b(near|near/usdt|nearusdt)\b", "NEARUSDT"),
+            (r"\b(aero|aero/usdt|aerousdt)\b", "AEROUSDT"),
+            (r"\b(eigen|eigen/usdt|eigenusdt)\b", "EIGENUSDT"),
+        ]
+        for pat, sym in crypto_patterns:
+            if re.search(pat, text_lower):
+                return sym
+
         # 2. Cek Saham IDX Berformat .JK eksplisit (misal BBCA.JK atau CUAN.JK)
         explicit_jk = re.search(r"\b([a-zA-Z]{4})\.jk\b", text_lower)
         if explicit_jk:
@@ -121,6 +146,17 @@ class ChatAgent:
         """
         text_lower = text.lower()
         extracted_ticker = cls.extract_ticker(text)
+
+        # 0. Deteksi Permintaan Panic Close All / Emergency Close (Prioritas Keamanan Tertinggi)
+        panic_keywords = [
+            "tutup semua", "close all", "panic close", "tutup posisi", "close semua",
+            "emergency close", "tutup semuanya", "cut all", "liquidate all", "tutup semua posisi"
+        ]
+        if any(k in text_lower for k in panic_keywords):
+            return {
+                "intent": "PANIC_CLOSE",
+                "ticker": None,
+            }
 
         # 1. Deteksi Permintaan Chart (Prioritas Tertinggi jika ada kata kunci chart/grafik/plot)
         chart_keywords = [
@@ -283,7 +319,7 @@ class ChatAgent:
 
         # 11. Deteksi Pertanyaan High-Impact News & Kalender Ekonomi
         news_keywords = [
-            "news", "fomc", "cpi", "pce", "cpe", "nfp", "inflasi", "suku bunga", "the fed",
+            "news", "fomc", "cpi", "ppi", "pce", "cpe", "nfp", "inflasi", "suku bunga", "the fed",
             "non farm", "nonfarm", "unemployment", "kalender", "berita ekonomi",
             "jadwal news", "prediksi news", "kapan news", "berita",
             "trump", "trump spike", "tarif", "trade war", "oil", "minyak", "wti", "brent", "opec",
@@ -307,6 +343,64 @@ class ChatAgent:
                 "intent": "COPIER",
                 "ticker": None,
             }
+
+        # 4a. Deteksi Permintaan Trading Plan / SL & TP Koin Crypto Spesifik
+        plan_keywords = ["sl", "tp", "stop loss", "take profit", "target", "cutloss", "plan", "entry"]
+        if extracted_ticker and any(k in extracted_ticker for k in ["BTC", "ETH", "SOL", "XRP", "DOGE", "PEPE", "BOME", "BONK", "WIF", "FLOKI", "SHIB", "NEIRO", "SUI", "AERO", "EIGEN"]):
+            if any(k in text_lower for k in plan_keywords) and not any(k in text_lower for k in ["chart", "grafik", "plot"]):
+                return {
+                    "intent": "COIN_PLAN",
+                    "ticker": extracted_ticker,
+                }
+
+        # 4a0. Deteksi Status Otak AI (Gemini Gatekeeper)
+        ai_keywords = [
+            "cek ai", "status ai", "tes ai", "test ai", "otak ai", "cek otak",
+            "apakah ai aktif", "apakah ada ai", "gemini", "brain", "ai aktif", "ai nya"
+        ]
+        if any(k in text_lower for k in ai_keywords):
+            return {
+                "intent": "AI_STATUS",
+                "ticker": None,
+            }
+
+        # 4aa. Deteksi Auto-Pump Sniper (Binance Spot / Paper Trading)
+        autopump_keywords = [
+            "autopump", "auto pump", "sniper pump", "auto buy", "auto beli", "auto trade crypto",
+            "autocoin", "auto koin", "otomatis masuk koin", "otomatis beli", "sniper crypto"
+        ]
+        if any(k in text_lower for k in autopump_keywords):
+            return {
+                "intent": "AUTOPUMP",
+                "ticker": None,
+            }
+
+        # 4b. Deteksi Radar / Scanner Koin Potensial Pump & Meme Coin
+        pump_keywords = [
+            "pump", "koin pump", "coin pump", "mau pump", "potensi pump", "koin potensial",
+            "koin micin", "meme coin", "memecoin", "micin", "radar crypto", "scan crypto",
+            "scan coin", "cari koin", "koin apa yang mau naik", "koin terbang"
+        ]
+        if any(k in text_lower for k in pump_keywords):
+            is_meme_req = any(k in text_lower for k in ["meme", "micin", "memecoin"])
+            return {
+                "intent": "PUMP",
+                "meme_only": is_meme_req,
+                "ticker": None,
+            }
+
+        # 4c. Deteksi Modul Crypto / Kripto (CCXT Multi-Exchange)
+        crypto_keywords = [
+            "crypto", "kripto", "bitcoin", "btc", "ethereum", "eth", "solana", "sol",
+            "binance", "indodax", "bybit", "tokocrypto", "okx", "coin", "altcoin",
+            "trading crypto", "saldo crypto", "api crypto"
+        ]
+        if any(k in text_lower for k in crypto_keywords):
+            if not any(k in text_lower for k in ["chart", "grafik", "plot"]):
+                return {
+                    "intent": "CRYPTO",
+                    "ticker": extracted_ticker or "BTC-USD",
+                }
 
         # 5. Deteksi MT5 / Auto-Trading / Posisi Akun
         mt5_keywords = [
@@ -1168,6 +1262,15 @@ class ChatAgent:
                 f"dan pipeline analisa jalan rutin memantau market. Siap berburu sinyal Grade A+ buat lu! 🛡️⚡"
             )
 
+        elif intent == "PANIC_CLOSE":
+            return (
+                "🚨 <b>PERINTAH PANIC CLOSE ALL TERDETEKSI</b>\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "Untuk keamanan akun dan konfirmasi 1-klik, silakan gunakan perintah:\n"
+                "👉 <code>/panic</code> atau <code>/closeall</code>\n\n"
+                "Tombol konfirmasi merah akan muncul untuk menutup seluruh tiket MT5 dan posisi Crypto Spot secara instan!"
+            )
+
         elif intent == "CURHAT_LOSS":
             return (
                 f"Sabar ya bor {user_name}, tarik napas dulu sejenak. 🧘‍♂️\n\n"
@@ -1205,3 +1308,75 @@ class ChatAgent:
                 f"Mantap bor! Gue standby 24 jam di sini. Ada yang lagi bikin penasaran di market hari ini, atau mau cek posisi MT5 dan analisa?",
             ]
             return random.choice(chitchat_replies)
+
+    @classmethod
+    def generate_crypto_response(cls, user_name: str = "Bor", target_coin: Optional[str] = None) -> str:
+        """
+        Menghasilkan ringkasan status trading Crypto via CCXT:
+        - Harga live koin utama (BTC, ETH, SOL)
+        - Status autentikasi bursa (Indodax, Bybit, Binance, Tokocrypto)
+        - Saldo USDT / IDR (jika API key terpasang)
+        - Panduan konfigurasi API key di .env
+        """
+        from crypto.exchange_client import CryptoExchangeClient
+        from data.fetcher import DataFetcher
+        import html
+
+        client = CryptoExchangeClient(exchange_name="binance")
+        is_auth = client.is_authenticated()
+
+        t_btc = client.fetch_ticker("BTCUSDT")
+        price_btc = t_btc.get("last", 0.0)
+        chg_btc = t_btc.get("percentage", 0.0)
+        vol_btc = t_btc.get("volume", 0.0)
+
+        t_eth = client.fetch_ticker("ETHUSDT")
+        price_eth = t_eth.get("last", 0.0)
+        chg_eth = t_eth.get("percentage", 0.0)
+
+        t_sol = client.fetch_ticker("SOLUSDT")
+        price_sol = t_sol.get("last", 0.0)
+        chg_sol = t_sol.get("percentage", 0.0)
+
+        t_xrp = client.fetch_ticker("XRPUSDT")
+        price_xrp = t_xrp.get("last", 0.0)
+        chg_xrp = t_xrp.get("percentage", 0.0)
+
+        reply = [
+            f"🪙 <b>MODUL TRADING CRYPTO LIVE (BINANCE OFFICIAL FEED)</b>",
+            f"Halo <b>{html.escape(user_name)}</b>! Data live crypto diambil langsung dari engine Binance! 🚀",
+            "",
+            "🏛️ <b>Bursa Feed:</b> <code>BINANCE SPOT DIRECT</code>",
+            f"🔑 <b>Status API Key:</b> " + ("🟢 <b>TERHUBUNG (Siap Autotrade)</b>" if is_auth else "🟡 <b>Mode Publik / Analisis (API Key belum diisi di .env)</b>"),
+            "",
+            "📊 <b>LIVE HARGA BINANCE SPOT (24/7):</b>",
+            f"• <b>BTC/USDT:</b> <code>${price_btc:,.2f}</code> ({chg_btc:+.2f}%) | Vol: {vol_btc:,.0f} BTC",
+            f"• <b>ETH/USDT:</b> <code>${price_eth:,.2f}</code> ({chg_eth:+.2f}%)",
+            f"• <b>SOL/USDT:</b> <code>${price_sol:,.2f}</code> ({chg_sol:+.2f}%)",
+            f"• <b>XRP/USDT:</b> <code>${price_xrp:,.4f}</code> ({chg_xrp:+.2f}%)",
+            "",
+        ]
+
+        if is_auth:
+            bal = client.get_balance()
+            free_u = bal.get("free_usdt", 0.0)
+            reply.extend([
+                "💼 <b>SALDO AKUN BURSA:</b>",
+                f"• <b>Free USDT:</b> <code>${free_u:,.2f} USDT</code>",
+                "",
+                "⚡ <b>Perintah Siap Pakai:</b>",
+                "• Ketik <code>chart btc</code> untuk memunculkan chart live.",
+                "• Ketik <code>analisa btc</code> atau <code>analisa eth</code> untuk cek konfluensi 9 Buku.",
+            ])
+        else:
+            reply.extend([
+                "⚙️ <b>CARA MENGHUBUNGKAN API KEY BURSA LU:</b>",
+                "Buka file <code>.env</code> di folder bot, lalu tambahkan baris ini:",
+                "<code>CRYPTO_EXCHANGE=indodax</code> <i>(atau binance / bybit / tokocrypto)</i>",
+                "<code>CRYPTO_API_KEY=api_key_kamu</code>",
+                "<code>CRYPTO_SECRET_KEY=secret_key_kamu</code>",
+                "",
+                "💡 <i>Catatan: Tanpa API Key pun, lu tetap bisa minta chart live dan analisa teknikal 24/7 kapan saja!</i>",
+            ])
+
+        return "\n".join(reply)

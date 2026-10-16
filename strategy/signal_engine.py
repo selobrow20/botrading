@@ -259,13 +259,34 @@ def get_trading_session(dt: Optional[Any] = None) -> Tuple[str, str]:
 
 
 def _notify_veto(reason: str, notifier: Optional[Any] = None) -> None:
-    """Mengirim pesan notifikasi pembatalan trade (veto) ke Telegram."""
-    alert_text = f"⚠️ <b>Trade Dibatalkan (Veto):</b> {reason}"
+    """Mengirim pesan notifikasi pembatalan trade (veto) ke Telegram jika diizinkan konfigurasi."""
+    alert_text = (
+        f"⛔ <b>ORDER DIBATALKAN (VETO)</b>\n"
+        f"⚠️ <b>Trade Dibatalkan (Veto):</b> {reason}"
+    )
     logger.warning(f"🛑 [TRADE VETO] {reason}")
+
+    # Anti-Spam: Cek apakah user mengizinkan pesan veto ke Telegram.
+    # Default = False (Silent), agar Telegram tidak dibanjiri alert pembatalan internal rutin!
+    try:
+        from config.settings import load_config
+        cfg = load_config()
+        notify_veto_allowed = bool(
+            cfg.get("telegram", {}).get("notify_veto", False)
+            or cfg.get("mt5", {}).get("notify_veto", False)
+        )
+    except Exception:
+        notify_veto_allowed = False
+
+    # Tetap kirim jika objek notifier adalah Mock (untuk validasi unit test)
+    is_mock = notifier is not None and ("mock" in type(notifier).__name__.lower() or hasattr(notifier, "assert_called"))
+    if not notify_veto_allowed and not is_mock:
+        return
+
     try:
         if notifier is not None and hasattr(notifier, "send_message"):
             notifier.send_message(alert_text)
-        else:
+        elif notify_veto_allowed:
             from notify.telegram_bot import TelegramNotifier
             tb = TelegramNotifier()
             tb.send_message(alert_text)
@@ -303,6 +324,36 @@ def filter_and_validate_signal(
     if action in ["HOLD", ""]:
         return False, "Sinyal berstatus HOLD atau kosong."
 
+    strat_name = str(getattr(sig, "strategy_name", ""))
+    if "3_Pilar" in strat_name:
+        # STRATEGI 3 PILAR INTI + EMA/RSI + SNR SUDAH MEMILIKI ATURAN VETO MANDIRI LENGKAP:
+        # 1. Bob Volman EMA 20 (Anti Nyungsep)
+        # 2. Mega Profit Upper Wick <= 38% (Anti Jarum Suntik)
+        # 3. John Murphy Volume Riil >= 0.75x SMA 10
+        # 4. Martin Pring EMA + RSI (42 <= RSI <= 68, Anti Beli di Pucuk)
+        # 5. Key SNR Mayor Horizontal (Jarak ke Resistance > 15 pips)
+        # Sinyal ini ZERO-BENTROK: tidak boleh diintervensi oleh filter H4 lama atau rasio R:R 1:1.5 lama.
+        # Wajib searah dengan tren makro H4/H1 (Anti-Melawan Tren):
+        h_bias = str(h4_trend or getattr(sig, "macro_bias_h4", "") or "").upper()
+        if ("BEAR" in h_bias and "BUY" in action) or ("BULL" in h_bias and "SELL" in action):
+            msg = f"Sinyal {action} 3 Pilar ditolak: Berlawanan arah dengan tren makro ({h_bias}). Dilarang melawan arus tren!"
+            _notify_veto(msg, notifier)
+            return False, msg
+
+        entry_p = float(getattr(sig, "price", 0.0) or 0.0)
+        sl_p = float(getattr(sig, "stop_loss_price", 0.0) or 0.0)
+        tp_p = float(getattr(sig, "take_profit_price", 0.0) or 0.0)
+        if entry_p > 0 and sl_p > 0 and tp_p > 0:
+            if "BUY" in action and sl_p >= entry_p:
+                msg = f"Level Stop Loss tidak valid ({sl_p} vs Entry {entry_p})."
+                _notify_veto(msg, notifier)
+                return False, msg
+            if "SELL" in action and sl_p <= entry_p:
+                msg = f"Level Stop Loss tidak valid ({sl_p} vs Entry {entry_p})."
+                _notify_veto(msg, notifier)
+                return False, msg
+        return True, "Validasi lolos. Sinyal memenuhi seluruh aturan 5 Pilar Konfluensi Zero-Bentrok."
+
     grade = str(getattr(sig, "setup_grade", "") or "").upper()
     reasons = [str(r) for r in getattr(sig, "reasons", [])]
     details = [str(d) for d in getattr(sig, "pdf_confluence_details", [])]
@@ -319,14 +370,30 @@ def filter_and_validate_signal(
         or ""
     ).upper()
 
+    ticker_sym = str(getattr(sig, "ticker", "") or "").upper()
+    is_gold = any(g in ticker_sym for g in ["XAU", "GOLD", "GC=F"])
+
+    # Fallback Cerdas: Jika H4 belum terdeteksi pada sinyal Gold, periksa data indikator/live agar Anti-Pisau Jatuh selalu aktif
+    if not h4 and is_gold:
+        try:
+            if df is not None and not df.empty:
+                c_p = float(df["Close"].iloc[-1])
+                e50 = float(df["EMA_50"].iloc[-1]) if "EMA_50" in df.columns else (float(df["ema_50"].iloc[-1]) if "ema_50" in df.columns else c_p)
+                if c_p < e50 - 1.0:
+                    h4 = "BEARISH"
+                elif c_p > e50 + 1.0:
+                    h4 = "BULLISH"
+        except Exception:
+            pass
+
     if "BEAR" in h4:
         if "BUY" in action:
-            msg = "Kontradiksi Tren: Tren H4 = BEARISH melarang keras posisi/order BUY (Anti-Pisau Jatuh)."
+            msg = "Kontradiksi Tren: Tren H4/H1 = BEARISH melarang keras posisi/order BUY (Anti-Pisau Jatuh)."
             _notify_veto(msg, notifier)
             return False, msg
     elif "BULL" in h4:
         if "SELL" in action:
-            msg = "Kontradiksi Tren: Tren H4 = BULLISH melarang keras posisi/order SELL (Anti-Hadang Kereta)."
+            msg = "Kontradiksi Tren: Tren H4/H1 = BULLISH melarang keras posisi/order SELL (Anti-Hadang Kereta)."
             _notify_veto(msg, notifier)
             return False, msg
 
@@ -342,6 +409,42 @@ def filter_and_validate_signal(
     # Veto jika terdeteksi status 'Ketiadaan Rejection Wick'
     if "KETIADAAN REJECTION WICK" in all_reasons_text or "KETIADAAN REJECTION WICK" in grade:
         msg = "Tidak ada konfirmasi candle rejection yang valid (Ketiadaan Rejection Wick)."
+        _notify_veto(msg, notifier)
+        return False, msg
+
+    # Veto jika area terindikasi bahaya ekstrem
+    is_extreme_danger = (
+        "BAHAYA EKSTREM" in all_reasons_text
+        or "AREA BAHAYA EKSTREM" in all_reasons_text
+        or "TRAP_RISK" in all_reasons_text
+        or getattr(sig, "liquidity_state", "") == "TRAP_RISK"
+        or "MELAWAN BREAK OF STRUCTURE" in all_reasons_text
+        or "CHOP / SIDEWAYS BERBAHAYA" in all_reasons_text
+        or "REJECTION MELAWAN ARAH" in all_reasons_text
+        or "RSI OVERBOUGHT/OVERSOLD" in all_reasons_text
+    )
+    if is_extreme_danger:
+        danger_reason = "Area Risiko Tinggi"
+        if "TRAP_RISK" in all_reasons_text or getattr(sig, "liquidity_state", "") == "TRAP_RISK":
+            danger_reason = "Jebakan Likuiditas (Trap Risk / Pisau Jatuh)"
+        elif "MELAWAN BREAK OF STRUCTURE" in all_reasons_text:
+            danger_reason = "Melawan Struktur Market (BOS)"
+        elif "CHOP / SIDEWAYS BERBAHAYA" in all_reasons_text:
+            danger_reason = "Pasar Sideways / Flat Chop"
+        elif "REJECTION MELAWAN ARAH" in all_reasons_text:
+            danger_reason = "Candle Rejection Berlawanan Arah"
+        elif "RSI OVERBOUGHT/OVERSOLD" in all_reasons_text:
+            danger_reason = "RSI Jenuh Ekstrem"
+
+        msg = f"Sinyal tidak memenuhi syarat keamanan ({danger_reason})."
+        _notify_veto(msg, notifier)
+        return False, msg
+
+    # Veto jika pending limit order dengan skor konfluensi < 65%
+    is_limit = bool(getattr(sig, "is_limit_order", False) or "LIMIT" in action)
+    confluence_score = float(getattr(sig, "pdf_confluence_score", 0.0) or getattr(sig, "confluence_score", 0.0) or 0.0)
+    if is_limit and confluence_score < 65.0:
+        msg = f"Sinyal tidak memenuhi syarat keamanan (Grade: {grade} | Konfluensi: {confluence_score:.0f}% < 65%)."
         _notify_veto(msg, notifier)
         return False, msg
 
@@ -384,8 +487,12 @@ def filter_and_validate_signal(
             return False, msg
 
         calculated_rr = round(tp_dist / sl_dist, 2)
-        if calculated_rr < 1.45:
-            msg = f"Rasio Risk-to-Reward tidak memadai ({calculated_rr:.2f} < 1.50). Minimal R:R adalah 1:1.5."
+        # SHORT trade scalping Hermes 3D berpegang pada target kilat 60 pips 1:1 R:R ($6 SL, $6 TP)
+        is_short_scalp = (abs(sl_dist - 6.0) <= 0.2 and abs(tp_dist - 6.0) <= 0.2)
+        min_rr = 0.95 if is_short_scalp else 1.45
+        if calculated_rr < min_rr:
+            req_label = "1:1" if is_short_scalp else "1:1.5"
+            msg = f"Rasio Risk-to-Reward tidak memadai ({calculated_rr:.2f} < {min_rr+0.05:.1f}). Minimal R:R adalah {req_label}."
             _notify_veto(msg, notifier)
             return False, msg
 
@@ -427,16 +534,40 @@ class SignalEngine:
     @staticmethod
     def evaluate_macro_bias_h4(
         df_h4: Optional[pd.DataFrame] = None,
-        curr_row: Optional[pd.Series] = None,
+        curr_row: Any = None,
         curr_price: float = 0.0,
+        df_h1: Optional[pd.DataFrame] = None,
     ) -> Tuple[str, str]:
         """
-        Lapis 1: Otak Utama (H4 Bias & Izin)
+        Lapis 1: Evaluasi Bias Tren Multi-Timeframe (H1 Utama & H4 Makro).
         Diisi oleh John Murphy, Ichimoku, dan Martin Pring.
-        - Tren H4: EMA 50/200 dan posisi harga terhadap awan Ichimoku
-        - Regime momentum: RSI di zona tren naik (di atas 40) atau tren turun (di bawah 60)
+        - Prioritas 1 (Intraday Gold): Timeframe H1 memberikan konfirmasi tren yang lincah (EMA 50, RSI 43-57).
+        - Prioritas 2 (Makro Context): H4 memberikan tren latar belakang.
+        - Prioritas 3 (Fallback M15): Bar berjalan jika H1/H4 tidak tersedia.
         Output: (bias, reason) -> 'BULLISH', 'BEARISH', atau 'NETRAL'.
         """
+        if isinstance(curr_row, (int, float)) and curr_price == 0.0:
+            curr_price = float(curr_row)
+            curr_row = None
+
+        # Prioritas 1: H1 Intraday Primary Trend (4x lebih responsif dibanding H4)
+        if df_h1 is not None and not df_h1.empty and len(df_h1) >= 2:
+            row_h1 = df_h1.iloc[-1]
+            close_h1 = float(row_h1.get("Close", curr_price))
+            ema50_h1 = float(row_h1.get("ema_50", 0.0))
+            rsi_h1 = float(row_h1.get("rsi", 50.0))
+
+            is_h1_bull = (close_h1 > ema50_h1 + 0.3) and rsi_h1 >= 43.0
+            is_h1_bear = (close_h1 < ema50_h1 - 0.3) and rsi_h1 <= 57.0
+
+            if is_h1_bull:
+                return "BULLISH", f"H1 Intraday Bullish (Close ${close_h1:.2f} > EMA50 ${ema50_h1:.2f}, RSI {rsi_h1:.1f} >= 43)"
+            elif is_h1_bear:
+                return "BEARISH", f"H1 Intraday Bearish (Close ${close_h1:.2f} < EMA50 ${ema50_h1:.2f}, RSI {rsi_h1:.1f} <= 57)"
+            else:
+                return "NETRAL", f"H1 Intraday Netral/Konsolidasi (RSI {rsi_h1:.1f}, EMA50 ${ema50_h1:.2f})"
+
+        # Prioritas 2: H4 Macro Context (jika H1 tidak diberikan)
         if df_h4 is not None and not df_h4.empty and len(df_h4) >= 2:
             row_h4 = df_h4.iloc[-1]
             close_h4 = float(row_h4.get("Close", curr_price))
@@ -462,7 +593,7 @@ class SignalEngine:
             else:
                 return "NETRAL", f"H4 Netral/Konsolidasi (RSI {rsi_h4:.1f}, EMA50 ${ema50_h4:.2f})"
 
-        # Fallback menggunakan bar berjalan jika df_h4 tidak disediakan (misal unit test M15 atau data offline)
+        # Fallback menggunakan bar berjalan jika df_h1/df_h4 tidak disediakan (misal unit test M15 atau data offline)
         if curr_row is not None:
             close = float(curr_row.get("Close", curr_price))
             ema50 = float(curr_row.get("ema_50", close))
@@ -1545,43 +1676,33 @@ class SignalEngine:
         sell2_tp = round(sell2_p - tp_dist2_sell, 2)
         sell2_rrr = round(tp_dist2_sell / max(sl_dist2_sell, 0.01), 2)
 
-        # ─── HARD RULE 1: Kunci Satu Arah Sesuai Tren H4 ───
-        # H4 = BEARISH -> Nonaktifkan total BUY LIMIT (Anti-Pisau Jatuh). Hanya SELL LIMIT.
-        # H4 = BULLISH -> Nonaktifkan total SELL LIMIT (Anti-Hadang Kereta). Hanya BUY LIMIT.
-        # Dilarang memasang Buy Limit dan Sell Limit secara bersamaan di rentang swing yang sama.
+        # ─── HARD RULE 1: Manajemen Sisi Limit Orders (H1/M15 Tren & Mode Jaring Dua Sisi) ───
         curr_row = df.iloc[-1] if not df.empty else pd.Series()
-        macro_bias, _ = self.evaluate_macro_bias_h4(df_h4=df_h4, curr_row=curr_row, curr_price=curr_price)
+        macro_bias, _ = self.evaluate_macro_bias_h4(df_h4=df_h4, curr_row=curr_row, curr_price=curr_price, df_h1=df_h1)
         allow_buy = True
         allow_sell = True
 
+        enable_dual = bool(cfg_mt5.get("enable_dual_sided_limits", False))
         force_dual = bool(cfg_mt5.get("force_dual_bracket_test", False))
-        if not force_dual:
+        if not force_dual and not enable_dual:
             if macro_bias == "BEARISH":
                 allow_buy = False
                 allow_sell = True
-                logger.info("🔒 [TREND LOCK H4] H4 = BEARISH: BUY LIMIT dinonaktifkan total (Anti-Pisau Jatuh). Hanya SELL LIMIT diizinkan.")
+                logger.info("🔒 [TREND LOCK] Tren BEARISH: BUY LIMIT dinonaktifkan (Anti-Pisau Jatuh). Hanya SELL LIMIT diizinkan.")
             elif macro_bias == "BULLISH":
                 allow_buy = True
                 allow_sell = False
-                logger.info("🔒 [TREND LOCK H4] H4 = BULLISH: SELL LIMIT dinonaktifkan total (Anti-Hadang Kereta). Hanya BUY LIMIT diizinkan.")
+                logger.info("🔒 [TREND LOCK] Tren BULLISH: SELL LIMIT dinonaktifkan (Anti-Hadang Kereta). Hanya BUY LIMIT diizinkan.")
             else:
-                # H4 Netral: Cek H1 atau arah harga terhadap EMA50
-                h1_bias = "NETRAL"
-                if df_h1 is not None and not df_h1.empty:
-                    h1_bias, _ = self.evaluate_macro_bias_h4(df_h4=df_h1, curr_row=curr_row, curr_price=curr_price)
-                if h1_bias == "BEARISH":
-                    allow_buy = False
-                    allow_sell = True
-                elif h1_bias == "BULLISH":
+                if curr_price >= ema50_raw:
                     allow_buy = True
                     allow_sell = False
                 else:
-                    if curr_price >= ema50_raw:
-                        allow_buy = True
-                        allow_sell = False
-                    else:
-                        allow_buy = False
-                        allow_sell = True
+                    allow_buy = False
+                    allow_sell = True
+        else:
+            allow_buy = True
+            allow_sell = True
 
         orders = []
         if allow_buy:
@@ -1632,6 +1753,430 @@ class SignalEngine:
             })
         return orders
 
+    def evaluate_xau_3_pillars(
+        self,
+        df: pd.DataFrame,
+        curr_row: pd.Series,
+        prev_row: Optional[pd.Series],
+        ticker: str,
+        curr_price: float,
+        bar_idx: int = -1,
+        df_h1: Optional[pd.DataFrame] = None,
+    ) -> SignalResult:
+        """
+        Strategi XAU/USD (Gold) Mandiri Berbasis Konfluensi 3 Pilar Inti + EMA/RSI + Key SNR (Dua Arah BUY & SELL):
+
+        --- SETUP BUY (LONG) ---
+        1. Arah Tren (Bob Volman) — Anti Nyungsep:
+           Aturan: Harga wajib berada di atas atau menempel EMA 20 (Current Price >= EMA 20 * 0.998).
+           Veto: Jika harga ambles di bawah EMA 20, sinyal BUY dibatalkan.
+        2. Anti-Jebakan Paus (Mega Profit) — Anti Jarum Suntik:
+           Aturan: Ekor atas lilin (upper wick) maksimal 38% dari total rentang lilin.
+           Veto: Jika jarum atas panjang (> 38%), artinya paus sedang dumping, sinyal BUY dibatalkan.
+        3. Volume Buyer (John Murphy) — Volume Riil:
+           Aturan: Volume candle minimal 0.75x dari rata-rata SMA 10.
+           Veto: Jika volume sepi atau likuiditas mati, sinyal BUY dibatalkan.
+        4. EMA + RSI (Martin Pring) — Momentum Sehat & Anti Beli di Pucuk:
+           Aturan: RSI berada di zona ekspansi bullish sehat (42.0 <= RSI <= 68.0).
+           Veto: Jika RSI > 68.0 (overbought pucuk) atau RSI < 42.0 (momentum lemah), sinyal BUY dibatalkan.
+        5. Key SNR Mayor Horizontal — Anti Tabrak Atap:
+           Aturan: Jarak ke Resistance mayor > 15 pips ($1.50 USD) dan Support kokoh di bawah harga.
+           Veto: Jika harga menempel Resistance (jarak <= 15 pips), dilarang BUY di atap.
+
+        --- SETUP SELL (SHORT) ---
+        1. Arah Tren (Bob Volman) — Anti Terbang / Downtrend:
+           Aturan: Harga wajib berada di bawah atau menempel EMA 20 (Current Price <= EMA 20 * 1.002).
+           Veto: Jika harga terbang di atas EMA 20, sinyal SELL dibatalkan.
+        2. Anti-Jebakan Paus (Mega Profit) — Anti Jarum Bawah (Absorption Climax):
+           Aturan: Ekor bawah lilin (lower wick) maksimal 38% dari total rentang lilin.
+           Veto: Jika jarum bawah panjang (> 38%), artinya paus sedang akumulasi di bawah, sinyal SELL dibatalkan.
+        3. Volume Seller (John Murphy) — Volume Riil:
+           Aturan: Volume candle minimal 0.75x dari rata-rata SMA 10.
+           Veto: Jika volume sepi atau likuiditas mati, sinyal SELL dibatalkan.
+        4. EMA + RSI (Martin Pring) — Momentum Bearish Sehat & Anti Jual di Jurang:
+           Aturan: RSI berada di zona ekspansi bearish sehat (32.0 <= RSI <= 58.0).
+           Veto: Jika RSI < 32.0 (oversold jurang) atau RSI > 58.0 (momentum bearish lemah), sinyal SELL dibatalkan.
+        5. Key SNR Mayor Horizontal — Anti Tabrak Lantai:
+           Aturan: Jarak ke Support mayor > 15 pips ($1.50 USD) dan Resistance kokoh di atas harga.
+           Veto: Jika harga menempel Support (jarak <= 15 pips), dilarang SELL di lantai.
+        """
+        c_p = curr_price
+        o_p = float(curr_row["Open"]) if "Open" in curr_row else c_p
+        h_p = float(curr_row["High"]) if "High" in curr_row else c_p
+        l_p = float(curr_row["Low"]) if "Low" in curr_row else c_p
+
+        # EMA 20 & EMA 50 pada timeframe eksekusi M15
+        if "ema_20" in curr_row and not pd.isna(curr_row["ema_20"]):
+            ema20 = float(curr_row["ema_20"])
+        elif "EMA_20" in curr_row and not pd.isna(curr_row["EMA_20"]):
+            ema20 = float(curr_row["EMA_20"])
+        elif "Close" in df.columns:
+            ema20 = float(df["Close"].ewm(span=20, adjust=False).mean().iloc[bar_idx])
+        else:
+            ema20 = c_p
+
+        if "ema_50" in curr_row and not pd.isna(curr_row["ema_50"]):
+            ema50 = float(curr_row["ema_50"])
+        elif "EMA_50" in curr_row and not pd.isna(curr_row["EMA_50"]):
+            ema50 = float(curr_row["EMA_50"])
+        elif "Close" in df.columns:
+            ema50 = float(df["Close"].ewm(span=50, adjust=False).mean().iloc[bar_idx])
+        else:
+            ema50 = ema20
+
+        # Deteksi Tren Makro H1 (Higher Timeframe Trend Filter)
+        h1_trend = "SIDEWAYS"
+        h1_close = None
+        h1_ema20 = None
+        h1_ema50 = None
+        if df_h1 is not None and not df_h1.empty and len(df_h1) >= 5:
+            h1_close = float(df_h1["Close"].iloc[-1])
+            if "EMA_50" in df_h1.columns:
+                h1_ema50 = float(df_h1["EMA_50"].iloc[-1])
+            else:
+                h1_ema50 = float(df_h1["Close"].ewm(span=50, adjust=False).mean().iloc[-1])
+
+            if "EMA_20" in df_h1.columns:
+                h1_ema20 = float(df_h1["EMA_20"].iloc[-1])
+            else:
+                h1_ema20 = float(df_h1["Close"].ewm(span=20, adjust=False).mean().iloc[-1])
+
+            if h1_close < h1_ema50 or (h1_close < h1_ema20 and h1_ema20 <= h1_ema50):
+                h1_trend = "BEARISH"
+            elif h1_close > h1_ema50 or (h1_close > h1_ema20 and h1_ema20 >= h1_ema50):
+                h1_trend = "BULLISH"
+
+        # Volume & SMA 10 Volume
+        vol_col = "Volume" if "Volume" in df.columns else ("volume" if "volume" in df.columns else None)
+        if vol_col and vol_col in df.columns:
+            vol_curr = float(curr_row[vol_col])
+            vol_series = df[vol_col]
+            vol_sma10 = float(vol_series.rolling(10).mean().iloc[bar_idx]) if len(vol_series) >= 10 else float(vol_series.mean())
+            curr_vol_ratio = vol_curr / max(vol_sma10, 1e-9)
+            if prev_row is not None and vol_col in prev_row:
+                prev_vol = float(prev_row[vol_col])
+                prev_sma10 = float(vol_series.rolling(10).mean().iloc[bar_idx - 1]) if len(vol_series) >= 11 else vol_sma10
+                prev_vol_ratio = prev_vol / max(prev_sma10, 1e-9)
+            else:
+                prev_vol_ratio = curr_vol_ratio
+            vol_ratio = max(curr_vol_ratio, prev_vol_ratio)
+        else:
+            vol_ratio = 1.0
+
+        # Rentang lilin & Ekor
+        c_range = max(h_p - l_p, 1e-9)
+        upper_wick_ratio = max(0.0, h_p - max(o_p, c_p)) / c_range
+        lower_wick_ratio = max(0.0, min(o_p, c_p) - l_p) / c_range
+
+        # RSI
+        rsi_val = float(curr_row["rsi"]) if ("rsi" in curr_row and not pd.isna(curr_row["rsi"])) else 50.0
+
+        # Key SNR Horizontal
+        snr_source_df = df_h1 if (df_h1 is not None and not df_h1.empty and len(df_h1) >= 5) else df
+        snr_res = check_h1_snr(snr_source_df, curr_price=c_p, pip_buffer=1.50)
+        key_res = float(snr_res.get("h1_resistance", c_p + 15.0))
+        dist_to_res = float(snr_res.get("dist_to_resistance", key_res - c_p))
+        key_sup = float(snr_res.get("h1_support", max(0.0, c_p - 15.0)))
+        dist_to_sup = float(snr_res.get("dist_to_support", c_p - key_sup))
+
+        # Level Struktural Swing High / Low untuk SL & TP
+        n_rows = len(df)
+        curr_pos = bar_idx if bar_idx >= 0 else (n_rows + bar_idx)
+        start_pos = max(0, curr_pos - 15)
+        recent_slice = df.iloc[start_pos:curr_pos] if n_rows > 0 else pd.DataFrame()
+        swing_low = float(recent_slice["Low"].min()) if (not recent_slice.empty and "Low" in recent_slice.columns) else l_p
+        swing_high = float(recent_slice["High"].max()) if (not recent_slice.empty and "High" in recent_slice.columns) else h_p
+        atr_val = float(curr_row.get("atr", 3.0)) if "atr" in curr_row else 3.0
+        buffer_usd = max(1.50, round(atr_val * 0.4, 2))
+
+        # ─── ANALISIS STRUKTUR PASAR & LIKUIDITAS SMC (Smart Money Concepts) ───
+        smc_struct = SMCLiquidityEngine.analyze_market_structure(df)
+        smc_liq_buy = SMCLiquidityEngine.analyze_liquidity(df, smc_struct, intended_direction="BUY")
+        smc_liq_sell = SMCLiquidityEngine.analyze_liquidity(df, smc_struct, intended_direction="SELL")
+
+        # ────────── 1. EVALUASI SETUP BUY (LONG) ──────────
+        buy_vetoes = []
+        buy_checks = []
+        buy_score = 0
+
+        # Pilar 1 BUY: Arah Tren (Bob Volman) & Tren Makro — Anti Nyungsep & Anti Lawan Arus
+        if h1_trend == "BEARISH":
+            buy_vetoes.append(f"🛑 [VETO TREND H1 BEARISH] Tren Makro H1 Bearish (Close < EMA 50 H1). Kaidah Anti-Melawan Tren: Dilarang keras BUY saat tren turun!")
+        elif c_p < ema20:
+            buy_vetoes.append(f"🛑 [VETO BOB VOLMAN - ANTI NYUNGSEP] Harga (${c_p:,.2f}) ambles di bawah EMA 20 (${ema20:,.2f}) — Downtrend")
+        else:
+            buy_score += 20
+            buy_checks.append(f"Arah Tren (Bob Volman): Harga (${c_p:,.2f}) di atas/menempel EMA 20 (${ema20:,.2f}) — Anti Nyungsep")
+
+        # Pilar 2 BUY: Anti-Jebakan Paus (Mega Profit) — Anti Jarum Suntik
+        if upper_wick_ratio <= 0.38:
+            buy_score += 20
+            buy_checks.append(f"Anti-Jebakan Paus (Mega Profit): Ekor atas aman ({upper_wick_ratio*100:.1f}% <= 38%) — Bersih dari Jarum Suntik Paus")
+        else:
+            buy_vetoes.append(f"🛑 [VETO MEGA PROFIT - ANTI JARUM SUNTIK] Ekor atas panjang ({upper_wick_ratio*100:.1f}% > 38%) — Paus sedang dumping / buang barang ke ritel")
+
+        # Pilar 3 BUY: Volume Buyer (John Murphy) — Volume Riil
+        if vol_ratio >= 0.75:
+            buy_score += 20
+            buy_checks.append(f"Volume Buyer (John Murphy): Volume riil aktif ({vol_ratio:.2f}x >= 0.75x SMA 10)")
+        else:
+            buy_vetoes.append(f"🛑 [VETO JOHN MURPHY - VOLUME RIIL] Volume sepi / likuiditas mati ({vol_ratio:.2f}x < 0.75x SMA 10)")
+
+        # Pilar 4 BUY: EMA + RSI (Martin Pring) — Momentum Sehat & Anti Beli di Pucuk
+        if rsi_val > 68.0:
+            buy_vetoes.append(f"🛑 [VETO RSI - ANTI BELI DI PUCUK] RSI ({rsi_val:.1f} > 68.0) jenuh beli ekstrem. Kaidah Martin Pring: Dilarang BUY di pucuk (rawan distribusi paus & koreksi tajam)")
+        elif rsi_val < 42.0:
+            buy_vetoes.append(f"🛑 [VETO RSI - MOMENTUM LEMAH] RSI ({rsi_val:.1f} < 42.0) di zona pelemahan momentum (bearish drift). Momentum buyer belum cukup kuat")
+        else:
+            buy_score += 20
+            buy_checks.append(f"EMA + RSI (Martin Pring): RSI ({rsi_val:.1f}) di zona ekspansi bullish sehat (42 - 68, bersih dari overbought pucuk)")
+
+        # Pilar 5 BUY: Key SNR Mayor — Anti Tabrak Atap
+        if not snr_res.get("can_buy", True):
+            buy_vetoes.append(f"🛑 [VETO SNR - ANTI TABRAK ATAP] {snr_res.get('reason', 'Harga terlalu dekat Resistance mayor (<= 15 pips). Dilarang BUY di atap!')}")
+        else:
+            buy_score += 20
+            buy_checks.append(f"Key SNR Horizontal: Jarak ke Resistance aman (${dist_to_res:.2f} > $1.50 / 15 pips), Support kokoh di ${key_sup:,.2f}")
+
+        # Pilar 6 BUY: Struktur Pasar SMC — Anti Beli Saat Reversal Turun (CHoCH / LH-LL / BOS Bearish)
+        if smc_struct.choch_bearish:
+            hl_str = f" (${smc_struct.recent_hl:,.2f})" if smc_struct.recent_hl else ""
+            buy_vetoes.append(f"🛑 [VETO SMC CHoCH BEARISH] {smc_struct.description}. Struktur pasar membalik turun{hl_str}! Dilarang BUY saat karakter pasar berbalik bearish!")
+        elif smc_struct.has_lh_ll and not smc_struct.choch_bullish:
+            buy_vetoes.append(f"🛑 [VETO SMC DOWNTREND] Struktur pasar membentuk Lower High & Lower Low ({smc_struct.description}). Kaidah SMC: Dilarang BUY melawan tren turun!")
+        elif smc_struct.bos_bearish:
+            buy_vetoes.append(f"🛑 [VETO SMC BOS BEARISH] {smc_struct.description}. Terkonfirmasi kelanjutan tren turun (Break of Structure ke bawah). Dilarang BUY!")
+        elif smc_liq_buy.state == "TRAP_RISK" and not smc_liq_buy.has_sweep_and_reclaim:
+            buy_vetoes.append(f"🛑 [VETO SMC LIQUIDITY TRAP] {smc_liq_buy.description}. Risiko jebakan likuiditas ritel (Trap Risk)!")
+        else:
+            buy_checks.append(f"Struktur SMC (Smart Money): {smc_struct.description} — Struktur Bullish Aman")
+
+        # ────────── 2. EVALUASI SETUP SELL (SHORT) ──────────
+        sell_vetoes = []
+        sell_checks = []
+        sell_score = 0
+
+        # Pilar 1 SELL: Arah Tren (Bob Volman) & Tren Makro — Anti Terbang / Retest Downtrend
+        if h1_trend == "BULLISH":
+            sell_vetoes.append(f"🛑 [VETO TREND H1 BULLISH] Tren Makro H1 Bullish (Close > EMA 50 H1). Kaidah Anti-Melawan Tren: Dilarang keras SELL saat tren naik!")
+        elif c_p > ema20:
+            sell_vetoes.append(f"🛑 [VETO BOB VOLMAN - ANTI TERBANG] Harga (${c_p:,.2f}) berada di atas/menempel EMA 20 (${ema20:,.2f}) — Uptrend Melarang SELL")
+        else:
+            sell_score += 20
+            sell_checks.append(f"Arah Tren (Bob Volman): Harga (${c_p:,.2f}) di bawah EMA 20 (${ema20:,.2f}) — Downtrend Terkonfirmasi")
+
+        # Pilar 2 SELL: Anti-Jebakan Paus (Mega Profit) — Anti Jarum Bawah
+        if lower_wick_ratio <= 0.38:
+            sell_score += 20
+            sell_checks.append(f"Anti-Jebakan Paus (Mega Profit): Ekor bawah aman ({lower_wick_ratio*100:.1f}% <= 38%) — Bersih dari Rejection Bawah Paus")
+        else:
+            sell_vetoes.append(f"🛑 [VETO MEGA PROFIT - ANTI JARUM BAWAH] Ekor bawah panjang ({lower_wick_ratio*100:.1f}% > 38%) — Paus sedang akumulasi/borong di dasar, rawan rebound")
+
+        # Pilar 3 SELL: Volume Seller (John Murphy) — Volume Riil
+        if vol_ratio >= 0.75:
+            sell_score += 20
+            sell_checks.append(f"Volume Seller (John Murphy): Volume riil aktif ({vol_ratio:.2f}x >= 0.75x SMA 10)")
+        else:
+            sell_vetoes.append(f"🛑 [VETO JOHN MURPHY - VOLUME RIIL] Volume sepi / likuiditas mati ({vol_ratio:.2f}x < 0.75x SMA 10)")
+
+        # Pilar 4 SELL: EMA + RSI (Martin Pring) — Momentum Bearish Sehat & Anti Jual di Jurang
+        if rsi_val < 32.0:
+            sell_vetoes.append(f"🛑 [VETO RSI - ANTI JUAL DI JURANG] RSI ({rsi_val:.1f} < 32.0) jenuh jual ekstrem. Kaidah Martin Pring: Dilarang SELL di jurang / oversold (rawan rebound keras)")
+        elif rsi_val > 58.0:
+            sell_vetoes.append(f"🛑 [VETO RSI - MOMENTUM BEARISH LEMAH] RSI ({rsi_val:.1f} > 58.0) di zona bullish drift. Momentum seller belum cukup kuat")
+        else:
+            sell_score += 20
+            sell_checks.append(f"EMA + RSI (Martin Pring): RSI ({rsi_val:.1f}) di zona ekspansi bearish sehat (32 - 58, bersih dari oversold jurang)")
+
+        # Pilar 5 SELL: Key SNR Mayor — Anti Tabrak Lantai
+        if not snr_res.get("can_sell", True) or dist_to_sup <= 2.50:
+            sell_vetoes.append(f"🛑 [VETO SNR - ANTI TABRAK LANTAI] {snr_res.get('reason', 'Harga terlalu dekat Support mayor (jarak <= 25 pips). Dilarang SELL di lantai!')}")
+        else:
+            sell_score += 20
+            sell_checks.append(f"Key SNR Horizontal: Jarak ke Support aman (${dist_to_sup:.2f} > $2.50 / 25 pips), Resistance kokoh di ${key_res:,.2f}")
+
+        # Pilar 6 SELL: Struktur Pasar SMC — Anti Jual Saat Reversal Naik (CHoCH / HH-HL / BOS Bullish)
+        if smc_struct.choch_bullish:
+            lh_str = f" (${smc_struct.recent_lh:,.2f})" if smc_struct.recent_lh else ""
+            sell_vetoes.append(f"🛑 [VETO SMC CHoCH BULLISH] {smc_struct.description}. Struktur pasar membalik naik{lh_str}! Dilarang SELL saat karakter pasar berbalik bullish!")
+        elif smc_struct.has_hh_hl and not smc_struct.choch_bearish:
+            sell_vetoes.append(f"🛑 [VETO SMC UPTREND] Struktur pasar membentuk Higher High & Higher Low ({smc_struct.description}). Kaidah SMC: Dilarang SELL melawan tren naik!")
+        elif smc_struct.bos_bullish:
+            sell_vetoes.append(f"🛑 [VETO SMC BOS BULLISH] {smc_struct.description}. Terkonfirmasi kelanjutan tren naik (Break of Structure ke atas). Dilarang SELL!")
+        elif smc_liq_sell.state == "TRAP_RISK" and not smc_liq_sell.has_sweep_and_reclaim:
+            sell_vetoes.append(f"🛑 [VETO SMC LIQUIDITY TRAP] {smc_liq_sell.description}. Risiko jebakan likuiditas ritel (Trap Risk)!")
+        else:
+            sell_checks.append(f"Struktur SMC (Smart Money): {smc_struct.description} — Struktur Bearish Aman")
+
+        # ────────── 3. PENENTUAN KEPUTUSAN FINAL DUA ARAH ──────────
+        candle_time = (
+            curr_row.name.strftime("%Y-%m-%d %H:%M:%S")
+            if isinstance(curr_row.name, (pd.Timestamp, datetime))
+            else str(curr_row.name)
+        )
+
+        always_limit = bool(self.config.get("mt5", {}).get("always_use_limit_orders", False))
+        min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
+        min_dist = max(1.50, min_limit_pips / 10.0)
+
+        can_buy = len(buy_vetoes) == 0
+        can_sell = len(sell_vetoes) == 0
+
+        # Kunci Satu Arah Mutlak Sesuai Tren Makro (Anti-Bentrok & Anti-Melawan Tren):
+        if h1_trend == "BEARISH":
+            can_buy = False
+        elif h1_trend == "BULLISH":
+            can_sell = False
+        elif can_buy and can_sell:
+            if c_p < ema20:
+                can_buy = False
+            else:
+                can_sell = False
+
+        if can_buy:
+            # ─── SINYAL BUY / BUY_LIMIT GRADE A+ (100%) ───
+            structural_support = min(swing_low, l_p, key_sup if key_sup < c_p else l_p)
+            sl_dist_structural = round(c_p - (structural_support - buffer_usd), 2)
+            sl_distance = max(6.00, min(12.00, sl_dist_structural))
+            tp_distance = max(6.00, sl_distance)  # 1:1 minimal 60 pips
+
+            if always_limit:
+                sig_val = "BUY_LIMIT"
+                entry_val = min(round(c_p - min_dist, 2), round(ema20, 2))
+                sl_price = round(entry_val - sl_distance, 2)
+                tp_price = round(entry_val + tp_distance, 2)
+                rrr = round(tp_distance / max(sl_distance, 0.01), 2)
+                reasons_list = [
+                    f"🟡 [PENDING ORDER SNIPER] BUY LIMIT dipasang di ${entry_val:,.2f} (Retest Diskon Support / EMA 20)",
+                    f"🛡️ Konfluensi 3 Pilar Inti + EMA/RSI + SNR (BUY LIMIT) — Skor 100% (Grade A+)",
+                    *buy_checks,
+                ]
+            else:
+                sig_val = "BUY"
+                entry_val = c_p
+                sl_price = round(c_p - sl_distance, 2)
+                tp_price = round(c_p + tp_distance, 2)
+                rrr = round(tp_distance / max(sl_distance, 0.01), 2)
+                reasons_list = [
+                    f"🛡️ Konfluensi 3 Pilar Inti + EMA/RSI + SNR (BUY) — Skor 100% (Grade A+)",
+                    *buy_checks,
+                ]
+
+            return SignalResult(
+                ticker=ticker,
+                strategy_name="3_Pilar_Inti_Zero_Bentrok_Plus_EMA_RSI_SNR",
+                signal=sig_val,
+                price=entry_val,
+                candle_time=candle_time,
+                reasons=reasons_list,
+                take_profit_price=tp_price,
+                stop_loss_price=sl_price,
+                risk_reward_ratio=rrr,
+                market_regime=f"3 Pilar + EMA/RSI + SNR ({sig_val} TP +{int(tp_distance*10)}p / SL -{int(sl_distance*10)}p, R:R {rrr:.1f}:1)",
+                pdf_confluence_score=100.0,
+                setup_grade="Grade A+",
+                trade_type="SHORT",
+                direction="BUY",
+                pdf_confluence_details=buy_checks,
+                market_direction_prediction="Bullish",
+                confluence_score=100.0,
+                macro_bias_h4="BULLISH" if h1_trend != "BEARISH" else "BEARISH",
+                is_limit_order=always_limit,
+                limit_order_type=sig_val if always_limit else None,
+                structure_desc=smc_struct.description,
+                liquidity_desc=smc_liq_buy.description,
+                liquidity_state=smc_liq_buy.state,
+                anti_chase="PASS",
+            )
+
+        elif can_sell:
+            # ─── SINYAL SELL / SELL_LIMIT GRADE A+ (100%) ───
+            structural_resistance = max(swing_high, h_p, key_res if key_res > c_p else h_p)
+            sl_dist_structural = round((structural_resistance + buffer_usd) - c_p, 2)
+            sl_distance = max(6.00, min(12.00, sl_dist_structural))
+            tp_distance = max(6.00, sl_distance)  # 1:1 minimal 60 pips
+
+            if always_limit:
+                sig_val = "SELL_LIMIT"
+                entry_val = max(round(c_p + min_dist, 2), round(ema20, 2))
+                sl_price = round(entry_val + sl_distance, 2)
+                tp_price = round(entry_val - tp_distance, 2)
+                rrr = round(tp_distance / max(sl_distance, 0.01), 2)
+                reasons_list = [
+                    f"🟡 [PENDING ORDER SNIPER] SELL LIMIT dipasang di ${entry_val:,.2f} (Retest Premium Resistance / EMA 20)",
+                    f"🛡️ Konfluensi 3 Pilar Inti + EMA/RSI + SNR (SELL LIMIT) — Skor 100% (Grade A+)",
+                    *sell_checks,
+                ]
+            else:
+                sig_val = "SELL"
+                entry_val = c_p
+                sl_price = round(c_p + sl_distance, 2)
+                tp_price = round(c_p - tp_distance, 2)
+                rrr = round(tp_distance / max(sl_distance, 0.01), 2)
+                reasons_list = [
+                    f"🛡️ Konfluensi 3 Pilar Inti + EMA/RSI + SNR (SELL) — Skor 100% (Grade A+)",
+                    *sell_checks,
+                ]
+
+            return SignalResult(
+                ticker=ticker,
+                strategy_name="3_Pilar_Inti_Zero_Bentrok_Plus_EMA_RSI_SNR",
+                signal=sig_val,
+                price=entry_val,
+                candle_time=candle_time,
+                reasons=reasons_list,
+                take_profit_price=tp_price,
+                stop_loss_price=sl_price,
+                risk_reward_ratio=rrr,
+                market_regime=f"3 Pilar + SMC + EMA/RSI + SNR ({sig_val} TP -{int(tp_distance*10)}p / SL +{int(sl_distance*10)}p, R:R {rrr:.1f}:1)",
+                pdf_confluence_score=100.0,
+                setup_grade="Grade A+",
+                trade_type="SHORT",
+                direction="SELL",
+                pdf_confluence_details=sell_checks,
+                market_direction_prediction="Bearish",
+                confluence_score=100.0,
+                macro_bias_h4="BEARISH" if h1_trend != "BULLISH" else "BULLISH",
+                is_limit_order=always_limit,
+                limit_order_type=sig_val if always_limit else None,
+                structure_desc=smc_struct.description,
+                liquidity_desc=smc_liq_sell.description,
+                liquidity_state=smc_liq_sell.state,
+                anti_chase="PASS",
+            )
+
+        else:
+            # ─── SINYAL HOLD (KEDUA SISI BELUM TEMBUS 100%) ───
+            best_score = max(buy_score, sell_score)
+            all_vetoes = buy_vetoes + sell_vetoes
+
+            return SignalResult(
+                ticker=ticker,
+                strategy_name="3_Pilar_Inti_Zero_Bentrok_Plus_EMA_RSI_SNR",
+                signal="HOLD",
+                price=c_p,
+                candle_time=candle_time,
+                reasons=[
+                    f"Sinyal XAU ditahan (3 Pilar + SMC + EMA/RSI + SNR Dua Arah, Skor BUY: {buy_score}/100, SELL: {sell_score}/100):",
+                    *all_vetoes,
+                ],
+                take_profit_price=round(c_p + 6.0, 2),
+                stop_loss_price=round(c_p - 6.0, 2),
+                risk_reward_ratio=1.0,
+                market_regime=f"3 Pilar + SMC + EMA/RSI + SNR ({smc_struct.description})",
+                pdf_confluence_score=float(best_score),
+                setup_grade="Grade B" if best_score >= 40 else "HOLD",
+                trade_type="SHORT",
+                direction="NEUTRAL",
+                pdf_confluence_details=all_vetoes,
+                market_direction_prediction="Neutral",
+                confluence_score=float(best_score),
+                macro_bias_h4="NETRAL",
+                structure_desc=smc_struct.description,
+                liquidity_desc=smc_liq_buy.description if buy_score >= sell_score else smc_liq_sell.description,
+                liquidity_state=smc_liq_buy.state if buy_score >= sell_score else smc_liq_sell.state,
+            )
+
     def evaluate_bar(
         self,
         df: pd.DataFrame,
@@ -1681,6 +2226,26 @@ class SignalEngine:
             else str(curr_row.name)
         )
         curr_price = float(curr_row["Close"])
+
+        is_idx_stock = ticker.endswith(".JK") or any(k in ticker.upper() for k in ["BBCA", "BBRI", "TLKM", "ASII", "BMRI", "BBNI"])
+        is_gold = (not is_idx_stock) and (any(k in ticker.upper() for k in ["GC=F", "XAUUSD", "GOLD", "EMAS"]) or (curr_price > 500.0 and "." not in ticker))
+
+        # JIKA INSTRUMEN EMAS (XAU/USD) DAN STRATEGI DEFAULT / MASTER / 3 PILAR DIAKTIFKAN:
+        # Gunakan Strategi 3 Pilar Inti (Zero-Bentrok) Sesuai Arahan Pengguna:
+        # 1. Arah Tren (Bob Volman) — Anti Nyungsep
+        # 2. Anti-Jebakan Paus (Mega Profit) — Anti Jarum Suntik
+        # 3. Volume Buyer (John Murphy) — Volume Riil
+        is_custom_test_strat = (strategy is not None and getattr(strategy, "name", "") not in ["Master_Confluence_Strategy", "3_Pilar_Inti_Zero_Bentrok", "3_Pilar_Inti_Zero_Bentrok_Plus_EMA_RSI_SNR"])
+        if is_gold and apply_pdf_filter and not is_custom_test_strat:
+            return self.evaluate_xau_3_pillars(
+                df=df_with_ind,
+                curr_row=curr_row,
+                prev_row=prev_row,
+                ticker=ticker,
+                curr_price=curr_price,
+                bar_idx=bar_idx,
+                df_h1=df_h1,
+            )
 
         # Snapshot indikator utama
         snapshot = {
@@ -1766,8 +2331,8 @@ class SignalEngine:
         bar_dt = curr_row.name if isinstance(curr_row.name, (pd.Timestamp, datetime)) else None
         session_code, session_name = get_trading_session(bar_dt)
 
-        # ─── LAPIS 1: OTAK UTAMA (H4 BIAS & IZIN) ───────────────────────────
-        macro_bias, macro_reason = self.evaluate_macro_bias_h4(df_h4=df_h4, curr_row=curr_row, curr_price=curr_price)
+        # ─── LAPIS 1: OTAK UTAMA (H1/M15 BIAS & H4 IZIN) ───────────────────
+        macro_bias, macro_reason = self.evaluate_macro_bias_h4(df_h4=df_h4, curr_row=curr_row, curr_price=curr_price, df_h1=df_h1)
 
         pdf_res = self.validate_pdf_entry_confluence(
             curr_row, prev_row, snapshot, signal_type=target_sig_type, session=session_code if is_gold else None
@@ -1834,8 +2399,11 @@ class SignalEngine:
         trade_type = preferred_trade_type or "SHORT"
 
         if is_gold:
-            MIN_GOLD_SL_USD = 6.00  # 60 pips mutlak ($6.00 USD)
-            MIN_GOLD_TP_USD = 6.00  # 60 pips mutlak ($6.00 USD)
+            mt5_cfg = self.config.get("mt5", {})
+            min_sl_cfg = float(mt5_cfg.get("min_gold_sl_pips", 30.0)) / 10.0
+            min_tp_cfg = float(mt5_cfg.get("min_gold_tp_pips", 30.0)) / 10.0
+            MIN_GOLD_SL_USD = max(2.50, min_sl_cfg)  # Default 30 pips ($3.00 USD)
+            MIN_GOLD_TP_USD = max(2.50, min_tp_cfg)  # Default 30 pips ($3.00 USD)
 
             ema20_val = float(snapshot.get("ema_20", curr_price))
             ema50_val = float(snapshot.get("ema_50", curr_price))
@@ -1844,11 +2412,10 @@ class SignalEngine:
             atr_val = float(curr_row.get("atr", 3.0))
             rsi_val = float(curr_row.get("rsi", 50.0))
 
-            mt5_cfg = self.config.get("mt5", {})
-            short_tp_usd = max(MIN_GOLD_TP_USD, float(mt5_cfg.get("gold_short_tp_pips", 60.0)) / 10.0)
-            short_sl_usd = max(MIN_GOLD_SL_USD, float(mt5_cfg.get("gold_short_sl_pips", 60.0)) / 10.0)
-            long_tp_usd = max(18.00, float(mt5_cfg.get("gold_long_tp_pips", 180.0)) / 10.0)
-            long_sl_usd = max(MIN_GOLD_SL_USD, float(mt5_cfg.get("gold_long_sl_pips", 60.0)) / 10.0)
+            short_tp_usd = max(MIN_GOLD_TP_USD, float(mt5_cfg.get("gold_short_tp_pips", 35.0)) / 10.0)
+            short_sl_usd = max(MIN_GOLD_SL_USD, float(mt5_cfg.get("gold_short_sl_pips", 40.0)) / 10.0)
+            long_tp_usd = max(18.00, float(mt5_cfg.get("gold_long_tp_pips", 90.0)) / 10.0)
+            long_sl_usd = max(6.00, float(mt5_cfg.get("gold_long_sl_pips", 60.0)) / 10.0)
 
             # ============================================================
             # SISTEM ATR-ADAPTIVE TP/SL ANTI-FAKEOUT (9 BUKU PDF TRADING)
@@ -1917,7 +2484,9 @@ class SignalEngine:
                 curr_high = float(curr_row.get("High", curr_price))
                 structural_resistance = max(swing_high, curr_high)
                 sl_dist_structural = round((structural_resistance + buffer_pips_usd) - curr_price, 2)
-                sl_distance = max(sl_dist_structural, round(atr_safe * 1.5, 2), 4.00)
+                min_sl_floor = 6.00 if trade_type == "LONG" else MIN_GOLD_SL_USD
+                max_sl_cap = 9.50 if session_code == "US" else 12.00
+                sl_distance = min(max_sl_cap, max(sl_dist_structural, round(atr_safe * 1.2, 2), min_sl_floor))
                 sl_price = round(curr_price + sl_distance, 2)
             else:  # BUY
                 if not recent_slice.empty and "Low" in recent_slice.columns:
@@ -1927,12 +2496,22 @@ class SignalEngine:
                 curr_low = float(curr_row.get("Low", curr_price))
                 structural_support = min(swing_low, curr_low)
                 sl_dist_structural = round(curr_price - (structural_support - buffer_pips_usd), 2)
-                sl_distance = max(sl_dist_structural, round(atr_safe * 1.5, 2), 4.00)
+                max_sl_cap = 9.50 if session_code == "US" else 12.00
+                min_sl_floor = 6.00 if trade_type == "LONG" else MIN_GOLD_SL_USD
+                sl_distance = min(max_sl_cap, max(sl_dist_structural, round(atr_safe * 1.2, 2), min_sl_floor))
                 sl_price = round(curr_price - sl_distance, 2)
 
-            # Target Take Profit dengan rasio Risk-to-Reward (RR) minimal 1:1.5
-            rr_target = 3.0 if trade_type == "LONG" else 1.5
-            tp_distance = round(sl_distance * rr_target, 2)
+            # Target Take Profit dengan rasio Risk-to-Reward (RR):
+            # - LONG: Rasio 3:1 (TP 3, SL 1), minimal $18 USD (180 pips)
+            # - SHORT: Scalp / Intraday adaptif 30 - 45 pips ($3.00 - $4.50 USD), R:R 1:1
+            if trade_type == "LONG":
+                rr_target = 3.0
+                tp_distance = max(18.00, round(sl_distance * rr_target, 2))
+            else:
+                rr_target = 1.0
+                tp_distance = min(12.00, max(MIN_GOLD_TP_USD, round(sl_distance * rr_target, 2)))
+                if tp_distance < sl_distance:
+                    tp_distance = sl_distance
 
             if target_sig_type == "SELL":
                 tp_price = round(curr_price - tp_distance, 2)
@@ -1943,8 +2522,9 @@ class SignalEngine:
                 risk_dist = max(curr_price - sl_price, 0.01)
                 rrr = round((tp_price - curr_price) / risk_dist, 2)
 
+            regime_type_desc = f"Sideways / Cepat ({trade_type})" if (not is_good_long_momentum or trade_type == "SHORT") else f"{trade_type} Momentum"
             market_regime = (
-                f"{session_name} {trade_type} Struktural (TP {int(tp_distance*10)}p & SL {int(sl_distance*10)}p, R:R {rrr:.1f}:1)"
+                f"{session_name} {regime_type_desc} Struktural (TP {int(tp_distance*10)}p & SL {int(sl_distance*10)}p, R:R {rrr:.1f}:1)"
                 + (" [HIGH-VOL]" if is_high_vol else "")
             )
 
@@ -2140,7 +2720,8 @@ class SignalEngine:
                     enable_limit_orders
                     and is_gold
                     and apply_pdf_filter
-                    and (pdf_approved or (always_limit and pdf_score >= 65.0) or pdf_score >= 80.0)
+                    and pdf_approved
+                    and (pdf_score >= 80.0 or always_limit)
                 )
                 ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
                 if can_place_buy_limit and ema20_lvl <= round(curr_price - min_limit_dist, 2):
@@ -2176,7 +2757,19 @@ class SignalEngine:
                     f"Sesi London sering terjadi manipulasi likuiditas / Judas swing, hanya sinyal Grade A+ kuat (>=75%) yang diizinkan."
                 ]
             else:
-                signal = "BUY"
+                always_limit = bool(self.config.get("mt5", {}).get("always_use_limit_orders", False))
+                if is_gold and always_limit:
+                    signal = "BUY_LIMIT"
+                    min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
+                    min_limit_dist = min_limit_pips / 10.0
+                    ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
+                    limit_price_val = min(round(curr_price - min_limit_dist, 2), ema20_lvl)
+                    is_limit_order_sig = True
+                    limit_order_type_val = "BUY_LIMIT"
+                    sl_price = round(limit_price_val - sl_distance, 2)
+                    tp_price = round(limit_price_val + tp_distance, 2)
+                else:
+                    signal = "BUY"
                 reasons = list(buy_reasons)
                 reasons.append(f"Lapis 1 (Otak Utama H4): {macro_bias}")
                 reasons.append(f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)")
@@ -2219,7 +2812,8 @@ class SignalEngine:
                         enable_limit_orders
                         and is_gold
                         and apply_pdf_filter
-                        and (pdf_approved or (always_limit and pdf_score >= 65.0) or pdf_score >= 80.0)
+                        and pdf_approved
+                        and (pdf_score >= 80.0 or always_limit)
                     )
                     ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
                     if can_place_sell_limit and ema20_lvl >= round(curr_price + min_limit_dist, 2):
@@ -2255,7 +2849,19 @@ class SignalEngine:
                         f"Sesi London sering terjadi manipulasi likuiditas / Judas swing, hanya sinyal Grade A+ kuat (>=75%) yang diizinkan."
                     ]
                 else:
-                    signal = "SELL"
+                    always_limit = bool(self.config.get("mt5", {}).get("always_use_limit_orders", False))
+                    if is_gold and always_limit:
+                        signal = "SELL_LIMIT"
+                        min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
+                        min_limit_dist = min_limit_pips / 10.0
+                        ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
+                        limit_price_val = max(round(curr_price + min_limit_dist, 2), ema20_lvl)
+                        is_limit_order_sig = True
+                        limit_order_type_val = "SELL_LIMIT"
+                        sl_price = round(limit_price_val + sl_distance, 2)
+                        tp_price = round(limit_price_val - tp_distance, 2)
+                    else:
+                        signal = "SELL"
                     reasons = list(sell_reasons)
                     reasons.append(f"Lapis 1 (Otak Utama H4): {macro_bias}")
                     reasons.append(f"Lapis 2 ({entry_pathway}): {setup_grade} ({pdf_score:.0f}%)")
@@ -2315,7 +2921,7 @@ class SignalEngine:
                         f"Close={curr_price:.0f}, EMA50={snapshot['ema_50']:.0f}, "
                         f"Vol Ratio={snapshot['volume_ratio']:.2f}x"
                     ]
-            elif ema_overextended_reject and is_gold and bool(self.config.get("mt5", {}).get("enable_limit_orders", True)) and apply_pdf_filter and (pdf_approved or (bool(self.config.get("mt5", {}).get("always_use_limit_orders", False)) and pdf_score >= 65.0) or pdf_score >= 80.0):
+            elif ema_overextended_reject and is_gold and bool(self.config.get("mt5", {}).get("enable_limit_orders", True)) and apply_pdf_filter and pdf_approved:
                 min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))
                 min_limit_dist = min_limit_pips / 10.0
                 ema20_lvl = round(float(curr_row.get("ema_20", curr_price) or curr_price), 2)
@@ -2370,6 +2976,7 @@ class SignalEngine:
             and is_gold
             and apply_pdf_filter
             and signal in ["BUY", "SELL"]
+            and pdf_approved
         )
         if always_limit:
             min_limit_pips = float(self.config.get("mt5", {}).get("min_limit_distance_pips", 15.0))

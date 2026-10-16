@@ -9,15 +9,17 @@ from member_copier.client_copier import (
     apply_zip_update,
     check_and_apply_ota_update,
     parse_version,
+    parse_signal,
 )
 
 
 def test_copier_version_exists():
-    assert CLIENT_COPIER_VERSION == "2.4.4"
+    assert CLIENT_COPIER_VERSION == "2.4.5"
     v_file = Path("member_copier/version.json")
     assert v_file.exists()
     data = json.loads(v_file.read_text(encoding="utf-8"))
-    assert data["version"] == "2.4.4"
+    assert data["version"] == "2.4.5"
+    assert parse_version("2.4.5") > parse_version("2.4.4")
     assert parse_version("2.4.4") > parse_version("2.4.3")
     assert parse_version("2.4.3") > parse_version("2.4.2")
 
@@ -185,5 +187,55 @@ def test_parse_signal_short_long_and_limits():
     sig4 = parse_signal(msg_long_sell)
     assert sig4["action"] == "SELL"
     assert sig4["trade_type"] == "LONG"
+
+
+def test_parse_signal_ignores_order_terjemput_and_reports():
+    msg_fill = (
+        "⚡ <b>[ORDER TERJEMPUT] LIMIT ORDER AKTIF</b>\n"
+        "👑 [AKUN MASTER PROVIDER]\n"
+        "📍 <b>Order:</b> <code>BUY LIMIT</code> @ $2,650.00\n"
+        "🎯 <b>Take Profit (TP):</b> $2,660.00\n"
+        "🛑 <b>Stop Loss (SL):</b> $2,640.00\n"
+        "STATUS: POSISI AKTIF"
+    )
+    assert parse_signal(msg_fill) == {}
+
+    msg_report = (
+        "📋 <b>[LAPORAN EKSEKUSI] POSISI MT5 TERBUKA</b>\n"
+        "👑 [AKUN MASTER PROVIDER]\n"
+        "📍 BUY 0.01 XAUUSD @ 2650.00"
+    )
+    assert parse_signal(msg_report) == {}
+
+    msg_tp = (
+        "👑 <b>[AKUN MASTER PROVIDER] LAPORAN HASIL TRANSAKSI MT5 SELESAI</b>\n"
+        "🎯 Outcome: WIN\n"
+        "Profit: +$12.50"
+    )
+    assert parse_signal(msg_tp) == {}
+
+
+def test_parse_signal_handles_official_filled_limit_order():
+    msg = (
+        "⚡ <b>[ORDER LIMIT TERJEMPUT] BUY LIMIT RESMI TERISI (FILLED)!</b> 🎯\n"
+        "🟢 <b>SINYAL ENTRY (MASUK / BUY): XAUUSDc (Gold)</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🎫 <b>Ticket Pending:</b> <code>#15294271065</code>\n"
+        "📊 <b>Instrumen:</b> <code>XAUUSDc (Gold)</code>\n"
+        "🟢 <b>Status Order:</b> <b>BUY / LONG (Posisi AKTIF)</b>\n"
+        "📦 <b>Volume:</b> <code>0.05 Lot</code>\n"
+        "💵 <b>Harga Entry:</b> <code>$4,175.00</code>\n"
+        "🎯 <b>Take Profit (TP):</b> <code>$4,181.00</code> (+60 pips / +$6.00)\n"
+        "🛑 <b>Stop Loss (SL):</b> <code>$4,169.00</code> (-60 pips / -$6.00)\n"
+        "⏱️ <b>Waktu Terjemput:</b> 22:45:00 WIB\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🛡️ <i>Pending limit order berhasil tersentuh harga pasar dan resmi terisi...</i>"
+    )
+    res = parse_signal(msg)
+    assert res["action"] == "BUY"
+    assert res["is_limit_order"] is False
+    assert res["entry_price"] == 4175.0
+    assert res["tp_price"] == 4181.0
+    assert res["sl_price"] == 4169.0
 
 

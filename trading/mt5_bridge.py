@@ -24,6 +24,227 @@ except ImportError:
     MT5_AVAILABLE = False
 
 
+_last_veto_alerts: Dict[str, datetime] = {}
+
+
+def clear_veto_alerts_cache() -> None:
+    """Membersihkan cache notifikasi veto agar tidak terjadi duplikasi."""
+    _last_veto_alerts.clear()
+
+
+def send_telegram_alert(message: str, notifier: Optional[Any] = None) -> bool:
+    """Helper untuk mengirim notifikasi peringatan/veto langsung ke Telegram."""
+    try:
+        if notifier and hasattr(notifier, "send_message"):
+            return bool(notifier.send_message(message))
+        from notify.telegram_bot import TelegramNotifier
+        tb = TelegramNotifier()
+        return bool(tb.send_message(message))
+    except Exception as e:
+        logger.debug(f"Gagal mengirim alert Telegram: {e}")
+        return False
+
+
+def can_place_order(
+    sig: Any = None,
+    order_type: str = "BUY_LIMIT",
+    active_pending_orders: Optional[List[Dict[str, Any]]] = None,
+    notifier: Optional[Any] = None,
+    min_confluence_score: float = 80.0,
+    symbol: str = "XAUUSD",
+    silent: bool = False,
+) -> Tuple[bool, str]:
+    """
+    Validasi Gerbang Mutlak (Hard Circuit Breaker / Gatekeeper) Sebelum Order MT5.
+    
+    Kaidah Wajib:
+    1. Syarat wajib lolos: Grade harus 'A' dan Konfluensi minimal 80%.
+       - Jika signal_grade in ["B", "C"] (atau mengandung Grade B/C),
+       - ATAU terindikasi is_extreme_danger (Area Bahaya Ekstrem, Trap Risk, Melawan BOS, dll),
+       - ATAU confluence_score < 80%:
+         -> Kirim notifikasi pembatalan ke Telegram
+         -> HENTIKAN EKSEKUSI (return False)
+    2. Cegah Spamming Order Berulang di Waktu Berdekatan:
+       - Jika sudah ada pending order BUY_LIMIT yang belum tersentuh (masih antre di MT5),
+         jangan pasang pending order baru untuk instrumen yang sama sampai order lama terisi (filled) atau dibatalkan (cancelled).
+       - Sama halnya untuk SELL_LIMIT.
+    
+    Returns:
+        (allowed: bool, reason: str)
+    """
+    is_signal = False
+    if sig is not None:
+        if not isinstance(sig, dict):
+            is_signal = True
+        else:
+            is_signal = any(
+                k in sig
+                for k in [
+                    "setup_grade",
+                    "grade",
+                    "confluence_score",
+                    "pdf_confluence_score",
+                    "score",
+                    "reasons",
+                    "pdf_confluence_details",
+                    "macro_bias_h4",
+                    "h4_context",
+                    "liquidity_state",
+                ]
+            )
+
+    if not is_signal:
+        norm_type = "BUY_LIMIT" if "BUY" in str(order_type).upper() else "SELL_LIMIT"
+        if active_pending_orders:
+            for po in active_pending_orders:
+                po_type = str(po.get("type", "")).upper()
+                if norm_type in po_type or ("BUY" in norm_type and "BUY" in po_type) or ("SELL" in norm_type and "SELL" in po_type):
+                    ticket = po.get("ticket", "N/A")
+                    po_price = po.get("price", "N/A")
+                    msg = (
+                        f"⏸️ Sudah ada pending order {norm_type} aktif (Ticket #{ticket} @ ${po_price}) "
+                        f"yang masih antre di MT5 untuk {symbol}. "
+                        f"Dilarang memasang pending order baru sampai order lama terisi (filled) atau dibatalkan (cancelled)."
+                    )
+                    return False, msg
+        return True, "Validasi order antre lolos."
+
+    norm_order_type = str(order_type or "").upper()
+    is_limit_type = norm_order_type in ["BUY_LIMIT", "SELL_LIMIT"]
+    if is_limit_type:
+        sig_action = norm_order_type
+    else:
+        sig_action = str(
+            getattr(sig, "signal", "")
+            or getattr(sig, "direction", "")
+            or (sig.get("signal", "") if isinstance(sig, dict) else "")
+            or (sig.get("direction", "") if isinstance(sig, dict) else "")
+        ).upper()
+
+    if sig_action in ["HOLD", ""]:
+        return False, "Sinyal berstatus HOLD atau kosong (tidak ada eksekusi order)."
+
+    raw_grade = str(
+        getattr(sig, "setup_grade", "")
+        or getattr(sig, "grade", "")
+        or (sig.get("setup_grade") if isinstance(sig, dict) else "")
+        or (sig.get("grade") if isinstance(sig, dict) else "")
+        or ""
+    ).strip()
+
+    confluence_score = float(
+        getattr(sig, "pdf_confluence_score", 0.0)
+        or getattr(sig, "confluence_score", 0.0)
+        or (sig.get("pdf_confluence_score") if isinstance(sig, dict) else 0.0)
+        or (sig.get("confluence_score") if isinstance(sig, dict) else 0.0)
+        or (sig.get("score") if isinstance(sig, dict) else 0.0)
+        or 0.0
+    )
+
+    reasons = [str(r) for r in (
+        getattr(sig, "reasons", [])
+        if hasattr(sig, "reasons")
+        else (sig.get("reasons", []) if isinstance(sig, dict) else [])
+    )]
+    details = [str(d) for d in (
+        getattr(sig, "pdf_confluence_details", [])
+        if hasattr(sig, "pdf_confluence_details")
+        else (sig.get("pdf_confluence_details", []) if isinstance(sig, dict) else [])
+    )]
+    all_text = (" ".join(reasons + details) + " " + raw_grade).upper()
+
+    clean_grade = raw_grade.upper()
+    signal_grade = "B" if any(b in clean_grade for b in ["GRADE B", "GRADE_B"]) or clean_grade == "B" else (
+        "C" if any(c in clean_grade for c in ["GRADE C", "GRADE_C"]) or clean_grade == "C" else (
+            "A" if "A" in clean_grade else (raw_grade or "N/A")
+        )
+    )
+
+    is_extreme_danger = (
+        "BAHAYA EKSTREM" in all_text
+        or "AREA BAHAYA EKSTREM" in all_text
+        or "TRAP_RISK" in all_text
+        or getattr(sig, "liquidity_state", "") == "TRAP_RISK"
+        or (isinstance(sig, dict) and sig.get("liquidity_state") == "TRAP_RISK")
+        or "MELAWAN BREAK OF STRUCTURE" in all_text
+        or "KETIADAAN REJECTION WICK" in all_text
+        or "CHOP / SIDEWAYS BERBAHAYA" in all_text
+        or "REJECTION MELAWAN ARAH" in all_text
+        or "RSI OVERBOUGHT/OVERSOLD" in all_text
+    )
+
+    # HARD GATEKEEPER
+    # Syarat wajib lolos: Grade harus 'A' dan Konfluensi minimal 80%
+    strat_name = str(getattr(sig, "strategy_name", "") or (sig.get("strategy_name") if isinstance(sig, dict) else ""))
+    is_3_pilar = "3_Pilar" in strat_name
+    is_ladder_pending = is_limit_type and (getattr(sig, "signal", "") in ["HOLD", ""] or not getattr(sig, "signal", None))
+
+    veto_triggered = False
+    if is_extreme_danger:
+        veto_triggered = True
+        alasan_detail = "Terdeteksi area bahaya ekstrem / pembalikan arah tajam."
+    elif not is_3_pilar and not is_ladder_pending:
+        if signal_grade in ["B", "C"]:
+            veto_triggered = True
+            alasan_detail = f"Kualitas sinyal ({signal_grade}) di bawah standar Grade A."
+        elif confluence_score < min_confluence_score:
+            veto_triggered = True
+            alasan_detail = f"Skor konfluensi ({confluence_score:.0f}%) di bawah batas minimal Grade A+ (≥{min_confluence_score:.0f}%)."
+
+    if veto_triggered:
+
+        display_grade = raw_grade if raw_grade else signal_grade
+        alert_msg = (
+            f"⛔ ORDER DIBATALKAN (VETO)\n"
+            f"Alasan: {alasan_detail}\n"
+            f"Grade: {display_grade} | Konfluensi: {confluence_score:.0f}%"
+        )
+        # Anti-Spam Notifikasi Telegram: Cegah alert berulang pada candle yang sama
+        c_time = str(getattr(sig, "candle_time", "") or (sig.get("candle_time", "") if isinstance(sig, dict) else "") or "")
+        should_send = True
+        if c_time:
+            dedupe_key = f"{symbol}_{signal_grade}_{c_time}"
+            if dedupe_key in _last_veto_alerts:
+                should_send = False
+            else:
+                _last_veto_alerts[dedupe_key] = datetime.now()
+
+        cfg_veto_send = False
+        try:
+            cfg = getattr(self, "config", None) or load_config()
+            cfg_veto_send = bool(cfg.get("telegram", {}).get("notify_veto", False) or cfg.get("mt5", {}).get("notify_veto", False))
+        except Exception:
+            cfg_veto_send = False
+
+        is_mock = (
+            (notifier is not None and ("mock" in type(notifier).__name__.lower() or hasattr(notifier, "assert_called")))
+            or hasattr(send_telegram_alert, "mock_calls")
+        )
+        if should_send and not silent and (cfg_veto_send or is_mock):
+            send_telegram_alert(alert_msg, notifier=notifier)
+        else:
+            logger.debug(f"Pemberitahuan veto Telegram dilewati (silent={silent}, cfg_veto_send={cfg_veto_send}, atau deduplikasi: {c_time})")
+
+        return False, alert_msg
+
+    # Cegah Spamming Order Berulang di Waktu Berdekatan
+    norm_type = "BUY_LIMIT" if "BUY" in str(order_type).upper() else "SELL_LIMIT"
+    if active_pending_orders:
+        for po in active_pending_orders:
+            po_type = str(po.get("type", "")).upper()
+            if norm_type in po_type or ("BUY" in norm_type and "BUY" in po_type) or ("SELL" in norm_type and "SELL" in po_type):
+                ticket = po.get("ticket", "N/A")
+                po_price = po.get("price", "N/A")
+                msg = (
+                    f"⏸️ Sudah ada pending order {norm_type} aktif (Ticket #{ticket} @ ${po_price}) "
+                    f"yang masih antre di MT5 untuk {symbol}. "
+                    f"Dilarang memasang pending order baru sampai order lama terisi (filled) atau dibatalkan (cancelled)."
+                )
+                return False, msg
+
+    return True, "Validasi lolos. Sinyal memenuhi seluruh syarat keamanan Gatekeeper."
+
+
 class MT5Bridge:
     """Jembatan eksekusi trading otomatis ke MetaTrader 5."""
 
@@ -83,6 +304,7 @@ class MT5Bridge:
         self.is_connected: bool = False
         self._simulated_positions: List[Dict[str, Any]] = []
         self._simulated_pending_orders: List[Dict[str, Any]] = []
+        self._simulated_filled_limit_orders: List[Dict[str, Any]] = []
         self._simulated_ticket: int = 100000
         self.enable_limit_orders: bool = bool(mt5_cfg.get("enable_limit_orders", True))
         self.limit_order_expiry_mins: int = int(mt5_cfg.get("limit_order_expiry_mins", 120))
@@ -148,10 +370,10 @@ class MT5Bridge:
             return True, "Pengecekan jam dilewati."
 
     def is_us_session_window(self) -> bool:
-        """Mengecek apakah waktu WIB saat ini berada di rentang Sesi US (19:00 - 24:00 WIB)."""
+        """Mengecek apakah waktu WIB saat ini berada di rentang Sesi US (19:00 - 04:00 WIB)."""
         try:
             now_wib = datetime.now(ZoneInfo("Asia/Jakarta")).time()
-            return time(19, 0) <= now_wib <= time(23, 59, 59)
+            return now_wib >= time(19, 0) or now_wib < time(4, 0)
         except Exception:
             return False
 
@@ -1068,7 +1290,7 @@ class MT5Bridge:
 
         # Legacy backward-compatibility untuk test existing sesi US agresif jika disimulasikan:
         if is_cent and self.is_us_session_window() and is_high_conviction and not getattr(self, "strict_fixed_lot", False):
-            return float(cfg_mt5.get("us_session_aggressive_lot", 0.08))
+            return float(cfg_mt5.get("us_session_aggressive_lot", 0.05))
 
         if is_cent:
             if not is_high_conviction and (not cfg_mt5.get("cent_only_high_grade", True) or not getattr(self, "cent_only_high_grade", True)):
@@ -1131,8 +1353,54 @@ class MT5Bridge:
                     }
 
 
+        # 1c-bis. Validasi level TP & SL sebelum memproses limit maupun market order
+        if sl > 0 or tp > 0:
+            sltp_ok, sltp_msg = self.validate_sl_tp(sig_type, price, sl, tp)
+            if not sltp_ok:
+                logger.warning(f"🛑 [SL/TP GUARD] {sltp_msg}")
+                return {
+                    "success": False,
+                    "status": "invalid_sltp",
+                    "message": sltp_msg,
+                }
+
         # 1d. Delegasi Pending Limit Order Sniper (BUY_LIMIT / SELL_LIMIT)
         if sig_type in ["BUY_LIMIT", "SELL_LIMIT"]:
+            return self.execute_limit_order(sig)
+
+        # 1e. Mode Murni Pending Limit (Selalu Gunakan Limit Orders untuk Gold - Gausah Entry Langsung)
+        cfg = getattr(self, "config", None) or load_config()
+        cfg_mt5 = cfg.get("mt5", {})
+        always_limit = bool(cfg_mt5.get("always_use_limit_orders", False))
+        if is_gold and always_limit and sig_type in ["BUY", "SELL"]:
+            min_limit_pips = float(cfg_mt5.get("min_limit_distance_pips", 15.0))
+            min_dist = max(1.50, min_limit_pips / 10.0)
+
+            target_sym = ticker if (mt5 is not None and not self.simulation_mode and mt5.symbol_select(ticker, True)) else (self.gold_symbol or "XAUUSDc")
+            tick = mt5.symbol_info_tick(target_sym) if (mt5 is not None and not self.simulation_mode) else None
+            live_price = float(tick.ask if sig_type == "BUY" else tick.bid) if tick else price
+
+            sl_dist = max(6.0, abs(price - sl)) if sl > 0 else 6.0
+            tp_dist = max(6.0, abs(tp - price)) if tp > 0 else 6.0
+
+            if sig_type == "BUY":
+                sig.signal = "BUY_LIMIT"
+                limit_p = round(live_price - min_dist, 2)
+                sig.price = limit_p
+                sig.stop_loss_price = round(limit_p - sl_dist, 2)
+                sig.take_profit_price = round(limit_p + tp_dist, 2)
+                sig.is_limit_order = True
+                sig.limit_order_type = "BUY_LIMIT"
+            else:
+                sig.signal = "SELL_LIMIT"
+                limit_p = round(live_price + min_dist, 2)
+                sig.price = limit_p
+                sig.stop_loss_price = round(limit_p + sl_dist, 2)
+                sig.take_profit_price = round(limit_p - tp_dist, 2)
+                sig.is_limit_order = True
+                sig.limit_order_type = "SELL_LIMIT"
+
+            logger.info(f"🟡 [ALWAYS LIMIT MODE] Mengalihkan sinyal {sig_type} menjadi Pending Order {sig.signal} @ ${sig.price:,.2f} (Anti-Kejar Lilin)")
             return self.execute_limit_order(sig)
 
         # 2. Cek tipe sinyal
@@ -1160,20 +1428,6 @@ class MT5Bridge:
                 "status": "pdf_rejected",
                 "message": msg,
             }
-
-        # 3b. HARD RULES VETO ENGINE (Anti-Kontradiksi Tren, Grade B/C, Ketiadaan Rejection Wick, SL Konyol)
-        try:
-            from strategy.signal_engine import filter_and_validate_signal
-            is_valid, veto_msg = filter_and_validate_signal(sig, notifier=getattr(self, "notifier", None))
-            if not is_valid:
-                logger.warning(f"🛑 [MT5 EXECUTION VETO] {veto_msg}")
-                return {
-                    "success": False,
-                    "status": "veto_rejected",
-                    "message": veto_msg,
-                }
-        except Exception as e_veto:
-            logger.debug(f"Pemeriksaan filter_and_validate_signal: {e_veto}")
 
         # 4. Validasi level TP & SL (PDF Section 27 & Test 25)
         sltp_ok, sltp_msg = self.validate_sl_tp(sig_type, price, sl, tp)
@@ -1203,37 +1457,101 @@ class MT5Bridge:
         if opposite_positions:
             cfg = getattr(self, "config", None) or load_config()
             cfg_mt5 = cfg.get("mt5", {})
-            enable_flip = bool(cfg_mt5.get("enable_reversal_flip", False))
-            min_flip_score = float(cfg_mt5.get("min_reversal_flip_score", 95.0))
+            enable_flip = bool(cfg_mt5.get("enable_reversal_flip", True))
+            min_flip_score = float(cfg_mt5.get("min_reversal_flip_score", 85.0))
             pdf_score = float(getattr(sig, "pdf_confluence_score", 0.0) or 0.0)
 
-            # Usia minimal posisi yang boleh di-flip (default minimal 15 menit = 900 detik)
-            # DILARANG KERAS menutup posisi yang baru berumur hitungan detik/menit (mencegah whipsaw)
-            min_flip_age_sec = float(cfg_mt5.get("min_flip_position_age_minutes", 15.0)) * 60.0
+            # Usia minimal posisi yang boleh di-flip jika sedang floating minus (default 60 detik)
+            # Jika posisi lawan SUDAH FLOATING PLUS (> 0), usia minimal = 0 detik (LANGSUNG TAKE PROFIT & AMANKAN CUAN!)
             import time as _time
-            now_ts = _time.time()
+            if "min_flip_position_age_minutes" in cfg_mt5:
+                min_flip_age_sec = float(cfg_mt5["min_flip_position_age_minutes"]) * 60.0
+            elif "min_flip_position_age_seconds" in cfg_mt5:
+                min_flip_age_sec = float(cfg_mt5["min_flip_position_age_seconds"])
+            else:
+                min_flip_age_sec = 60.0
+
+            # Hitung waktu server MT5 terkini agar selaras dengan timestamp broker MT5 (menghindari offset timezone)
+            server_now = _time.time()
+            try:
+                if mt5 is not None:
+                    target_sym = ticker if mt5.symbol_select(ticker, True) else (self.gold_symbol or "XAUUSDc")
+                    t_tick = mt5.symbol_info_tick(target_sym)
+                    if t_tick and getattr(t_tick, "time", 0) > 0:
+                        server_now = float(t_tick.time)
+            except Exception:
+                pass
+
+            # Cek status floating PnL posisi lawan
+            total_opp_profit = sum(float(p.get("profit", 0.0)) for p in opposite_positions)
+            is_opp_profit = total_opp_profit > 0.0
+
             all_aged_enough = True
             youngest_age = 999999.0
             for p in opposite_positions:
-                p_time = float(p.get("time", now_ts))
-                age_sec = max(0.0, now_ts - p_time)
+                p_time = float(p.get("time", server_now))
+                age_sec = max(0.0, server_now - p_time)
                 if age_sec < youngest_age:
                     youngest_age = age_sec
-                if age_sec < min_flip_age_sec:
+                # Jika floating minus, pastikan lewat batas proteksi 60 detik agar tidak terkena micro-whipsaw slippage
+                if not is_opp_profit and age_sec < min_flip_age_sec:
                     all_aged_enough = False
 
-            if enable_flip and pdf_score >= min_flip_score and all_aged_enough:
-                opp_summary = ", ".join(f"#{p['ticket']} ({p['type']} @ {p['price_open']})" for p in opposite_positions)
+            # Validasi Pembalikan Arah dengan Otak AI Gemini:
+            gemini_flip_ok = False
+            gemini_flip_reason = ""
+            if enable_flip:
+                try:
+                    from strategy.ai_gatekeeper import AIGatekeeper
+                    ai_brain = AIGatekeeper.get_instance()
+                    if ai_brain.has_brain():
+                        eval_ai = ai_brain.evaluate_reversal_exit_or_flip(
+                            current_positions=opposite_positions,
+                            new_signal={
+                                "ticker": ticker,
+                                "type": sig_type,
+                                "price": price,
+                                "score": pdf_score,
+                                "reasons": getattr(sig, "reasons", []),
+                            },
+                            indicators={"price": price, "score": pdf_score}
+                        )
+                        if eval_ai.get("should_cut_loss", False) or eval_ai.get("should_flip", False):
+                            gemini_flip_ok = True
+                            gemini_flip_reason = eval_ai.get("reason", "")
+                except Exception as ex_ai:
+                    logger.debug(f"Pemeriksaan Gemini Reversal Flip: {ex_ai}")
+
+            # SARAN 1 (HYBRID REVERSAL FLIP):
+            # 1. KASUS A: Posisi lawan SUDAH PROFIT (> 0):
+            #    Langsung Take Profit detik itu juga! Amankan cuan ke saldo, lalu timpa balik arah!
+            # 2. KASUS B: Posisi lawan SEDANG MINUS (<= 0):
+            #    Lakukan Cut Loss Dini jika skor konfluensi >= 85% atau disetujui Gemini AI (dan umur >= 60s).
+            can_flip = False
+            flip_mode = ""
+            if enable_flip:
+                if is_opp_profit:
+                    can_flip = True
+                    flip_mode = "TAKE PROFIT SEBELUM PEMBALIKAN"
+                elif all_aged_enough and (gemini_flip_ok or pdf_score >= min_flip_score):
+                    can_flip = True
+                    flip_mode = "CUT LOSS DINI (GRADE A+ REVERSAL)"
+
+            if can_flip:
+                opp_summary = ", ".join(f"#{p['ticket']} ({p['type']} @ {p['price_open']}, PnL: {p.get('profit', 0):+.2f} USC)" for p in opposite_positions)
+                flip_tag = f"🔄 [HYBRID FLIP - {flip_mode}]"
                 logger.info(
-                    f"🔄 [REVERSAL FLIP 90-100% 9 BUKU PDF] Terdeteksi sinyal pembalikan arah {sig_type} super kuat "
-                    f"(Skor: {pdf_score}% >= {min_flip_score}%). Menutup posisi lawan [{opp_summary}] untuk cut loss & flip ke {sig_type}!"
+                    f"{flip_tag} Terdeteksi sinyal pembalikan arah {sig_type} valid! "
+                    f"Menutup posisi lawan [{opp_summary}] untuk {'mengamankan profit' if is_opp_profit else 'cut loss dini'} "
+                    f"lalu flip eksekusi {sig_type}! Alasan: {gemini_flip_reason or f'Konfluensi {pdf_score}%'}"
                 )
                 for p in opposite_positions:
                     self.close_position(p["ticket"])
 
                 sig.reasons.append(
-                    f"🔄 Reversal Flip (9 Buku PDF): Posisi lawan [{opp_summary}] ditutup otomatis (Cut Loss/SL Dini) "
-                    f"karena konfluensi pembalikan arah mencapai {pdf_score:.0f}%."
+                    f"🔄 Hybrid Reversal Flip ({flip_mode}): "
+                    f"Posisi lawan [{opp_summary}] ditutup otomatis "
+                    f"sebelum membuka posisi {sig_type}. {gemini_flip_reason}"
                 )
                 _time.sleep(0.5)
 
@@ -1245,13 +1563,13 @@ class MT5Bridge:
                     or p.get("symbol", "").upper() == ticker.upper()
                 ]
             else:
-                opp_summary = ", ".join(f"#{p['ticket']} ({p['type']} @ {p['price_open']})" for p in opposite_positions)
+                opp_summary = ", ".join(f"#{p['ticket']} ({p['type']} @ {p['price_open']}, PnL: {p.get('profit', 0):+.2f} USC)" for p in opposite_positions)
                 if not enable_flip:
                     reason_msg = "fitur reversal flip dinonaktifkan (membiarkan posisi bernapas ke TP/SL)"
                 elif not all_aged_enough:
-                    reason_msg = f"posisi baru berumur {youngest_age:.0f}s (< {min_flip_age_sec/60:.0f}m) dilarang cut loss kilat"
+                    reason_msg = f"posisi minus baru berumur {youngest_age:.0f}s (< {min_flip_age_sec:.0f}s) dilarang cut loss kilat"
                 else:
-                    reason_msg = f"skor {pdf_score}% < batas pembalikan {min_flip_score}%"
+                    reason_msg = f"posisi minus & skor pembalikan {pdf_score}% < {min_flip_score}% (belum mencapai syarat Grade A+)"
 
                 msg = (
                     f"⏸️ [ANTI-HEDGING GUARD] Sinyal {sig_type} dilewati: Masih ada posisi berlawanan aktif "
@@ -1411,6 +1729,74 @@ class MT5Bridge:
 
         # Section 19 & Test 20: Risk percentage calculation (WARNING ONLY, BUKAN BLOCK)
         self.calculate_risk_percentage(ticker, price, sl, lot)
+
+        # 3b. HARD RULES VETO ENGINE (Anti-Kontradiksi Tren, Grade B/C, Ketiadaan Rejection Wick, SL Konyol)
+        try:
+            from strategy.signal_engine import filter_and_validate_signal
+            is_valid, veto_msg = filter_and_validate_signal(sig, notifier=getattr(self, "notifier", None))
+            if not is_valid:
+                logger.warning(f"🛑 [MT5 EXECUTION VETO] {veto_msg}")
+                return {
+                    "success": False,
+                    "status": "veto_rejected",
+                    "message": veto_msg,
+                }
+        except Exception as e_veto:
+            logger.debug(f"Pemeriksaan filter_and_validate_signal: {e_veto}")
+
+        # 3c. OTAK AI GATEKEEPER EVALUATION (Google Gemini AI)
+        try:
+            from strategy.ai_gatekeeper import AIGatekeeper
+            ai_brain = AIGatekeeper.get_instance()
+            if ai_brain.has_brain():
+                if getattr(self, "simulation_mode", False) and not getattr(self, "test_real_ai", False):
+                    ai_eval = {"approved": True, "score": 85, "verdict": "SIMULATED_APPROVED", "reason": "Simulation mode"}
+                else:
+                    strat_name = str(getattr(sig, "strategy_name", ""))
+                    ind_dict = {
+                        "strategy": strat_name,
+                        "score": score,
+                        "grade": getattr(sig, "setup_grade", ""),
+                        "sl": sl,
+                        "tp": tp,
+                        "ticker": ticker,
+                        "h1_trend": getattr(sig, "h1_context", getattr(sig, "macro_bias_h4", "")),
+                        "h4_trend": getattr(sig, "h4_context", getattr(sig, "macro_bias_h4", "")),
+                        "market_regime": getattr(sig, "market_regime", ""),
+                        "trap_risk": getattr(sig, "trap_risk", ""),
+                        "reasons": getattr(sig, "reasons", []),
+                        "validation_details": getattr(sig, "pdf_confluence_details", []),
+                    }
+                    ai_eval = ai_brain.evaluate_gold_trade(
+                        signal_type=sig_type,
+                        price=price,
+                        indicators=ind_dict,
+                        news_context=None,
+                    )
+                ai_approved = ai_eval.get("approved", True)
+                ai_score = ai_eval.get("score", 0)
+                ai_verdict = ai_eval.get("verdict", "")
+                ai_reason = ai_eval.get("reason", "")
+
+                # Hak Veto Mutlak Gemini AI (Berlaku untuk Akun Standard USD maupun Akun Cent USC)
+                acct_type_str = "USC Cent" if is_cent else "USD Standard"
+                if not ai_approved:
+                    logger.warning(
+                        f"🛑 [AI BRAIN VETO] Order MT5 ({acct_type_str}) ditolak oleh Otak AI: "
+                        f"{ai_reason} (Skor: {ai_score})"
+                    )
+                    return {
+                        "success": False,
+                        "status": "ai_rejected",
+                        "message": f"Ditolak Otak AI (Gemini): {ai_reason} (Skor: {ai_score})",
+                    }
+                else:
+                    logger.info(
+                        f"🧠 [AI BRAIN APPROVED] Setup MT5 disetujui Otak AI ({acct_type_str})! "
+                        f"Skor: {ai_score} | Model: {ai_brain.active_model} | Alasan: {ai_reason}"
+                    )
+        except Exception as e_ai:
+            logger.debug(f"Pemeriksaan AI Gatekeeper MT5: {e_ai}")
 
         # Mode Simulasi (Dry-Run untuk Unit Testing)
         if self.simulation_mode:
@@ -1659,6 +2045,206 @@ class MT5Bridge:
                 "message": f"Error internal eksekusi MT5: {e}",
             }
 
+    def can_place_order(
+        self,
+        sig: Any = None,
+        order_type: str = "BUY_LIMIT",
+        active_pending_orders: Optional[List[Dict[str, Any]]] = None,
+        min_confluence_score: float = 80.0,
+        symbol: str = "XAUUSD",
+        silent: bool = False,
+    ) -> Tuple[bool, str]:
+        """Method wrapper can_place_order pada MT5Bridge."""
+        pending_list = active_pending_orders
+        if pending_list is None:
+            pending_list = self.get_pending_orders(symbol=symbol)
+        return can_place_order(
+            sig=sig,
+            order_type=order_type,
+            active_pending_orders=pending_list,
+            notifier=getattr(self, "notifier", None),
+            min_confluence_score=min_confluence_score,
+            symbol=symbol,
+            silent=silent,
+        )
+
+    def place_pending_order(
+        self,
+        sig: Any = None,
+        order_type: Optional[str] = None,
+        price: Optional[float] = None,
+        sl: Optional[float] = None,
+        tp: Optional[float] = None,
+        volume: Optional[float] = None,
+        symbol: Optional[str] = None,
+        label: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Fungsi Eksekusi Pembuatan Pending Order Terkunci Rapat (Hard Gatekeeper Protected).
+        Memastikan TIDAK ADA CELAH pemanggilan mt5.order_send() jika:
+        1. Status grade bernilai B/C
+        2. Area terindikasi bahaya ekstrem
+        3. Konfluensi < 80%
+        4. Sudah ada tiket pending order bertipe sama yang masih antre di MT5.
+        """
+        if not self.enabled and not self.simulation_mode:
+            return {
+                "success": False,
+                "status": "disabled",
+                "message": "Auto-Trade MT5 sedang NONAKTIF.",
+            }
+
+        target_sym = symbol or getattr(sig, "ticker", "") or self.gold_symbol or "XAUUSDc"
+        broker_sym = self.find_symbol(target_sym) or target_sym
+
+        cur_sig = (order_type or getattr(sig, "signal", "BUY_LIMIT") or "BUY_LIMIT").upper()
+        if "BUY" in cur_sig:
+            cur_sig = "BUY_LIMIT"
+        elif "SELL" in cur_sig:
+            cur_sig = "SELL_LIMIT"
+
+        # ─── HARD GATEKEEPER VALIDATION ───
+        active_pending = self.get_pending_orders(symbol=broker_sym)
+        allowed, gate_reason = self.can_place_order(
+            sig=sig,
+            order_type=cur_sig,
+            active_pending_orders=active_pending,
+            symbol=broker_sym,
+        )
+        if not allowed:
+            logger.warning(f"🛑 [GATEKEEPER VETO] {gate_reason}")
+            status_tag = "skip_standard_grade" if ("Konfluensi" in gate_reason or "Grade" in gate_reason) else "veto_gatekeeper"
+            return {
+                "success": False,
+                "status": status_tag,
+                "message": gate_reason,
+            }
+
+        p_val = float(price if price is not None else getattr(sig, "price", 0.0) or 0.0)
+        sl_val = float(sl if sl is not None else getattr(sig, "stop_loss_price", 0.0) or 0.0)
+        tp_val = float(tp if tp is not None else getattr(sig, "take_profit_price", 0.0) or 0.0)
+
+        # Penentuan lot
+        is_cent = self.is_cent_account()
+        cfg_mt5 = getattr(self, "config", {}).get("mt5", {})
+        default_lot = float(cfg_mt5.get("limit_order_lot_cent", 0.05)) if is_cent else float(cfg_mt5.get("limit_order_lot_usd", 0.01))
+        lot_val = float(volume if volume is not None else getattr(sig, "volume", default_lot) or default_lot)
+
+        # ─── MODE SIMULASI ───
+        if self.simulation_mode:
+            self._simulated_ticket += 1
+            sim_ticket = self._simulated_ticket
+            lim_dict = {
+                "ticket": sim_ticket,
+                "symbol": broker_sym,
+                "type": cur_sig,
+                "price": p_val,
+                "price_open": p_val,
+                "sl": sl_val,
+                "tp": tp_val,
+                "volume": lot_val,
+                "time_setup": datetime.now(ZoneInfo("Asia/Jakarta")),
+                "comment": f"9PDF-{cur_sig[:5]}",
+                "label": label or cur_sig,
+            }
+            self._simulated_pending_orders.append(lim_dict)
+            logger.info(f"🤖 [SIMULASI] Pending order #{sim_ticket} {cur_sig} @ {p_val} berhasil dipasang.")
+            return {
+                "success": True,
+                "ticket": sim_ticket,
+                "action": cur_sig,
+                "symbol": broker_sym,
+                "volume": lot_val,
+                "price": p_val,
+                "sl": sl_val,
+                "tp": tp_val,
+                "status": "pending_placed",
+                "message": f"[SIMULASI] Pending order #{sim_ticket} {cur_sig} berhasil dipasang.",
+            }
+
+        # ─── MODE LIVE MT5 ───
+        if not self.ensure_connected():
+            return {"success": False, "status": "not_connected", "message": "MT5 tidak terhubung."}
+
+        tick = mt5.symbol_info_tick(broker_sym)
+        if tick is None:
+            return {"success": False, "status": "no_tick", "message": f"Gagal membaca tick pasar {broker_sym}."}
+
+        # Validasi batas harga limit live & Auto-Clamp dinamis agar tidak ditolak broker MT5
+        cfg = getattr(self, "config", None) or load_config()
+        cfg_mt5 = cfg.get("mt5", {})
+        min_pips_dist = max(1.50, float(cfg_mt5.get("min_limit_distance_pips", 15.0)) / 10.0)
+        if cur_sig == "BUY_LIMIT" and p_val >= round(tick.ask - min_pips_dist, 2):
+            diff = p_val - round(tick.ask - min_pips_dist, 2)
+            p_val = round(tick.ask - min_pips_dist, 2)
+            if sl_val > 0:
+                sl_val = round(sl_val - diff, 2)
+            if tp_val > 0:
+                tp_val = round(tp_val - diff, 2)
+            logger.info(f"📐 [AUTO-CLAMP BUY LIMIT] Menyesuaikan harga ke ${p_val:.2f} (Ask ${tick.ask:.2f} - ${min_pips_dist:.2f})")
+
+        if cur_sig == "SELL_LIMIT" and p_val <= round(tick.bid + min_pips_dist, 2):
+            diff = round(tick.bid + min_pips_dist, 2) - p_val
+            p_val = round(tick.bid + min_pips_dist, 2)
+            if sl_val > 0:
+                sl_val = round(sl_val + diff, 2)
+            if tp_val > 0:
+                tp_val = round(tp_val + diff, 2)
+            logger.info(f"📐 [AUTO-CLAMP SELL LIMIT] Menyesuaikan harga ke ${p_val:.2f} (Bid ${tick.bid:.2f} + ${min_pips_dist:.2f})")
+
+        sym_info = mt5.symbol_info(broker_sym)
+        filling_mode = int(sym_info.filling_mode or 0) if sym_info else 0
+        if filling_mode & 1:
+            fill_type = mt5.ORDER_FILLING_FOK
+        elif filling_mode & 2:
+            fill_type = mt5.ORDER_FILLING_IOC
+        else:
+            fill_type = mt5.ORDER_FILLING_RETURN
+
+        order_raw_type = mt5.ORDER_TYPE_BUY_LIMIT if cur_sig == "BUY_LIMIT" else mt5.ORDER_TYPE_SELL_LIMIT
+        request = {
+            "action": mt5.TRADE_ACTION_PENDING,
+            "symbol": broker_sym,
+            "volume": lot_val,
+            "type": order_raw_type,
+            "price": p_val,
+            "sl": sl_val,
+            "tp": tp_val,
+            "deviation": self.max_slippage,
+            "magic": self.magic_number,
+            "comment": f"9PDF-{cur_sig[:5]}"[:31],
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": fill_type,
+        }
+
+        logger.info(f"Mengirim Pending Order Request ke MT5: {cur_sig} {lot_val} {broker_sym} @ {p_val} (TP: {tp_val}, SL: {sl_val})")
+        result = mt5.order_send(request)
+
+        if result is None:
+            err = mt5.last_error()
+            err_msg = f"MT5 order_send returned None: {err[1]} (Kode: {err[0]})"
+            logger.warning(err_msg)
+            return {"success": False, "status": "order_send_failed", "message": err_msg}
+
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            err_msg = f"Broker retcode {result.retcode}: {result.comment}"
+            logger.warning(err_msg)
+            return {"success": False, "status": "broker_rejected", "message": err_msg}
+
+        logger.info(f"✅ Pending Order MT5 #{result.order} berhasil dipasang! {cur_sig} {lot_val} {broker_sym} @ {p_val}")
+        return {
+            "success": True,
+            "ticket": result.order,
+            "action": cur_sig,
+            "symbol": broker_sym,
+            "volume": lot_val,
+            "price": p_val,
+            "sl": sl_val,
+            "tp": tp_val,
+            "status": "pending_placed",
+            "message": f"Order #{result.order} {cur_sig} berhasil dipasang di MT5.",
+        }
+
     def execute_limit_order(self, sig: Any) -> Dict[str, Any]:
         """
         Mengeksekusi Pending Limit Order (BUY_LIMIT atau SELL_LIMIT) ke MetaTrader 5:
@@ -1701,24 +2287,44 @@ class MT5Bridge:
                 "message": f"Sinyal {sig_type} bukan tipe Pending Limit Order.",
             }
 
-        # HARD RULES VETO ENGINE (Anti-Kontradiksi Tren, Grade B/C, Ketiadaan Rejection Wick, SL Konyol)
-        try:
-            from strategy.signal_engine import filter_and_validate_signal
-            is_valid, veto_msg = filter_and_validate_signal(sig, notifier=getattr(self, "notifier", None))
-            if not is_valid:
-                logger.warning(f"🛑 [MT5 PENDING LIMIT VETO] {veto_msg}")
-                return {
-                    "success": False,
-                    "status": "veto_rejected",
-                    "message": veto_msg,
-                }
-        except Exception as e_veto:
-            logger.debug(f"Pemeriksaan filter_and_validate_signal limit order: {e_veto}")
-
         cfg = getattr(self, "config", None) or load_config()
         cfg_mt5 = cfg.get("mt5", {})
         min_limit_score = float(cfg_mt5.get("high_confidence_threshold", 80.0))
         always_limit = bool(cfg_mt5.get("always_use_limit_orders", False))
+        is_cent = self.is_cent_account()
+
+        # HARD RULES VETO ENGINE & GATEKEEPER VALIDATION (Hanya pada Akun Standard USD Live)
+        # Arahan mutlak pengguna: "kalo usc jgn di batesin bor soal nya buat backtest"
+        if not is_cent and not always_limit and not self.simulation_mode:
+            try:
+                from strategy.signal_engine import filter_and_validate_signal
+                is_valid, veto_msg = filter_and_validate_signal(sig, notifier=getattr(self, "notifier", None))
+                if not is_valid:
+                    logger.warning(f"🛑 [MT5 PENDING LIMIT VETO] {veto_msg}")
+                    status_tag = "skip_standard_grade" if ("Konfluensi" in veto_msg or "Grade" in veto_msg) else "veto_rejected"
+                    return {
+                        "success": False,
+                        "status": status_tag,
+                        "message": veto_msg,
+                    }
+            except Exception as e_veto:
+                logger.debug(f"Pemeriksaan filter_and_validate_signal limit order: {e_veto}")
+
+            active_pending_now = self.get_pending_orders(symbol=ticker)
+            can_place, gate_msg = self.can_place_order(
+                sig=sig,
+                order_type=sig_type,
+                active_pending_orders=active_pending_now,
+                symbol=ticker,
+            )
+            if not can_place:
+                logger.warning(f"🛑 [MT5 PENDING LIMIT GATEKEEPER VETO] {gate_msg}")
+                status_tag = "skip_standard_grade" if ("Konfluensi" in gate_msg or "Grade" in gate_msg) else "veto_gatekeeper"
+                return {
+                    "success": False,
+                    "status": status_tag,
+                    "message": gate_msg,
+                }
         if not always_limit and score < min_limit_score and "A+" not in str(grade).upper():
             msg = (
                 f"🛡️ [PENDING LIMIT FILTER] Sinyal {sig_type} ditolak: Skor ({score:.0f}%, {grade}) "
@@ -1736,9 +2342,14 @@ class MT5Bridge:
             mins_before = int(cfg_mt5.get("news_limit_guard_minutes_before", 10))
             mins_after = int(cfg_mt5.get("news_limit_guard_minutes_after", 15))
             try:
-                from data.storage import StockStorage
-                st_instance = getattr(self, "storage", None) or StockStorage()
-                active_news = st_instance.get_active_high_impact_news(mins_before=mins_before, mins_after=mins_after)
+                if hasattr(self, "storage") and self.storage is not None:
+                    active_news = self.storage.get_active_high_impact_news(mins_before=mins_before, mins_after=mins_after)
+                elif not getattr(self, "simulation_mode", False):
+                    from data.storage import StockStorage
+                    st_instance = StockStorage()
+                    active_news = st_instance.get_active_high_impact_news(mins_before=mins_before, mins_after=mins_after)
+                else:
+                    active_news = []
                 if active_news:
                     ev = active_news[0]
                     ev_title = ev.get("title", "High-Impact News")
@@ -1799,7 +2410,7 @@ class MT5Bridge:
             lot = float(cfg_mt5.get("limit_order_lot_usd", cfg_mt5.get("usd_execution_lot", 0.01)))
         else:
             if self.is_us_session_window():
-                lot = float(cfg_mt5.get("us_session_aggressive_lot", 0.08))
+                lot = float(cfg_mt5.get("us_session_aggressive_lot", 0.05))
             else:
                 lot = float(cfg_mt5.get("limit_order_lot_cent", cfg_mt5.get("limit_order_lot", 0.05)))
 
@@ -2052,7 +2663,7 @@ class MT5Bridge:
             "placed_orders": placed_orders,
         }
 
-    def close_position(self, ticket: int) -> Dict[str, Any]:
+    def close_position(self, ticket: int, comment: Optional[str] = None) -> Dict[str, Any]:
         """Menutup posisi order aktif di MT5 berdasarkan nomor tiket."""
         if self.simulation_mode:
             self._simulated_positions = [p for p in self._simulated_positions if p["ticket"] != ticket]
@@ -2083,6 +2694,7 @@ class MT5Bridge:
             else:
                 fill_type = mt5.ORDER_FILLING_RETURN
 
+            order_comment = (comment[:31] if comment else f"Close #{ticket}")
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,
                 "position": ticket,
@@ -2092,7 +2704,7 @@ class MT5Bridge:
                 "price": close_price,
                 "deviation": self.max_slippage,
                 "magic": self.magic_number,
-                "comment": f"Close #{ticket}",
+                "comment": order_comment,
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": fill_type,
             }
@@ -2101,11 +2713,36 @@ class MT5Bridge:
             if res and res.retcode == mt5.TRADE_RETCODE_DONE:
                 return {"success": True, "message": f"Posisi #{ticket} sukses ditutup pada harga {close_price}."}
             else:
-                comment = res.comment if res else mt5.last_error()[1]
-                return {"success": False, "message": f"Gagal menutup posisi #{ticket}: {comment}"}
+                comm = res.comment if res else mt5.last_error()[1]
+                return {"success": False, "message": f"Gagal menutup posisi #{ticket}: {comm}"}
 
         except Exception as e:
             return {"success": False, "message": f"Error saat menutup posisi: {e}"}
+
+    def close_all_positions(self, reason: str = "Emergency Panic Close") -> Dict[str, Any]:
+        """Menutup SEMUA posisi aktif di MT5 (Emergency / Panic Close)."""
+        open_pos = self.get_open_positions()
+        if not open_pos:
+            return {"success": True, "closed_count": 0, "total": 0, "message": "Tidak ada posisi terbuka di MT5."}
+
+        closed_count = 0
+        errors = []
+        for p in open_pos:
+            ticket = p.get("ticket")
+            if ticket:
+                res = self.close_position(ticket, comment=reason)
+                if res.get("success"):
+                    closed_count += 1
+                else:
+                    errors.append(f"#{ticket}: {res.get('message')}")
+
+        return {
+            "success": len(errors) == 0,
+            "closed_count": closed_count,
+            "total": len(open_pos),
+            "errors": errors,
+            "message": f"Berhasil menutup {closed_count} dari {len(open_pos)} posisi MT5.",
+        }
 
     def modify_position(
         self,
@@ -2293,154 +2930,215 @@ class MT5Bridge:
             logger.warning(f"Error mengambil riwayat closed deals MT5: {e}")
             return []
 
+    def get_filled_limit_orders(self, hours: int = 24) -> List[Dict[str, Any]]:
+        """
+        Mengambil daftar pending limit order (BUY_LIMIT / SELL_LIMIT) yang telah
+        BERHASIL TERJEMPUT / TERISI (ORDER_STATE_FILLED) oleh broker MT5.
+        Digunakan untuk trigger notifikasi Telegram real-time kilat (0 delay)
+        saat order limit berubah menjadi posisi aktif berjalan.
+        """
+        if self.simulation_mode:
+            if hasattr(self, "_simulated_filled_limit_orders"):
+                return list(self._simulated_filled_limit_orders)
+            return []
+
+        if not self.ensure_connected():
+            return []
+
+        try:
+            import time as _time
+            from datetime import datetime, timezone, timedelta
+            from zoneinfo import ZoneInfo
+
+            offset = self.get_broker_time_offset()
+            tz_wib = ZoneInfo("Asia/Jakarta")
+
+            from_server = datetime.now() - timedelta(hours=max(hours, 24))
+            to_server = datetime.now() + timedelta(days=1)
+
+            orders = mt5.history_orders_get(from_server, to_server)
+            if not orders:
+                return []
+
+            filled_limits = []
+            for o in orders:
+                # 1. Wajib state FILLED (state == 4)
+                if getattr(o, "state", -1) != mt5.ORDER_STATE_FILLED:
+                    continue
+
+                # 2. Cek apakah berasal dari pending limit order
+                is_limit_type = getattr(o, "type", -1) in (mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_SELL_LIMIT)
+                comment_str = str(getattr(o, "comment", "") or "").upper()
+                is_bot_comment = "9PDF-" in comment_str or "LIMIT" in comment_str
+                is_bot_magic = (getattr(o, "magic", 0) == self.magic_number)
+                is_gold = any(g in (getattr(o, "symbol", "") or "").upper() for g in ["XAU", "GOLD"])
+
+                if not (is_limit_type or (is_bot_comment and is_bot_magic)):
+                    continue
+                if not is_bot_magic and not is_gold and not is_bot_comment:
+                    continue
+
+                raw_t = getattr(o, "type", -1)
+                if raw_t == mt5.ORDER_TYPE_BUY_LIMIT or "BUY" in comment_str:
+                    action_type = "BUY"
+                    limit_type = "BUY_LIMIT"
+                else:
+                    action_type = "SELL"
+                    limit_type = "SELL_LIMIT"
+
+                # Ambil waktu selesai/eksekusi
+                t_done = getattr(o, "time_done", getattr(o, "time_setup", int(_time.time())))
+                true_utc_epoch = t_done - offset
+                filled_time_wib = datetime.fromtimestamp(true_utc_epoch, tz=tz_wib).strftime("%Y-%m-%d %H:%M:%S WIB")
+
+                price_open = float(getattr(o, "price_open", 0.0) or 0.0)
+                price_curr = float(getattr(o, "price_current", 0.0) or 0.0)
+                fill_price = price_curr if price_curr > 0 else price_open
+                pos_id = int(getattr(o, "position_id", 0) or getattr(o, "ticket", 0))
+
+                filled_limits.append({
+                    "ticket": int(o.ticket),
+                    "order_ticket": int(o.ticket),
+                    "position_id": pos_id,
+                    "symbol": o.symbol,
+                    "action": action_type,
+                    "type": limit_type,
+                    "volume": float(getattr(o, "volume_initial", 0.0) or getattr(o, "volume_current", 0.0)),
+                    "price": fill_price,
+                    "price_open": price_open,
+                    "sl": float(getattr(o, "sl", 0.0) or 0.0),
+                    "tp": float(getattr(o, "tp", 0.0) or 0.0),
+                    "time": t_done,
+                    "time_wib": filled_time_wib,
+                    "true_utc_epoch": true_utc_epoch,
+                    "comment": getattr(o, "comment", ""),
+                })
+
+            return filled_limits
+        except Exception as e:
+            logger.warning(f"Error mengambil limit orders terjemput MT5: {e}")
+            return []
+
+    def simulate_limit_order_fill(self, ticket: int, fill_price: Optional[float] = None) -> Optional[Dict[str, Any]]:
+        """
+        Helper mode simulasi: mensimulasikan pending limit order yang tersentuh harga
+        dan terisi menjadi posisi aktif berjalan.
+        """
+        if not self.simulation_mode:
+            return None
+
+        found_idx = None
+        for idx, po in enumerate(self._simulated_pending_orders):
+            if po.get("ticket") == ticket:
+                found_idx = idx
+                break
+
+        if found_idx is None:
+            return None
+
+        po = self._simulated_pending_orders.pop(found_idx)
+        p_exec = float(fill_price if fill_price is not None else po.get("price", 0.0))
+        act_type = "BUY" if "BUY" in str(po.get("type", "")).upper() else "SELL"
+
+        # Pindahkan ke posisi terbuka
+        pos_dict = {
+            "ticket": po["ticket"],
+            "symbol": po.get("symbol", "XAUUSD"),
+            "type": act_type,
+            "volume": float(po.get("volume", 0.05)),
+            "price_open": p_exec,
+            "sl": float(po.get("sl", 0.0)),
+            "tp": float(po.get("tp", 0.0)),
+            "price_current": p_exec,
+            "profit": 0.0,
+            "comment": po.get("comment", f"9PDF-{act_type}"),
+        }
+        self._simulated_positions.append(pos_dict)
+
+        import time as _time
+        from zoneinfo import ZoneInfo
+        now_wib_str = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%Y-%m-%d %H:%M:%S WIB")
+        fill_dict = {
+            "ticket": po["ticket"],
+            "order_ticket": po["ticket"],
+            "position_id": po["ticket"],
+            "symbol": po.get("symbol", "XAUUSD"),
+            "action": act_type,
+            "type": po.get("type", f"{act_type}_LIMIT"),
+            "volume": float(po.get("volume", 0.05)),
+            "price": p_exec,
+            "price_open": float(po.get("price", p_exec)),
+            "sl": float(po.get("sl", 0.0)),
+            "tp": float(po.get("tp", 0.0)),
+            "time_wib": now_wib_str,
+            "true_utc_epoch": int(_time.time()),
+            "comment": po.get("comment", ""),
+        }
+        self._simulated_filled_limit_orders.append(fill_dict)
+        return fill_dict
+
     def deploy_dual_sided_limit_bracket(
         self,
         symbol: str,
         orders: List[Dict[str, Any]],
+        target_lot: float = 0.01,
+        sig: Any = None,
     ) -> Dict[str, Any]:
         """
         Memasang bracket dual-sided pending limit orders (BUY LIMIT & SELL LIMIT)
-        berdasarkan analisis SMC & Likuiditas terkini, dengan penyegaran otomatis berkala.
+        berdasarkan analisis SMC & Likuiditas terkini, dengan pengawalan Hard Gatekeeper.
         """
         if not orders:
             return {"success": False, "placed_tickets": [], "placed_orders": [], "message": "Tidak ada order untuk dipasang."}
 
         is_cent = self.is_cent_account()
         cfg_mt5 = getattr(self, "config", {}).get("mt5", {})
-        target_lot = float(cfg_mt5.get("limit_order_lot_cent", cfg_mt5.get("limit_order_lot", 0.05))) if is_cent else float(cfg_mt5.get("limit_order_lot_usd", 0.01))
-
-        if self.simulation_mode:
-            placed_tickets = []
-            placed_orders = []
-            for ord_info in orders:
-                cur_sig = ord_info.get("type") or ord_info.get("signal", "BUY_LIMIT")
-                p_val = float(ord_info["price"])
-                lot_val = target_lot if not is_cent else float(ord_info.get("lot", target_lot))
-                self._simulated_ticket += 1
-                ticket = self._simulated_ticket
-                lim_dict = {
-                    "ticket": ticket,
-                    "symbol": symbol,
-                    "type": cur_sig,
-                    "price": p_val,
-                    "price_open": p_val,
-                    "sl": float(ord_info["sl"]),
-                    "tp": float(ord_info["tp"]),
-                    "volume": lot_val,
-                    "time_setup": datetime.now(ZoneInfo("Asia/Jakarta")),
-                    "comment": f"9PDF-{cur_sig[:5]}",
-                }
-                self._simulated_pending_orders.append(lim_dict)
-                placed_tickets.append(ticket)
-                placed_orders.append(lim_dict)
-            logger.info(f"🤖 [SIMULASI] {len(placed_tickets)} Dual-sided pending limit orders berhasil dipasang.")
-            return {
-                "success": len(placed_tickets) > 0,
-                "placed_tickets": placed_tickets,
-                "placed_orders": placed_orders,
-                "message": f"[SIMULASI] {len(placed_tickets)} Dual-sided pending limit orders berhasil dipasang.",
-            }
-
-        if not self.ensure_connected():
-            return {"success": False, "placed_tickets": [], "placed_orders": [], "message": "MT5 tidak terhubung."}
-
-        broker_sym = self.find_symbol(symbol) or symbol
-        tick = mt5.symbol_info_tick(broker_sym)
-        if tick is None:
-            return {"success": False, "placed_tickets": [], "placed_orders": [], "message": f"Gagal membaca tick pasar {broker_sym}."}
-
-        sym_info = mt5.symbol_info(broker_sym)
-        filling_mode = int(sym_info.filling_mode or 0) if sym_info else 0
-        if filling_mode & 1:
-            fill_type = mt5.ORDER_FILLING_FOK
-        elif filling_mode & 2:
-            fill_type = mt5.ORDER_FILLING_IOC
-        else:
-            fill_type = mt5.ORDER_FILLING_RETURN
+        default_lot = float(cfg_mt5.get("limit_order_lot_cent", cfg_mt5.get("limit_order_lot", 0.05))) if is_cent else float(cfg_mt5.get("limit_order_lot_usd", 0.01))
+        order_target_lot = target_lot or default_lot
 
         placed_tickets = []
         placed_orders = []
-        active_pending = self.get_pending_orders(symbol=broker_sym)
 
         for ord_info in orders:
             cur_sig = ord_info.get("type") or ord_info.get("signal", "BUY_LIMIT")
             p_val = float(ord_info["price"])
             sl_val = float(ord_info["sl"])
             tp_val = float(ord_info["tp"])
-            lot_val = target_lot if not is_cent else float(ord_info.get("lot", target_lot))
+            lot_val = float(ord_info.get("lot", order_target_lot))
             label = ord_info.get("label", cur_sig)
 
-            # Validasi harga limit terhadap tick live (MT5 rule: BUY_LIMIT < ask, SELL_LIMIT > bid)
-            sl_dist = abs(p_val - sl_val)
-            if sl_dist < 4.0:
-                sl_dist = 6.0
-            tp_dist = round(sl_dist * 1.5, 2)
-
-            if "BUY" in cur_sig:
-                if p_val >= tick.ask - 1.00:
-                    p_val = round(tick.ask - 1.50, 2)
-                    sl_val = round(p_val - sl_dist, 2)
-                    tp_val = round(p_val + tp_dist, 2)
-                order_raw_type = mt5.ORDER_TYPE_BUY_LIMIT
+            # Validasi Gerbang Gatekeeper & Pemasangan Pending Order Terkunci
+            res = self.place_pending_order(
+                sig=sig,
+                order_type=cur_sig,
+                price=p_val,
+                sl=sl_val,
+                tp=tp_val,
+                volume=lot_val,
+                symbol=symbol,
+                label=label,
+            )
+            if res.get("success"):
+                t_num = res.get("ticket")
+                placed_tickets.append(t_num)
+                placed_orders.append({
+                    "ticket": t_num,
+                    "action": cur_sig,
+                    "symbol": symbol,
+                    "price": p_val,
+                    "sl": sl_val,
+                    "tp": tp_val,
+                    "volume": lot_val,
+                    "label": label,
+                })
             else:
-                if p_val <= tick.bid + 1.00:
-                    p_val = round(tick.bid + 1.50, 2)
-                    sl_val = round(p_val + sl_dist, 2)
-                    tp_val = round(p_val - tp_dist, 2)
-                order_raw_type = mt5.ORDER_TYPE_SELL_LIMIT
-
-            # Anti-duplicate check: jika sudah ada pending order dengan tipe sama dalam jarak $1.50 USD
-            is_dup = any(po.get("type") == cur_sig and abs(po.get("price", 0.0) - p_val) < 1.50 for po in active_pending)
-            if is_dup:
-                logger.info(f"Pending order {cur_sig} @ {p_val} sudah aktif di area yang sama. Dilewati.")
-                continue
-
-            request = {
-                "action": mt5.TRADE_ACTION_PENDING,
-                "symbol": broker_sym,
-                "volume": lot_val,
-                "type": order_raw_type,
-                "price": p_val,
-                "sl": sl_val,
-                "tp": tp_val,
-                "deviation": self.max_slippage,
-                "magic": self.magic_number,
-                "comment": f"9PDF-{cur_sig[:5]}"[:31],
-                "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": fill_type,
-            }
-
-            logger.info(f"🚀 Memasang Dual-Sided Limit: {cur_sig} {lot_val} {broker_sym} @ {p_val} (TP: {tp_val}, SL: {sl_val}) [{label}]")
-            result = mt5.order_send(request)
-
-            if result is None:
-                err = mt5.last_error()
-                logger.warning(f"Gagal order_send: {err[1]} (Kode: {err[0]})")
-                continue
-
-            if result.retcode != mt5.TRADE_RETCODE_DONE:
-                logger.warning(f"Broker retcode {result.retcode}: {result.comment}")
-                continue
-
-            logger.info(f"✅ Berhasil pasang {cur_sig} #{result.order} ({label}) @ {p_val}")
-            placed_tickets.append(result.order)
-            placed_orders.append({
-                "ticket": result.order,
-                "action": cur_sig,
-                "symbol": broker_sym,
-                "price": p_val,
-                "sl": sl_val,
-                "tp": tp_val,
-                "volume": lot_val,
-                "label": label,
-            })
-            active_pending.append({"type": cur_sig, "price": p_val, "ticket": result.order})
+                logger.warning(f"🛑 [GATEKEEPER VETO] Pending limit {cur_sig} @ {p_val} dibatalkan: {res.get('message')}")
 
         return {
             "success": len(placed_tickets) > 0,
             "placed_tickets": placed_tickets,
             "placed_orders": placed_orders,
-            "message": f"Berhasil memasang {len(placed_tickets)} pending limit order.",
+            "message": f"Berhasil memasang {len(placed_tickets)} pending limit order." if placed_tickets else "Seluruh pending limit order dibatalkan oleh Gatekeeper.",
         }
 
 

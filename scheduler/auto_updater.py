@@ -89,7 +89,29 @@ class GitAutoUpdater:
             if not local_hash or not remote_hash:
                 return False, local_hash, remote_hash
 
-            has_update = local_hash != remote_hash
+            if local_hash == remote_hash:
+                return False, local_hash, remote_hash
+
+            # 4. Periksa apakah remote memiliki commit baru di depan lokal (HEAD..origin/branch)
+            # Menghindari false positive saat lokal mendahului remote (local ahead of remote)
+            count_proc = subprocess.run(
+                ["git", "rev-list", "--count", f"HEAD..origin/{self.branch}"],
+                cwd=str(self.base_dir),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if count_proc.returncode == 0:
+                behind_count = int(count_proc.stdout.strip() or 0)
+                has_update = (behind_count > 0)
+                if not has_update:
+                    logger.debug(
+                        f"Git lokal ({local_hash[:7]}) sejajar atau di depan remote ({remote_hash[:7]}). "
+                        f"Tidak ada commit baru untuk ditarik."
+                    )
+            else:
+                has_update = False
+
             return has_update, local_hash, remote_hash
         except subprocess.TimeoutExpired:
             logger.warning("Git check timeout saat menghubungi GitHub.")
@@ -116,6 +138,11 @@ class GitAutoUpdater:
                 err_msg = pull_proc.stderr.strip() or pull_proc.stdout.strip()
                 logger.error(f"Git pull gagal: {err_msg}")
                 return False, err_msg
+
+            stdout_text = (pull_proc.stdout or "").strip()
+            if "already up to date" in stdout_text.lower() or "already up-to-date" in stdout_text.lower():
+                logger.debug("Git repo sudah up-to-date (tidak ada commit baru dari remote).")
+                return False, "Already up to date."
 
             # Ambil pesan commit terbaru
             log_proc = subprocess.run(
@@ -154,18 +181,34 @@ class GitAutoUpdater:
 
     def restart_process(self) -> None:
         """
-        Me-restart proses bot saat ini secara mulus di Windows.
-        Proses baru dijalankan via subprocess, lalu proses saat ini ditutup.
+        Me-restart proses bot saat ini secara mulus di Windows tanpa memunculkan jendela konsol baru.
+        Jika dijalankan via JALANKAN_BOT.bat (loop), cukup exit 0 agar batch file me-reload di jendela yang sama.
+        Jika dijalankan standalone / silent, spawn proses baru secara silent/detached.
         """
         logger.info("🔄 Me-restart proses bot Master agar kode terbaru langsung aktif...")
         try:
-            python_bin = sys.executable
-            args = [python_bin] + sys.argv
-            creationflags = 0
-            if sys.platform == "win32":
-                creationflags = subprocess.CREATE_NEW_CONSOLE
-            # Spawn proses baru yang independen
-            subprocess.Popen(args, cwd=str(self.base_dir), creationflags=creationflags)
+            parent_is_cmd = False
+            try:
+                import psutil
+                parent = psutil.Process().parent()
+                if parent and "cmd" in parent.name().lower():
+                    parent_is_cmd = True
+            except Exception:
+                pass
+
+            if not parent_is_cmd:
+                python_bin = sys.executable
+                args = [python_bin] + sys.argv
+                creationflags = 0
+                if sys.platform == "win32":
+                    creationflags = subprocess.CREATE_NO_WINDOW | 0x08000000  # DETACHED_PROCESS
+                subprocess.Popen(
+                    args,
+                    cwd=str(self.base_dir),
+                    creationflags=creationflags,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
             time.sleep(1.0)
             os._exit(0)
         except Exception as e:
@@ -197,6 +240,8 @@ class GitAutoUpdater:
                     threading.Timer(2.0, self.restart_process).start()
                 return True, commit_info, True
             else:
+                if "already up to date" in commit_info.lower():
+                    return True, "Repository sudah up to date dengan remote.", False
                 return False, commit_info, False
         except Exception as e:
             logger.error(f"Error saat manual update Git: {e}")
@@ -223,7 +268,7 @@ class GitAutoUpdater:
                 logger.debug(f"Git repo up-to-date ({local_h[:7] if local_h else 'ok'}). Tidak ada kodingan baru.")
                 return False
 
-            logger.info(f"🚀 Terdeteksi kodingan baru di GitHub ({local_h[:7]} -> {remote_h[:7]}). Memulai git pull...")
+            logger.info(f"🚀 Terdeteksi perbedaan commit ({local_h[:7]} vs {remote_h[:7]}). Memeriksa git pull...")
             success, commit_info = self.apply_pull()
 
             if success:
@@ -243,6 +288,9 @@ class GitAutoUpdater:
                     self.restart_process()
                 return True
             else:
+                if "already up to date" in commit_info.lower():
+                    logger.debug(f"Git repo up-to-date ({commit_info}). Tidak ada restart.")
+                    return False
                 logger.error(f"❌ Gagal melakukan git pull: {commit_info}")
                 self.notify_telegram(
                     "[AUTO-UPDATE GAGAL]",

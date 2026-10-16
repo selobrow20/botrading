@@ -34,6 +34,18 @@ class DataFetcher:
         if ticker_clean in ["XAUUSD", "XAU/USD", "XAU-USD", "XAUUSD=X", "GOLD", "EMAS", "GC=F"]:
             return "XAUUSD"
 
+        # Mapping khusus untuk Cryptocurrency Populer
+        crypto_map = {
+            "BTC": "BTC-USD", "BTCUSD": "BTC-USD", "BTCUSDT": "BTC-USD", "BITCOIN": "BTC-USD", "BTC/USDT": "BTC-USD",
+            "ETH": "ETH-USD", "ETHUSD": "ETH-USD", "ETHUSDT": "ETH-USD", "ETHEREUM": "ETH-USD", "ETH/USDT": "ETH-USD",
+            "SOL": "SOL-USD", "SOLUSD": "SOL-USD", "SOLUSDT": "SOL-USD", "SOLANA": "SOL-USD", "SOL/USDT": "SOL-USD",
+            "XRP": "XRP-USD", "XRPUSD": "XRP-USD", "XRPUSDT": "XRP-USD", "RIPPLE": "XRP-USD",
+            "DOGE": "DOGE-USD", "DOGEUSD": "DOGE-USD", "DOGEUSDT": "DOGE-USD",
+            "BNB": "BNB-USD", "BNBUSD": "BNB-USD", "BNBUSDT": "BNB-USD",
+        }
+        if ticker_clean in crypto_map:
+            return crypto_map[ticker_clean]
+
         # Jika sudah memiliki suffix bursa (.JK, .US dll) atau simbol futures/forex (=F, =X, ^)
         if any(char in ticker_clean for char in [".", "=", "^", "-"]):
             return ticker_clean
@@ -51,6 +63,9 @@ class DataFetcher:
             t_upper = ticker.upper()
             if any(k in t_upper for k in ["XAU", "GOLD", "EMAS", "GC=F"]):
                 tv_symbol = "OANDA:XAUUSD"
+            elif any(k in t_upper for k in ["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB"]):
+                clean_c = t_upper.replace("-USD", "").replace("/USDT", "").replace("USDT", "")
+                tv_symbol = f"BINANCE:{clean_c}USDT"
             elif ".JK" in t_upper or (t_upper.isalpha() and len(t_upper) <= 5):
                 clean_idx = t_upper.replace(".JK", "")
                 tv_symbol = f"IDX:{clean_idx}"
@@ -176,7 +191,7 @@ class DataFetcher:
                 df.set_index("Date", inplace=True)
                 clean_df = self._clean_dataframe(df[["Open", "High", "Low", "Close", "Volume"]])
                 if not clean_df.empty:
-                    logger.info(f"Sukses mengambil {len(clean_df)} bar Spot Gold langsung dari terminal MT5 ({target_symbol}).")
+                    logger.debug(f"Sukses mengambil {len(clean_df)} bar Spot Gold langsung dari terminal MT5 ({target_symbol}).")
                     return clean_df
         except Exception as e:
             logger.debug(f"Gagal mengambil data dari MT5: {e}")
@@ -212,17 +227,23 @@ class DataFetcher:
         # 4. Fallback ke direct spot feed jika MT5 tidak tersedia
         # 5. Terakhir fallback ke COMEX Gold Futures (GC=F)
         if normalized_ticker == "XAUUSD":
-            tv_quote = self.fetch_tradingview_quote("XAUUSD")
-
-            # 1. Prioritaskan MT5 terminal lokal karena paling real-time dan terhubung live
+            # 1. Prioritaskan MT5 terminal lokal (0 ms latency, harga broker live riil)
             mt5_df = self.fetch_from_mt5(interval=interval, limit=100)
             if not mt5_df.empty and len(mt5_df) >= 15:
-                if tv_quote and "close" in tv_quote:
-                    mt5_df.loc[mt5_df.index[-1], "Close"] = tv_quote["close"]
-                    mt5_df.attrs["tradingview_quote"] = tv_quote
+                # Perbarui harga penutupan bar terakhir dengan live tick terkini dari MT5
+                try:
+                    import MetaTrader5 as mt5
+                    for sym_candidate in ["XAUUSDc", "XAUUSDm", "XAUUSD", "GOLD"]:
+                        tk = mt5.symbol_info_tick(sym_candidate)
+                        if tk and tk.bid > 0:
+                            mt5_df.loc[mt5_df.index[-1], "Close"] = float(tk.bid)
+                            break
+                except Exception:
+                    pass
                 return mt5_df
 
-            # 2. Fallback: Direct Spot Gold feed
+            # 2. Fallback: Direct Spot Gold feed jika MT5 offline
+            tv_quote = self.fetch_tradingview_quote("XAUUSD")
             spot_df = self.fetch_spot_gold(interval=interval, limit=100)
             if not spot_df.empty and len(spot_df) >= 15:
                 if tv_quote and "close" in tv_quote:
@@ -230,8 +251,21 @@ class DataFetcher:
                     spot_df.attrs["tradingview_quote"] = tv_quote
                 return spot_df
 
-            logger.warning("Gagal fetch dari MT5 dan direct Spot Gold feed, fallback ke COMEX Gold Futures (GC=F)...")
-            normalized_ticker = "GC=F"
+        # Jika instrumen adalah Cryptocurrency (BTC, ETH, SOL, XRP, DOGE, BNB):
+        # Ambil langsung dari cluster resmi Binance Direct Engine (0 ms latency, real-time 24/7)
+        if any(normalized_ticker.startswith(k) for k in ["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB"]):
+            try:
+                from crypto.exchange_client import CryptoExchangeClient
+                crypto_client = CryptoExchangeClient(exchange_name="binance")
+                binance_df = crypto_client.fetch_ohlcv(normalized_ticker, timeframe=interval, limit=100)
+                if not binance_df.empty and len(binance_df) >= 15:
+                    ticker_info = crypto_client.fetch_ticker(normalized_ticker)
+                    if ticker_info and "last" in ticker_info and ticker_info["last"] > 0:
+                        binance_df.loc[binance_df.index[-1], "Close"] = ticker_info["last"]
+                        binance_df.attrs["binance_ticker"] = ticker_info
+                    return binance_df
+            except Exception as e:
+                logger.warning(f"Gagal mengambil klines Binance untuk {normalized_ticker}: {e}")
 
         if period is None and start is None:
             # Gunakan default dari config

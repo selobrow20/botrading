@@ -29,3 +29,10 @@ MetaTrader5>=5.0.0; sys_platform == 'win32'
 # Cloud MT5 Auto-Trading (Linux & Windows 24/7 on Railway)
 metaapi-cloud-sdk>=29.0.0
 
+# Crypto Exchange & System Monitoring (Binance Futures & Dashboard)
+ccxt>=4.0.0
+requests>=2.31.0
+psutil>=5.9.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+

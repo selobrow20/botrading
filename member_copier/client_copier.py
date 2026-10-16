@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.4.4"
+CLIENT_COPIER_VERSION = "2.4.6"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -268,12 +268,14 @@ def parse_signal(text: str) -> dict:
 
     # Abaikan jika ini adalah laporan hasil / deal / penutupan posisi / pengumuman
     # Namun jika terdapat header sinyal resmi (SINYAL ENTRY / SINYAL PENDING), jangan diabaikan meski ada badge akurasi!
-    is_signal_header = any(k in text_upper for k in [
-        "SINYAL ENTRY", "SINYAL PENDING", "PENDING ORDER", "BUY LIMIT", "SELL LIMIT",
+    is_official_entry_signal = any(k in text_upper for k in [
+        "SINYAL ENTRY", "SINYAL ENTRY (MASUK / BUY)", "SINYAL ENTRY (MASUK / SELL)",
+        "SINYAL ENTRY BUY", "SINYAL ENTRY SELL", "SINYAL ENTRY (SELL)",
+        "SINYAL PENDING", "PENDING ORDER", "BUY LIMIT", "SELL LIMIT",
         "SINYAL BUY", "SINYAL SELL", "ENTRY BUY", "ENTRY SELL", "DUAL-LEVEL"
     ])
 
-    ignore_keywords = [
+    deal_closed_keywords = [
         "LAPORAN PENUTUPAN",
         "TRANSAKSI SELESAI",
         "HASIL TRANSAKSI",
@@ -286,12 +288,33 @@ def parse_signal(text: str) -> dict:
         "/USERS",
         "/STATUS",
         "/LICENSE",
+        "[LAPORAN EKSEKUSI]",
+        "[LAPORAN HASIL]",
+        "TRANSAKSI MT5 SELESAI",
+        "AKUN MASTER PROVIDER",
+        "AKUN MT5 ANDA",
     ]
-    if not is_signal_header:
-        ignore_keywords.extend(["WIN RATE", "AKURASI EMAS"])
-
-    if any(k in text_upper for k in ignore_keywords):
+    if any(k in text_upper for k in deal_closed_keywords):
         return {}
+
+    fill_keywords = [
+        "[ORDER TERJEMPUT]",
+        "ORDER TERJEMPUT",
+        "PENDING LIMIT ORDER AKTIF",
+        "LIMIT ORDER AKTIF",
+        "TERJEMPUT DI PASAR",
+        "POSISI AKTIF",
+        "WAKTU TERISI",
+        "ORDER MT5 TERPASANG",
+        "[PENDING ORDER] LIMIT ORDER MT5 TERPASANG",
+    ]
+    # Abaikan fill status alert jika pesan tersebut BUKAN sinyal resmi yang membawa header entry (SINYAL ENTRY)
+    if any(k in text_upper for k in fill_keywords) and not is_official_entry_signal:
+        return {}
+
+    if not is_official_entry_signal:
+        if any(k in text_upper for k in ["WIN RATE", "AKURASI EMAS"]):
+            return {}
 
     is_gold = any(k in text_upper for k in ["XAUUSD", "XAU/USD", "XAU", "GOLD", "EMAS"])
     if not is_gold:
@@ -299,7 +322,21 @@ def parse_signal(text: str) -> dict:
 
     action = None
     is_limit_order = False
-    if any(k in text_upper for k in ["BUY LIMIT", "BUY_LIMIT", "LIMIT ORDER: BUY", "ORDER: BUY LIMIT", "AKSI ORDER: BUY LIMIT"]):
+    is_filled_limit = any(k in text_upper for k in [
+        "[ORDER LIMIT TERJEMPUT]", "ORDER LIMIT TERJEMPUT",
+        "[ORDER TERJEMPUT]", "ORDER TERJEMPUT",
+        "TERISI (FILLED)", "RESMI TERISI",
+    ])
+    if is_filled_limit:
+        # Order limit sudah resmi terjemput menjadi posisi aktif di pasar
+        # Eksekusi instan sebagai MARKET ORDER langsung
+        if "BUY" in text_upper:
+            action = "BUY"
+            is_limit_order = False
+        elif "SELL" in text_upper:
+            action = "SELL"
+            is_limit_order = False
+    elif any(k in text_upper for k in ["BUY LIMIT", "BUY_LIMIT", "LIMIT ORDER: BUY", "ORDER: BUY LIMIT", "AKSI ORDER: BUY LIMIT"]):
         action = "BUY_LIMIT"
         is_limit_order = True
     elif any(k in text_upper for k in ["SELL LIMIT", "SELL_LIMIT", "LIMIT ORDER: SELL", "ORDER: SELL LIMIT", "AKSI ORDER: SELL LIMIT"]):
@@ -896,9 +933,56 @@ class MT5MemberBridge:
         # Bersihkan order basi terlebih dahulu
         self.cancel_stale_pending_orders(symbol=sym, max_age_minutes=int(self.cfg.get("limit_order_expiry_mins", 120)))
 
-        # Bersihkan pending order lawan jika dual-sided tidak aktif
+        is_cent = self.is_cent_account()
+        is_us = False
+        try:
+            from zoneinfo import ZoneInfo
+            from datetime import datetime, time
+            now_wib = datetime.now(ZoneInfo("Asia/Jakarta")).time()
+            is_us = time(19, 0) <= now_wib <= time(23, 59, 59)
+        except Exception:
+            pass
+
+        # 1. CEK BATAS MAKSIMAL POSISI TERBUKA (OPEN POSITIONS) DI MT5 MEMBER
+        # Sesuai arahan pengguna: "semua ikut setup gw aja bor" (Disiplin ketat, member tidak boleh buka 10 posisi!)
+        open_pos = self.mt5.positions_get(symbol=sym) or []
+        if not is_cent:
+            max_pos = int(self.cfg.get("max_positions_standard", 1))
+        else:
+            cent_base = int(self.cfg.get("max_positions_cent", 1))
+            max_pos = max(cent_base, int(self.cfg.get("us_session_max_positions", 3))) if is_us else cent_base
+
+        if len(open_pos) >= max_pos:
+            mode_lbl = f"Sesi US (Maks {max_pos} Posisi)" if (is_cent and is_us) else (f"CENT USC (Maks {max_pos} Posisi)" if is_cent else f"USD Standard (Maks {max_pos} Posisi)")
+            msg_limit = f"Pending limit {action} dilewati: Batas posisi terbuka ({len(open_pos)}/{max_pos} aktif) sudah tercapai di MT5 Member [{mode_lbl}]. Menunggu posisi selesai sebelum memasang limit order baru."
+            print(f"   🛑 {msg_limit}")
+            return {"success": False, "message": msg_limit}
+
+        # 2. CEK ANTI-HEDGING & POSISI BERLAWANAN ARAH
+        # Jika ada posisi market berlawanan, dilarang pasang pending limit yang memicu tabrakan order
         if not bool(self.cfg.get("enable_dual_sided_limits", False)):
+            opposite_open = [p for p in open_pos if (p.type == 0 and "SELL" in action) or (p.type == 1 and "BUY" in action)]
+            if opposite_open:
+                msg_opp = f"Pending limit {action} dilewati: Masih ada posisi berlawanan aktif di MT5. Mencegah bentrok order."
+                print(f"   🛑 {msg_opp}")
+                return {"success": False, "message": msg_opp}
+            # Bersihkan pending order lawan jika single-sided
             self.cancel_opposite_pending_orders(sym, action)
+
+        # 3. CEK TOTAL KUOTA PENDING ORDERS & POSISI AKTIF
+        active_pending = self.get_pending_orders(symbol=sym)
+        max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 2))
+        if len(open_pos) + len(active_pending) >= max_pending:
+            same_pending = [po for po in active_pending if ("BUY" in action and "BUY" in str(po.get("type", "")).upper()) or ("SELL" in action and "SELL" in str(po.get("type", "")).upper())]
+            if same_pending:
+                dup_po = same_pending[0]
+                limit_p_chk = float(sig.get("entry_price", 0.0) or 0.0)
+                if abs(dup_po.get("price", 0.0) - limit_p_chk) < 3.0:
+                    print(f"   ℹ️ Pending order {action} @ ${limit_p_chk:,.2f} sudah ada aktif (#{dup_po.get('ticket')}). Dilewati.")
+                    return {"success": True, "ticket": dup_po.get("ticket"), "message": "Pending order sudah aktif."}
+            msg_cap = f"Pending limit {action} dilewati: Kuota total ({len(open_pos)} posisi + {len(active_pending)} pending / maks {max_pending}) sudah tercapai pada {sym}."
+            print(f"   ℹ️ {msg_cap}")
+            return {"success": False, "message": msg_cap}
 
         s_info = self.mt5.symbol_info(sym)
         if not s_info:
@@ -1328,6 +1412,61 @@ class MT5MemberBridge:
         err_code = res.retcode if res else "No response"
         err_comment = res.comment if res else self.mt5.last_error()[1]
         return {"success": False, "message": f"RetCode: {err_code} - {err_comment}"}
+
+    def get_closed_deals(self, hours: int = 1) -> list:
+        """
+        Mengambil deals transaksi yang ditutup (DEAL_ENTRY_OUT) pada akun MT5 Member.
+        Digunakan oleh watcher mandiri agar Member mendapatkan notifikasi TP/SL akun sendiri secara privat.
+        """
+        if not self.ensure_connected():
+            return []
+        try:
+            from datetime import datetime, timedelta
+            from_server = datetime.now() - timedelta(hours=max(hours, 1))
+            to_server = datetime.now() + timedelta(days=1)
+            deals = self.mt5.history_deals_get(from_server, to_server)
+            if not deals:
+                return []
+            closed_deals = []
+            for d in deals:
+                if d.entry != self.mt5.DEAL_ENTRY_OUT:
+                    continue
+                is_gold = any(g in (d.symbol or "").upper() for g in ["XAU", "GOLD"])
+                is_magic = (d.magic == self.magic)
+                if not is_gold and not is_magic:
+                    continue
+
+                is_profit = float(d.profit) >= 0.0
+                reason_str = "MANUAL"
+                comment_lower = (d.comment or "").lower()
+                if d.reason == 4 or "sl" in comment_lower:
+                    reason_str = "TRAILING_SL" if is_profit else "SL"
+                elif d.reason == 5 or "tp" in comment_lower:
+                    reason_str = "TP"
+                else:
+                    reason_str = "TP" if is_profit else "MANUAL"
+
+                pos_deals = self.mt5.history_deals_get(position=d.position_id)
+                in_deal = next((x for x in pos_deals if x.entry == self.mt5.DEAL_ENTRY_IN), None) if pos_deals else None
+                entry_price = float(in_deal.price) if in_deal else float(d.price)
+                pos_type = "BUY" if (in_deal and in_deal.type == 0) else ("SELL" if (in_deal and in_deal.type == 1) else "TRADE")
+
+                closed_deals.append({
+                    "deal_ticket": d.ticket,
+                    "position_id": d.position_id,
+                    "symbol": d.symbol,
+                    "type": pos_type,
+                    "entry_price": entry_price,
+                    "exit_price": float(d.price),
+                    "volume": float(d.volume),
+                    "profit": float(d.profit),
+                    "reason": reason_str,
+                    "outcome": "WIN" if is_profit else "LOSE",
+                    "time": d.time,
+                })
+            return closed_deals
+        except Exception:
+            return []
 
 
 async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
@@ -1958,8 +2097,96 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
             except Exception:
                 pass
 
+    reported_member_deals = set()
+
+    async def local_deal_watcher():
+        """
+        Background Watcher Hasil Transaksi MT5 Pribadi Member:
+        Memeriksa apakah ada posisi di MT5 member yang tersentuh TP atau SL.
+        Jika tersentuh, kirim notifikasi khusus ke chat Telegram pribadi member (Saved Messages / Pesan Tersimpan),
+        sehingga member mendapat notifikasi TP/SL untuk akunnya sendiri secara instan dan personal!
+        """
+        if not bool(cfg.get("notify_own_tp", True)):
+            return
+
+        # Warm-up: kumpulkan deals yang sudah ada saat copier baru start agar tidak kirim deal lama
+        await asyncio.sleep(3)
+        try:
+            initial_deals = bridge.get_closed_deals(hours=2)
+            for d in initial_deals:
+                reported_member_deals.add(d["deal_ticket"])
+        except Exception:
+            pass
+
+        while True:
+            try:
+                await asyncio.sleep(3)
+                if not bridge.ensure_connected():
+                    continue
+
+                deals = bridge.get_closed_deals(hours=2)
+                for d in deals:
+                    t_id = d["deal_ticket"]
+                    if t_id in reported_member_deals:
+                        continue
+                    reported_member_deals.add(t_id)
+
+                    pos_id = d["position_id"]
+                    outcome = d["outcome"]
+                    is_win = (outcome == "WIN")
+                    action = d["type"]
+                    entry_p = d["entry_price"]
+                    exit_p = d["exit_price"]
+                    vol = d["volume"]
+                    profit = d["profit"]
+                    sym = d["symbol"]
+                    is_cent_acc = bridge.is_cent_account()
+                    unit_curr = "USC" if is_cent_acc else "USD"
+
+                    # Hitung pips
+                    pips = abs(exit_p - entry_p) * 10.0 if (entry_p > 0 and exit_p > 0) else 0.0
+                    now_str = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%H:%M:%S")
+
+                    icon = "🟢" if action == "BUY" else "🔴"
+                    if is_win:
+                        title = "🎯 [AKUN MT5 ANDA] TAKE PROFIT TERCAPAI! 🎉"
+                        note = "Target keuntungan 9 Buku PDF berhasil diraih pada akun Anda!"
+                        profit_str = f"+${profit:,.2f} {unit_curr}"
+                    else:
+                        title = "🛑 [AKUN MT5 ANDA] STOP LOSS TERSENTUH 🛡️"
+                        note = "Batas toleransi risiko berhasil mengamankan modal trading Anda."
+                        profit_str = f"-${abs(profit):,.2f} {unit_curr}"
+
+                    lines = [
+                        f"<b>{title}</b>",
+                        "━━━━━━━━━━━━━━━━━━━━━━",
+                        f"🎫 <b>Tiket MT5:</b> <code>#{pos_id}</code>",
+                        f"📊 <b>Instrumen:</b> <code>{sym} (Gold)</code>",
+                        f"{icon} <b>Posisi:</b> <b>{action} ({vol:.2f} Lot)</b>",
+                        f"💵 <b>Harga Entry:</b> <code>${entry_p:,.2f}</code>",
+                        f"🎯 <b>Harga Exit:</b> <code>${exit_p:,.2f}</code>",
+                        f"💰 <b>Hasil Bersih:</b> <code>{profit_str}</code> (+{pips:.1f} Pips)" if is_win else f"📉 <b>Hasil:</b> <code>{profit_str}</code> (-{pips:.1f} Pips)",
+                        f"⏰ <b>Waktu:</b> <code>{now_str} WIB</code>",
+                        "━━━━━━━━━━━━━━━━━━━━━━",
+                        f"<i>{note}</i>",
+                    ]
+                    msg_text = "\n".join(lines)
+
+                    print(f"\n🔔 [{now_str}] {title}")
+                    print(f"   Posisi {action} #{pos_id} {sym} | Hasil: {profit_str} ({pips:.1f} Pips)\n")
+
+                    # Kirim langsung ke Saved Messages Telegram member (Private to Member!)
+                    try:
+                        await client.send_message("me", msg_text, parse_mode="html")
+                    except Exception as ex_me:
+                        print(f"   ⚠️ Gagal kirim notif TP ke Saved Messages: {ex_me}")
+            except Exception:
+                pass
+
     # Jalankan background watcher otomatis untuk Break-Even Protection (BEP) di MT5 Member
     asyncio.create_task(local_bep_watcher())
+    # Jalankan background watcher notifikasi TP/SL akun sendiri untuk Member
+    asyncio.create_task(local_deal_watcher())
 
     # Jalankan background task pemeriksaan pembaruan OTA Cloud berkala (tiap 30 menit)
     async def periodic_ota_checker():

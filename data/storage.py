@@ -170,6 +170,21 @@ class StockStorage:
                 );
             """)
 
+            # Tabel 2c: Pending Limit Orders yang Terisi (Hit / Filled) & Telah Dilaporkan
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS mt5_reported_limit_fills (
+                    order_ticket INTEGER PRIMARY KEY,
+                    position_id INTEGER,
+                    symbol TEXT,
+                    order_type TEXT,
+                    price REAL,
+                    volume REAL,
+                    sl REAL,
+                    tp REAL,
+                    reported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
             # Tabel 3: Hasil Backtest
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS backtest_results (
@@ -328,7 +343,7 @@ class StockStorage:
             cursor.executemany(query, records)
             conn.commit()
 
-        logger.info(f"Berhasil menyimpan {len(records)} baris data OHLCV untuk {ticker_clean} ({interval_clean}).")
+        logger.debug(f"Berhasil menyimpan {len(records)} baris data OHLCV untuk {ticker_clean} ({interval_clean}).")
         return len(records)
 
     def load_ohlcv(
@@ -472,7 +487,7 @@ class StockStorage:
                 SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time, take_profit_price, stop_loss_price
                 FROM signals
                 WHERE (ticker LIKE '%XAUUSD%' OR ticker LIKE '%GC=F%' OR ticker LIKE '%GOLD%' OR ticker LIKE '%EMAS%')
-                AND outcome = 'OPEN' AND signal_type IN ('BUY', 'SELL')
+                AND outcome = 'OPEN' AND (signal_type LIKE '%BUY%' OR signal_type LIKE '%SELL%')
                 AND take_profit_price IS NOT NULL AND stop_loss_price IS NOT NULL
             """
             params = ()
@@ -480,7 +495,7 @@ class StockStorage:
             query = """
                 SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time, take_profit_price, stop_loss_price
                 FROM signals
-                WHERE ticker = ? AND outcome = 'OPEN' AND signal_type IN ('BUY', 'SELL')
+                WHERE ticker = ? AND outcome = 'OPEN' AND (signal_type LIKE '%BUY%' OR signal_type LIKE '%SELL%')
                 AND take_profit_price IS NOT NULL AND stop_loss_price IS NOT NULL
             """
             params = (clean_ticker,)
@@ -527,34 +542,27 @@ class StockStorage:
                     exit_price = None
                     pnl_pct = 0.0
 
-                    if sig_type == "BUY":
+                    is_buy = "BUY" in str(sig_type).upper()
+                    is_sell = "SELL" in str(sig_type).upper()
+
+                    if is_buy:
                         if high >= tp:
                             outcome = "WIN"
                             exit_price = tp
-                            pnl_pct = round(((tp - entry_price) / entry_price) * 100.0, 2)
+                            pnl_pct = abs(round(((tp - entry_price) / entry_price) * 100.0, 2))
                         elif low <= sl:
                             outcome = "LOSE"
                             exit_price = sl
-                            pnl_pct = round(((sl - entry_price) / entry_price) * 100.0, 2)
-                    elif sig_type == "SELL" and is_gold:
+                            pnl_pct = -abs(round(((sl - entry_price) / entry_price) * 100.0, 2))
+                    elif is_sell:
                         if low <= tp:
                             outcome = "WIN"
                             exit_price = tp
-                            pnl_pct = round(((entry_price - tp) / entry_price) * 100.0, 2)
+                            pnl_pct = abs(round(((entry_price - tp) / entry_price) * 100.0, 2))
                         elif high >= sl:
                             outcome = "LOSE"
                             exit_price = sl
-                            pnl_pct = round(((entry_price - sl) / entry_price) * 100.0, 2)
-                    elif sig_type == "SELL" and not is_gold:
-                        # Saham IDX SELL: Jika harga turun di bawah entry, profit teramankan (WIN)
-                        if low <= tp:
-                            outcome = "WIN"
-                            exit_price = tp
-                            pnl_pct = round(((entry_price - tp) / entry_price) * 100.0, 2)
-                        elif high >= sl:
-                            outcome = "LOSE"
-                            exit_price = sl
-                            pnl_pct = round(((entry_price - sl) / entry_price) * 100.0, 2)
+                            pnl_pct = -abs(round(((entry_price - sl) / entry_price) * 100.0, 2))
 
                     if outcome:
                         exit_time_str = bar_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -571,23 +579,23 @@ class StockStorage:
                         # Generate keterangan evaluasi hasil
                         if outcome == "WIN":
                             if is_gold:
-                                if sig_type == "BUY":
+                                if is_buy:
                                     note = f"Target Take Profit tercapai (+{pnl_pct:.2f}%). Harga bergerak sesuai proyeksi ekspansi Wave 3 & Fibonacci Golden Pocket ke target resisten. Profit berhasil diamankan!"
                                 else:
                                     note = f"Target Take Profit Short Gold tercapai (+{pnl_pct:.2f}%). Rejection di resisten 20 EMA & Awan Kumo menekan harga ke target TP. Profit sukses diamankan!"
                             else:
-                                if sig_type == "BUY":
+                                if is_buy:
                                     note = f"Target Take Profit tercapai (+{pnl_pct:.2f}%). Akumulasi volume buyer & pullback dinamis 20 EMA berhasil mengantarkan harga menyentuh target keuntungan!"
                                 else:
                                     note = f"Target Exit pengaman tercapai (+{pnl_pct:.2f}%). Posisi diamankan sebelum koreksi lebih dalam."
                         else:
                             if is_gold:
-                                if sig_type == "BUY":
+                                if is_buy:
                                     note = f"Batas Stop Loss pengaman tersentuh ({pnl_pct:+.2f}%). Tekanan seller menembus support dinamis. Disiplin SL berhasil membatasi risiko agar modal tetap terlindungi."
                                 else:
                                     note = f"Batas Stop Loss pengaman tersentuh ({pnl_pct:+.2f}%). Terjadi lonjakan buyer melampaui batas toleransi risiko. Eksekusi SL disiplin memotong kerugian minimal."
                             else:
-                                if sig_type == "BUY":
+                                if is_buy:
                                     note = f"Batas Stop Loss tersentuh ({pnl_pct:+.2f}%). Support terlewati akibat volatilitas pasar. Eksekusi cut loss disiplin melindungi portofolio."
                                 else:
                                     note = f"Batas Stop Loss pengaman tersentuh ({pnl_pct:+.2f}%). Sinyal ditutup disiplin sesuai risk management."
@@ -659,13 +667,15 @@ class StockStorage:
             # Fallback cerdas: Jika belum terkait mt5_ticket, kaitkan sinyal OPEN terbaru
             if ticker:
                 if signal_type:
+                    clean_type = signal_type.upper()
+                    base_type = "BUY" if "BUY" in clean_type else ("SELL" if "SELL" in clean_type else clean_type)
                     cursor.execute("""
                         SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time,
                                take_profit_price, stop_loss_price, outcome, is_notified, mt5_ticket
                         FROM signals
-                        WHERE ticker = ? AND signal_type = ? AND outcome = 'OPEN'
+                        WHERE ticker = ? AND (signal_type = ? OR signal_type LIKE ?) AND outcome = 'OPEN'
                         ORDER BY id DESC LIMIT 1
-                    """, (ticker.upper(), signal_type.upper()))
+                    """, (ticker.upper(), clean_type, f"%{base_type}%"))
                 else:
                     cursor.execute("""
                         SELECT id, ticker, strategy_name, signal_type, price, reasons, candle_time,
@@ -704,6 +714,43 @@ class StockStorage:
                 INSERT OR REPLACE INTO mt5_reported_deals (deal_ticket, position_id, outcome, pnl_pct)
                 VALUES (?, ?, ?, ?)
             """, (int(deal_ticket), int(position_id), str(outcome), float(pnl_pct)))
+            conn.commit()
+
+    def is_mt5_limit_fill_reported(self, order_ticket: int) -> bool:
+        """Mengecek apakah penjemputan (fill) pending limit order MT5 sudah pernah dilaporkan ke Telegram."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM mt5_reported_limit_fills WHERE order_ticket = ?", (int(order_ticket),))
+            return cursor.fetchone() is not None
+
+    def mark_mt5_limit_fill_reported(
+        self,
+        order_ticket: int,
+        position_id: int = 0,
+        symbol: str = "",
+        order_type: str = "",
+        price: float = 0.0,
+        volume: float = 0.0,
+        sl: float = 0.0,
+        tp: float = 0.0,
+    ) -> None:
+        """Mencatat pending limit order MT5 yang telah terjemput (filled) dan dilaporkan ke Telegram."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO mt5_reported_limit_fills (
+                    order_ticket, position_id, symbol, order_type, price, volume, sl, tp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                int(order_ticket),
+                int(position_id or order_ticket),
+                str(symbol or "XAUUSD"),
+                str(order_type or "LIMIT"),
+                float(price or 0.0),
+                float(volume or 0.0),
+                float(sl or 0.0),
+                float(tp or 0.0),
+            ))
             conn.commit()
 
     def mark_signal_outcome_notified(self, sig_id: int) -> None:
@@ -829,13 +876,13 @@ class StockStorage:
                 cursor.execute("""
                     SELECT outcome, pnl_pct, ticker, signal_type
                     FROM signals
-                    WHERE ticker = ? AND signal_type IN ('BUY', 'SELL')
+                    WHERE ticker = ? AND (signal_type LIKE '%BUY%' OR signal_type LIKE '%SELL%')
                 """, (ticker.upper(),))
             else:
                 cursor.execute("""
                     SELECT outcome, pnl_pct, ticker, signal_type
                     FROM signals
-                    WHERE signal_type IN ('BUY', 'SELL')
+                    WHERE (signal_type LIKE '%BUY%' OR signal_type LIKE '%SELL%')
                 """)
             rows = [dict(r) for r in cursor.fetchall()]
 
@@ -867,7 +914,7 @@ class StockStorage:
             with self._get_connection() as conn2:
                 cur2 = conn2.cursor()
                 cur2.execute(
-                    "SELECT COUNT(*) FROM signals WHERE outcome = 'OPEN' AND signal_type IN ('BUY', 'SELL') "
+                    "SELECT COUNT(*) FROM signals WHERE outcome = 'OPEN' AND (signal_type LIKE '%BUY%' OR signal_type LIKE '%SELL%') "
                     "AND (ticker LIKE '%XAUUSD%' OR ticker LIKE '%GC=F%' OR ticker LIKE '%GOLD%' OR ticker LIKE '%EMAS%')"
                 )
                 gold_open_count = cur2.fetchone()[0]
@@ -1252,7 +1299,7 @@ class StockStorage:
         query = """
             SELECT * FROM economic_calendar
             WHERE date_utc >= ? AND date_utc <= ? AND alert_sent = 0
-            AND news_type IN ('FOMC', 'CPI', 'NFP', 'PCE', 'TRUMP', 'OIL')
+            AND (impact = 'High' OR news_type IN ('FOMC', 'CPI', 'NFP', 'PCE', 'TRUMP', 'OIL', 'PPI'))
             ORDER BY date_utc ASC
         """
         with self._get_connection() as conn:
@@ -1274,7 +1321,7 @@ class StockStorage:
         params = [start_str, end_str]
         if high_only:
             # Utamakan event High Impact (Red Folder Forex Factory) & rilis resmi utama
-            query += " AND (impact = 'High' OR news_type IN ('NFP', 'CPI', 'FOMC', 'PCE', 'OIL', 'TRUMP'))"
+            query += " AND (impact = 'High' OR news_type IN ('NFP', 'CPI', 'FOMC', 'PCE', 'OIL', 'TRUMP', 'PPI'))"
         query += """
             ORDER BY 
                 CASE WHEN impact = 'High' THEN 0 ELSE 1 END ASC,
@@ -1299,7 +1346,7 @@ class StockStorage:
         self, mins_before: int = 10, mins_after: int = 15, current_time_utc: Optional[datetime] = None
     ) -> List[Dict[str, Any]]:
         """
-        Mengambil event berita besar (High Impact atau FOMC, CPI, NFP, PCE) yang berada
+        Mengambil event berita besar (High Impact atau FOMC, CPI, NFP, PCE, PPI) yang berada
         dalam jendela bahaya aktif: [Waktu Event - mins_before] s/d [Waktu Event + mins_after].
         TIDAK dibatasi alert_sent, sehingga selalu aktif untuk News Guard pembatalan Buy/Sell Limit.
         """
@@ -1310,7 +1357,7 @@ class StockStorage:
         query = """
             SELECT * FROM economic_calendar
             WHERE date_utc >= ? AND date_utc <= ?
-            AND (impact = 'High' OR news_type IN ('FOMC', 'CPI', 'NFP', 'PCE'))
+            AND (impact = 'High' OR news_type IN ('FOMC', 'CPI', 'NFP', 'PCE', 'TRUMP', 'OIL', 'PPI'))
             ORDER BY date_utc ASC
         """
         with self._get_connection() as conn:

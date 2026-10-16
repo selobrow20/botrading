@@ -46,3 +46,9 @@ Thumbs.db
 .coverage
 htmlcov/
 scratch/
+
+# Large binaries and archives
+BOT_SIAP_PINDAH_VPS.zip
+*.exe
+build/
+dist/

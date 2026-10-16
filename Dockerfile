@@ -28,5 +28,6 @@ COPY . .
 # Buat direktori data, logs, dan reports
 RUN mkdir -p /app/data /app/logs /app/reports
 
-# Mode Standby: Bot utama berjalan di Laptop Windows lokal
-CMD ["python", "-c", "import time; print('Railway Standby Mode: Bot aktif berjalan di Windows Laptop MT5.'); time.sleep(86400 * 365)"]
+EXPOSE 8080
+CMD ["python", "dashboard_server.py"]
+

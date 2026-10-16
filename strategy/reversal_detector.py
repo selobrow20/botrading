@@ -83,6 +83,13 @@ class GoldReversalDetector:
         ob_bull = bool(curr.get("order_block_bullish", 0))
         ob_bear = bool(curr.get("order_block_bearish", 0))
 
+        # Integrasi SMC Liquidity & Market Structure (CHoCH / BOS / HH-HL / LH-LL)
+        try:
+            from strategy.smc_liquidity import SMCLiquidityEngine
+            smc_struct = SMCLiquidityEngine.analyze_market_structure(df_ind)
+        except Exception:
+            smc_struct = None
+
         # Ichimoku
         tk_cross = bool(curr.get("ichimoku_tk_cross", 0))
 
@@ -107,9 +114,13 @@ class GoldReversalDetector:
                     f"🕯️ Candlestick: Pola Bullish Engulfing (Candle hijau menelan penuh bar merah sebelumnya)"
                 )
 
-            # 2. Market Structure Shift / CHoCH (Trading Alchemist - Buku 9)
+            # 2. Market Structure Shift / CHoCH (Trading Alchemist & SMC)
             crossed_above_ema20 = (close > ema20) and (prev_close <= prev_ema20)
-            if bos_bull or crossed_above_ema20:
+            smc_bull_shift = bool(smc_struct and (smc_struct.choch_bullish or smc_struct.bos_bullish or smc_struct.has_hh_hl))
+            if smc_bull_shift:
+                score += 30.0
+                reasons.append(f"🏛️ SMC Reversal: {smc_struct.description} (Struktur berbalik Bullish melanggar posisi SELL)")
+            elif bos_bull or crossed_above_ema20:
                 score += 25.0
                 detail_bos = "Breakout Menembus Kembali ke Atas Dinamis 20 EMA" if crossed_above_ema20 else "Break of Structure (BOS) Bullish"
                 reasons.append(f"🏛️ Struktur Pasar: {detail_bos} (Indikasi pergantian karakter tren / CHoCH)")
@@ -156,9 +167,13 @@ class GoldReversalDetector:
                     f"🕯️ Candlestick: Pola Bearish Engulfing (Candle merah menelan penuh bar hijau sebelumnya)"
                 )
 
-            # 2. Market Structure Shift / CHoCH (Trading Alchemist - Buku 9)
+            # 2. Market Structure Shift / CHoCH (Trading Alchemist & SMC)
             crossed_below_ema20 = (close < ema20) and (prev_close >= prev_ema20)
-            if bos_bear or crossed_below_ema20:
+            smc_bear_shift = bool(smc_struct and (smc_struct.choch_bearish or smc_struct.bos_bearish or smc_struct.has_lh_ll))
+            if smc_bear_shift:
+                score += 30.0
+                reasons.append(f"🏛️ SMC Reversal: {smc_struct.description} (Struktur berbalik Bearish melanggar posisi BUY)")
+            elif bos_bear or crossed_below_ema20:
                 score += 25.0
                 detail_bos = "Breakdown Menembus ke Bawah Dinamis 20 EMA" if crossed_below_ema20 else "Break of Structure (BOS) Bearish"
                 reasons.append(f"🏛️ Struktur Pasar: {detail_bos} (Indikasi pelemahan momentum / CHoCH Bearish)")
@@ -191,26 +206,27 @@ class GoldReversalDetector:
             return False, "Tipe posisi tidak valid", [], 0.0
 
         # =========================================================================
-        # STANDAR ULTRA-KETAT: REVERSAL FIX / 100% TERKONFIRMASI (9 BUKU PDF)
+        # STANDAR ULTRA-KETAT: REVERSAL FIX / 100% TERKONFIRMASI (SMC & 9 BUKU PDF)
         # =========================================================================
-        # Sesuai arahan mutlak pengguna:
-        # "kalo sinyal pembalikan coba di perketat deh bor soal nya udah beberapa kali kena engga jelas ke sl sendiri"
-        # 1. Wajib ada penembusan struktur resmi (Break of Structure / BOS) atau Pola Reversal Mayor (Double Top/Bottom / H&S).
-        #    Persilangan EMA 20 kecil saja BUKAN pembalikan tren dan dilarang memicu auto-close.
-        # 2. Skor konfluensi pembalikan dinaikkan minimal >= 75.0% dengan minimal 3 konfirmasi independen.
-
         has_structure_break = False
+        smc_opposing_confirmed = False
         if pos_type == "SELL":
-            # Wajib ada penembusan struktur ke atas yang sah (BOS Bullish menjebol swing high, atau pola W menembus Neckline):
-            has_structure_break = (bos_bull or pat_db or pat_ihs) and (close >= ema20)
+            smc_opposing_confirmed = bool(smc_struct and (smc_struct.choch_bullish or smc_struct.bos_bullish or (smc_struct.trend == "BULLISH" and close > ema20)))
+            has_structure_break = (bos_bull or pat_db or pat_ihs or smc_opposing_confirmed) and (close >= ema20 or (smc_struct and smc_struct.choch_bullish))
         elif pos_type == "BUY":
-            # Wajib ada penembusan struktur ke bawah yang sah (BOS Bearish menjebol swing low, atau pola M menembus Neckline):
-            has_structure_break = (bos_bear or pat_dt or pat_hs) and (close <= ema20)
+            smc_opposing_confirmed = bool(smc_struct and (smc_struct.choch_bearish or smc_struct.bos_bearish or (smc_struct.trend == "BEARISH" and close < ema20)))
+            has_structure_break = (bos_bear or pat_dt or pat_hs or smc_opposing_confirmed) and (close <= ema20 or (smc_struct and smc_struct.choch_bearish))
 
-        # 1. Konfirmasi Utama: Skor Konfluensi Tinggi (>= 70%) + Minimal 3 Konfirmasi Independen + Wajib Rusak Struktur Pasar Nyata (BOS / Pola Mayor)
+        # 1. Konfirmasi Utama: Skor Konfluensi Tinggi (>= 70%) + Minimal 3 Konfirmasi Independen + Wajib Rusak Struktur Pasar Nyata (BOS / Pola Mayor / SMC)
         is_reversal = (score >= 70.0) and (len(reasons) >= 3) and has_structure_break
 
-        # 2. Konfirmasi Pola Mayor (Buku 8 Chart Pattern):
+        # 2. Konfirmasi SMC Institutional CHoCH Reversal:
+        # Jika CHoCH / BOS terkonfirmasi berlawanan dengan arah posisi + didukung minimal 2 indikasi:
+        if not is_reversal and smc_opposing_confirmed and has_structure_break and len(reasons) >= 2 and score >= 55.0:
+            is_reversal = True
+            score = max(score, 85.0)
+
+        # 3. Konfirmasi Pola Mayor (Buku 8 Chart Pattern):
         # Hanya sah jika Pola Double Top/Bottom atau Head & Shoulders sudah menembus Neckline / Struktur
         if not is_reversal:
             if pos_type == "SELL" and (pat_db or pat_ihs) and (bos_bull and close > ema20):

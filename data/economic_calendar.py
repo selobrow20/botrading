@@ -59,6 +59,10 @@ class EconomicCalendar:
         if any(k in t_lower for k in ["cpi", "consumer price index", "core cpi"]):
             return "CPI"
 
+        # 3b. PPI (Producer Price Index / Data Inflasi Produsen AS)
+        if any(k in t_lower for k in ["ppi", "producer price index", "core ppi"]):
+            return "PPI"
+
         # 4. NFP (Tenaga Kerja & Pengangguran AS Resmi dari BLS)
         # PENTING: ADP Non-Farm adalah data swasta (precursor), jangan kategorikan sebagai NFP resmi!
         if "adp" in t_lower:
@@ -273,9 +277,9 @@ class EconomicCalendar:
                 continue
 
             news_type = self.categorize_news_type(title, country)
-            # Simpan jika USD High Impact atau merupakan salah satu High Impact News (FOMC, CPI, PCE, NFP, TRUMP, OIL)
-            if (country in ["USD", "ALL", "GLOBAL", "US", ""] or news_type in ["OIL", "TRUMP"]) and (
-                impact in ["High", "Medium"] or news_type in ["FOMC", "CPI", "NFP", "PCE", "TRUMP", "OIL"]
+            # Simpan jika USD High Impact atau merupakan salah satu High Impact News (FOMC, CPI, PCE, NFP, TRUMP, OIL, PPI)
+            if (country in ["USD", "ALL", "GLOBAL", "US", ""] or news_type in ["OIL", "TRUMP", "PPI"]) and (
+                impact in ["High", "Medium"] or news_type in ["FOMC", "CPI", "NFP", "PCE", "TRUMP", "OIL", "PPI"]
             ):
                 utc_str, wib_str = self.parse_event_time(date_raw)
                 fc_val = str(item.get("forecast", "") or "").strip()
@@ -291,12 +295,22 @@ class EconomicCalendar:
                     "news_type": news_type,
                 })
 
-        # 2. Fallback jadwal resmi HANYA jika feed online kosong dan database tidak memiliki data sama sekali
-        if not parsed_events:
-            existing = self.storage.get_this_week_news(limit=5, high_only=False)
-            if not existing:
-                schedule_fallbacks = self.generate_official_schedule_events(datetime.now().year)
-                parsed_events.extend(schedule_fallbacks)
+        # 2. Keamanan: Purge event sintetis / tebakan tanggal lama agar tidak memicu alert palsu
+        if parsed_events:
+            try:
+                with self.storage._get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        DELETE FROM economic_calendar 
+                        WHERE title LIKE '%(Inflasi AS)%' 
+                           OR title LIKE '%FOMC Statement & Fed Funds Rate Decision%'
+                           OR title LIKE '%(Indikator Inflasi The Fed)%'
+                           OR title LIKE '%Crude Oil Inventories & Petroleum Status%'
+                           OR title LIKE '%Trump Tariff Watch%'
+                    """)
+                    conn.commit()
+            except Exception:
+                pass
 
         saved = 0
         if parsed_events:

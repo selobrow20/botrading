@@ -26,7 +26,8 @@ def test_categorize_news_type():
     assert EconomicCalendar.categorize_news_type("Trump Tariff Announcement on China", "USD") == "TRUMP"
     assert EconomicCalendar.categorize_news_type("US Trade Policy & Tariff Shock", "USD") == "TRUMP"
     assert EconomicCalendar.categorize_news_type("EIA Crude Oil Inventories", "USD") == "OIL"
-    assert EconomicCalendar.categorize_news_type("OPEC+ Petroleum Meeting", "USD") == "OIL"
+    assert EconomicCalendar.categorize_news_type("Core PPI m/m", "USD") == "PPI"
+    assert EconomicCalendar.categorize_news_type("Producer Price Index y/y", "USD") == "PPI"
     assert EconomicCalendar.categorize_news_type("Trade Balance", "USD") == "OTHER"
     assert EconomicCalendar.categorize_news_type("CPI", "EUR") == "OTHER"
 
@@ -169,6 +170,17 @@ def test_fundamental_bias_pce_trump_oil():
     bias_oil_bear = NewsPredictor.calculate_fundamental_bias("OIL", "EIA Crude Oil Inventories", "+3.5M", "+0.5M")
     assert bias_oil_bear["sentiment"] == "BEARISH"
     assert bias_oil_bear["score"] < 0
+
+    # 4. PPI (Producer Price Index)
+    # PPI forecast < previous -> USD weak -> Bullish Gold
+    bias_ppi_bull = NewsPredictor.calculate_fundamental_bias("PPI", "Core PPI m/m", "0.2%", "0.4%")
+    assert bias_ppi_bull["sentiment"] == "BULLISH"
+    assert bias_ppi_bull["score"] > 0
+
+    # PPI forecast > previous -> USD strong -> Bearish Gold
+    bias_ppi_bear = NewsPredictor.calculate_fundamental_bias("PPI", "PPI m/m", "0.6%", "0.3%")
+    assert bias_ppi_bear["sentiment"] == "BEARISH"
+    assert bias_ppi_bear["score"] < 0
 
 
 def test_pdf_technical_confluence():

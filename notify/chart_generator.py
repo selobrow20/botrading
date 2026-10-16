@@ -476,7 +476,7 @@ class ChartGenerator:
 
         # Simpan Gambar ke Direktori Charts
         timestamp_slug = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:18]
-        safe_ticker = clean_ticker.replace("=", "").replace("^", "").replace(".", "_")
+        safe_ticker = clean_ticker.replace("=", "").replace("^", "").replace(".", "_").replace(":", "_").replace("/", "_")
         filename = f"chart_{safe_ticker}_{interval}_{timestamp_slug}.png"
         output_path = str(CHARTS_DIR / filename)
 

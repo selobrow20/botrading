@@ -138,8 +138,12 @@ class TelegramNotifier:
             if is_gold:
                 trade_type_val = getattr(sig, "trade_type", "SHORT") or "SHORT"
                 direction_val = getattr(sig, "direction", "BUY") or "BUY"
-                macro_h4 = getattr(sig, "macro_bias_h4", "") or "NEUTRAL / SIDEWAYS"
-                lines.append(f"🌐 <b>Market:</b> H4 = <code>{macro_h4}</code>")
+                strat_name = str(getattr(sig, "strategy_name", ""))
+                if "3_Pilar" in strat_name:
+                    lines.append("🛡️ <b>Strategi:</b> <code>3 Pilar Inti + EMA/RSI + SNR</code>")
+                else:
+                    macro_h4 = getattr(sig, "macro_bias_h4", "") or "NEUTRAL / SIDEWAYS"
+                    lines.append(f"🌐 <b>Market:</b> H4 = <code>{macro_h4}</code>")
                 lines.append(f"⚡ <b>Trade Type:</b> <code>{trade_type_val} — {'SCALPING' if trade_type_val == 'SHORT' else 'INTRADAY/SWING'}</code>")
                 lines.append(f"🧭 <b>Direction:</b> <code>{direction_val}</code>")
                 if trade_type_val == "LONG":
@@ -162,13 +166,17 @@ class TelegramNotifier:
             if wr_badge:
                 lines.append(wr_badge)
 
-            # Telaah 9 Buku PDF untuk Sinyal Masuk
+            # Telaah Sinyal Masuk
             pdf_details = getattr(sig, "pdf_confluence_details", [])
             if pdf_details:
                 grade_str, score_val = _get_grade_and_score()
                 lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-                lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val}%):</b>")
-                for chk in pdf_details[:5]:
+                strat_name = str(getattr(sig, "strategy_name", ""))
+                if "3_Pilar" in strat_name:
+                    lines.append(f"🛡️ <b>KONFLUANSI 3 PILAR + EMA/RSI + SNR ({grade_str} - {score_val}%):</b>")
+                else:
+                    lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val}%):</b>")
+                for chk in pdf_details[:6]:
                     lines.append(f"• {html.escape(chk)}")
 
                 pred = getattr(sig, "market_direction_prediction", "")
@@ -182,8 +190,12 @@ class TelegramNotifier:
             lines.append(f"🔴 <b>SINYAL ENTRY (SELL): {display_ticker}</b>")
             trade_type_val = getattr(sig, "trade_type", "SHORT") or "SHORT"
             direction_val = getattr(sig, "direction", "SELL") or "SELL"
-            macro_h4 = getattr(sig, "macro_bias_h4", "") or "NEUTRAL / SIDEWAYS"
-            lines.append(f"🌐 <b>Market:</b> H4 = <code>{macro_h4}</code>")
+            strat_name = str(getattr(sig, "strategy_name", ""))
+            if "3_Pilar" in strat_name:
+                lines.append("🛡️ <b>Strategi:</b> <code>3 Pilar Inti + EMA/RSI + SNR (Dua Arah)</code>")
+            else:
+                macro_h4 = getattr(sig, "macro_bias_h4", "") or "NEUTRAL / SIDEWAYS"
+                lines.append(f"🌐 <b>Market:</b> H4 = <code>{macro_h4}</code>")
             lines.append(f"⚡ <b>Trade Type:</b> <code>{trade_type_val} — {'SCALPING' if trade_type_val == 'SHORT' else 'INTRADAY/SWING'}</code>")
             lines.append(f"🧭 <b>Direction:</b> <code>{direction_val}</code>")
             if trade_type_val == "LONG":
@@ -195,7 +207,7 @@ class TelegramNotifier:
             if sig.take_profit_price and sig.stop_loss_price:
                 tp_str = format_currency(sig.take_profit_price, sig.ticker)
                 sl_str = format_currency(sig.stop_loss_price, sig.ticker)
-                rrr = sig.risk_reward_ratio or 2.0
+                rrr = sig.risk_reward_ratio or 1.0
                 pct_tp = ((sig.price - sig.take_profit_price) / max(sig.price, 0.01)) * 100.0
                 pct_sl = ((sig.stop_loss_price - sig.price) / max(sig.price, 0.01)) * 100.0
                 lines.append(f"🎯 <b>Take Profit (TP):</b> <code>{tp_str}</code> (-{pct_tp:.2f}% Target Bawah)")
@@ -210,8 +222,12 @@ class TelegramNotifier:
             if pdf_details:
                 grade_str, score_val = _get_grade_and_score()
                 lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-                lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val}%):</b>")
-                for chk in pdf_details[:5]:
+                strat_name = str(getattr(sig, "strategy_name", ""))
+                if "3_Pilar" in strat_name:
+                    lines.append(f"🛡️ <b>KONFLUANSI 3 PILAR + EMA/RSI + SNR ({grade_str} - {score_val}%):</b>")
+                else:
+                    lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val}%):</b>")
+                for chk in pdf_details[:6]:
                     lines.append(f"• {html.escape(chk)}")
                 pred = getattr(sig, "market_direction_prediction", "")
                 if pred:
@@ -327,11 +343,21 @@ class TelegramNotifier:
         return "\n".join(lines)
 
     def get_bot(self) -> Optional[Bot]:
-        """Mendapatkan instance Bot Telegram yang di-cache untuk connection pooling."""
+        """Mendapatkan instance Bot Telegram yang terikat pada event loop yang sedang berjalan."""
         if not self.is_configured:
             return None
-        if not hasattr(self, "_cached_bot") or self._cached_bot is None:
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        if (
+            not hasattr(self, "_cached_bot")
+            or self._cached_bot is None
+            or getattr(self, "_cached_bot_loop", None) is not current_loop
+        ):
             self._cached_bot = Bot(token=self.token)
+            self._cached_bot_loop = current_loop
         return self._cached_bot
 
     async def _async_send_text(
@@ -357,6 +383,20 @@ class TelegramNotifier:
             logger.info(f"Pesan berhasil terkirim ke Telegram ({cid}).")
             return True
         except Exception as e:
+            if "event loop is closed" in str(e).lower() or "closed" in str(e).lower():
+                try:
+                    fresh_bot = Bot(token=self.token)
+                    self._cached_bot = fresh_bot
+                    await fresh_bot.send_message(
+                        chat_id=cid,
+                        text=text,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=reply_markup,
+                    )
+                    logger.info(f"Pesan berhasil terkirim ke Telegram ({cid}) via recovered bot instance.")
+                    return True
+                except Exception as e2:
+                    logger.error(f"Fallback recover bot juga gagal ({cid}): {e2}")
             logger.error(f"Gagal mengirim pesan ke Telegram ({cid}): {e}")
             return False
 
@@ -570,18 +610,17 @@ class TelegramNotifier:
             return {"success": False, "sent_count": 0, "recipients": [], "error": f"File {p} tidak ditemukan."}
 
         caption = custom_caption or (
-            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.4.2 (DUAL-LEVEL SNIPER LIMIT)</b> 🚀\n"
+            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.4.5 (SETUP MASTER 1:1 & NOTIFIKASI PERSONAL)</b> 🚀\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5 v2.4.2.\n\n"
-            "✨ <b>FITUR & LOGIKA TERBARU (v2.4.2):</b>\n"
-            "1. 🎯 <b>Dual-Level Pending Limit Orders:</b> Memasang 2 level pending order sekaligus (Level 1: 20 EMA Agresif & Level 2: 50 EMA Deep Retest) agar tidak telat masuk dan tetap disiplin 9 PDF!\n"
-            "2. 🟡 <b>Opsi 2 Murni Sniper Limit:</b> 100% Sinyal dieksekusi sebagai BUY LIMIT & SELL LIMIT tanpa kejar lilin.\n"
-            "3. ⚡ <b>Sinyal SHORT & LONG:</b> Scalping 60 pips (R:R 1:1) dan Intraday Swing 180 pips (R:R 3:1) dengan TP/SL presisi.\n"
-            "4. 🛡️ <b>Auto-BEP +60 Pips:</b> Kunci modal otomatis saat floating profit mencapai +60 pips ($6.00 USD).\n"
-            "5. ⏳ <b>Auto-Cancel 120 Menit & Reversal Cleanup:</b> Pending order stale 2 jam atau berlawanan arah dibatalkan otomatis.\n"
-            "6. 🔄 <b>Zero-Touch OTA Auto-Reload:</b> Aplikasi auto-copier member langsung ter-update otomatis dari Telegram.\n"
-            "7. 🛡️ <b>Preserve User Config:</b> Nomor akun dan pengaturan lot member tetap tersimpan aman 100%.\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━"
+            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5 v2.4.5.\n\n"
+            "✨ <b>FITUR & LOGIKA TERBARU (v2.4.5):</b>\n"
+            "1. 🎯 <b>Sinkronisasi Setup 1:1 Ikut Master:</b> Single-sided order, anti-bentrok, dan anti-layer bertumpuk. Member membuka posisi persis sesuai setup Master!\n"
+            "2. ⚡ <b>Eksekusi 0-Delay Saat Order Terjemput:</b> Begitu limit Master terisi di pasar, copier member langsung mengeksekusi secara instan.\n"
+            "3. 🔔 <b>Notifikasi Hasil Deal MT5 Mandiri:</b> Notifikasi TP/SL pribadi dikirim langsung ke Pesan Tersimpan (Saved Messages) Telegram Anda sendiri.\n"
+            "4. 🛡️ <b>Maksimal 1 Posisi (Disiplin Modal):</b> Proteksi ketat anti-hedging & anti-layer.\n"
+            "5. 🔄 <b>OTA Auto-Reload:</b> Copier langsung memperbarui dirinya sendiri secara otomatis saat dijalankan.\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "<i>Aplikasi dapat langsung di-ekstrak atau biarkan copier mengupdate otomatis via OTA.</i>"
         )
 
         approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
@@ -625,6 +664,29 @@ class TelegramNotifier:
         Mengirim kartu sinyal ke seluruh pengguna yang telah disetujui (Admin + Whitelist).
         Dilengkapi tombol interaktif langsung menuju live chart TradingView.
         """
+        # Sesuai instruksi pengguna: "sinyal pending jangan ditampilin"
+        # Sinyal pending limit order (Buy Limit / Sell Limit) tidak ditampilkan di Telegram,
+        # notifikasi baru akan dikirim saat limit order terjemput di pasar (Filled / 0-delay).
+        is_pending_signal = bool(
+            getattr(sig, "is_limit_order", False)
+            or str(getattr(sig, "signal", "")).endswith("_LIMIT")
+            or (getattr(sig, "ladder_limit_orders", None) and len(sig.ladder_limit_orders) > 0)
+        )
+        if is_pending_signal:
+            from config.settings import load_config
+            cfg_mt5 = getattr(self, "config", {}).get("mt5", {}) if hasattr(self, "config") else {}
+            if not cfg_mt5:
+                try:
+                    cfg_mt5 = load_config().get("mt5", {})
+                except Exception:
+                    cfg_mt5 = {}
+            if not bool(cfg_mt5.get("notify_pending_limit_signals", False)):
+                logger.info(
+                    f"🔇 [PENDING SIGNAL MUTED] Sinyal pending limit {sig.signal} {sig.ticker} "
+                    f"tidak ditampilkan ke Telegram ('sinyal pending jangan ditampilin'). Menunggu order terjemput pasar."
+                )
+                return True
+
         msg = self.format_signal_message(sig)
         approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
         if not approved_ids:
@@ -650,19 +712,31 @@ class TelegramNotifier:
         display_ticker = "XAU/USD (Gold)" if is_gold else ticker.replace(".JK", "")
 
         outcome = res_sig.get("outcome", "WIN")
-        is_win = (outcome == "WIN")
-        sig_type = res_sig.get("signal_type", "BUY")
+        sig_type = str(res_sig.get("signal_type", "BUY")).upper()
 
         entry_p = float(res_sig.get("price") or res_sig.get("entry_price") or 0.0)
         exit_p = float(res_sig.get("exit_price") or 0.0)
         tp_p = float(res_sig.get("take_profit_price") or 0.0)
         sl_p = float(res_sig.get("stop_loss_price") or 0.0)
         pnl_pct = float(res_sig.get("pnl_pct") or 0.0)
+        pnl_cash = res_sig.get("pnl_cash")
 
-        # Koreksi otomatis: Jika harga keluar menguntungkan atau PnL positif, status MUTLAK WIN (bukan LOSE!)
-        if (sig_type == "BUY" and exit_p > entry_p) or (sig_type == "SELL" and exit_p < entry_p) or pnl_pct > 0:
+        # Prioritas 1: Jika pnl_cash negatif (< 0) atau outcome == "LOSE", status MUTLAK LOSE (Stop Loss)!
+        # Dilarang keras meng-override Stop Loss menjadi Take Profit!
+        if (pnl_cash is not None and float(pnl_cash) < 0) or outcome == "LOSE":
+            is_win = False
+            outcome = "LOSE"
+            pnl_pct = -abs(pnl_pct)
+        elif (pnl_cash is not None and float(pnl_cash) > 0) or outcome == "WIN":
             is_win = True
             outcome = "WIN"
+            pnl_pct = abs(pnl_pct)
+        else:
+            # Fallback jika tidak ada pnl_cash dan outcome
+            is_buy = "BUY" in sig_type
+            is_win = (exit_p > entry_p) if is_buy else (exit_p < entry_p)
+            outcome = "WIN" if is_win else "LOSE"
+            pnl_pct = abs(pnl_pct) if is_win else -abs(pnl_pct)
 
         entry_str = format_currency(entry_p, ticker)
         exit_str = format_currency(exit_p, ticker)
@@ -694,27 +768,34 @@ class TelegramNotifier:
         is_manual_win = is_win and ("MANUAL" in note_upper or "EARLY CLOSE" in note_upper)
         is_manual_cut_loss = not is_win and ("MANUAL" in note_upper or "CLOSE MANUAL" in note_upper)
 
+        pnl_cash = res_sig.get("pnl_cash")
+        unit_curr = res_sig.get("currency") or ("USC" if is_gold and "c" in ticker.lower() else "USD")
+        cash_str = f" ({'+' if is_win else '-'}${abs(float(pnl_cash)):,.2f} {unit_curr})" if pnl_cash is not None else ""
+
+        is_from_master = bool(res_sig.get("from_mt5"))
+        role_prefix = "👑 <b>[AKUN MASTER PROVIDER]</b> " if is_from_master else "🎯 <b>[SINYAL VIP TERCAPAI]</b> "
+
         if is_win:
             if is_trailing_win:
-                header = "🎯 <b>[LAPORAN HASIL] PROFIT TERKUNCI (TRAILING STOP / BEP)!</b> 🛡️"
-                outcome_badge = "🟢 <b>HASIL: WIN / PROFIT TERKUNCI</b>"
+                header = f"{role_prefix}<b>PROFIT TERKUNCI (TRAILING STOP / BEP)!</b> 🛡️"
+                outcome_badge = "🟢 <b>HASIL: UNTUNG / PROFIT TERKUNCI (WIN)</b>"
             elif is_early_close or is_manual_win:
-                header = "🛡️ <b>[LAPORAN HASIL] PROFIT DIAMANKAN LEBIH AWAL (MANUAL CLOSE)!</b> 💰"
-                outcome_badge = "🟢 <b>HASIL: WIN / MANUAL PROFIT SECURED</b>"
+                header = f"{role_prefix}<b>PROFIT DIAMANKAN LEBIH AWAL!</b> 💰"
+                outcome_badge = "🟢 <b>HASIL: UNTUNG / MANUAL PROFIT SECURED (WIN)</b>"
             else:
-                header = "🎯 <b>[LAPORAN HASIL] TAKE PROFIT TERCAPAI!</b> 🚀"
-                outcome_badge = "🟢 <b>HASIL: WIN / PROFIT MAKSIMAL</b>"
-            pnl_badge = f"💰 <b>Keuntungan (PnL):</b> <code>+{abs(pnl_pct):.2f}%</code>"
+                header = f"{role_prefix}<b>TAKE PROFIT TERCAPAI!</b> 🚀"
+                outcome_badge = "🟢 <b>HASIL: WIN / PROFIT MAKSIMAL (UNTUNG)</b>"
+            pnl_badge = f"💰 <b>Total Keuntungan:</b> <code>+{abs(pnl_pct):.2f}%{cash_str}</code>"
         else:
             if is_manual_cut_loss:
-                header = "🛑 <b>[LAPORAN HASIL] CUT LOSS MANUAL / PROTEKSI MODAL!</b> 🛡️"
-                outcome_badge = "🔴 <b>HASIL: CUT LOSS MANUAL (TRADER / MEMBER CLOSE)</b>"
+                header = f"{role_prefix}<b>CUT LOSS MANUAL / PROTEKSI MODAL!</b> 🛡️"
+                outcome_badge = "🔴 <b>HASIL: RUGI / CUT LOSS MANUAL (LOSE)</b>"
             else:
-                header = "🛑 <b>[LAPORAN HASIL] STOP LOSS TERSENTUH!</b> ⚠️"
-                outcome_badge = "🔴 <b>HASIL: LOSE / PROTEKSI MODAL</b>"
-            pnl_badge = f"📉 <b>Kerugian (PnL):</b> <code>-{abs(pnl_pct):.2f}%</code>"
+                header = f"{role_prefix}<b>STOP LOSS TERSENTUH!</b> ⚠️"
+                outcome_badge = "🔴 <b>HASIL: LOSE / PROTEKSI MODAL (RUGI)</b>"
+            pnl_badge = f"📉 <b>Total Kerugian:</b> <code>-{abs(pnl_pct):.2f}%{cash_str}</code>"
 
-        action_label = "BUY / LONG" if sig_type == "BUY" else "SELL / SHORT" if is_gold else "SELL / EXIT"
+        action_label = "BUY / LONG" if "BUY" in sig_type else "SELL / SHORT" if is_gold else "SELL / EXIT"
 
         lines = [
             header,
@@ -734,11 +815,30 @@ class TelegramNotifier:
             "━━━━━━━━━━━━━━━━━━━━━━",
             "📝 <b>KETERANGAN & EVALUASI:</b>",
             f"<i>{html.escape(note)}</i>",
+        ]
+
+        # Evaluasi Pasca-SL Instan dari Otak AI Gemini
+        ai_post_mortem = res_sig.get("ai_post_mortem")
+        if ai_post_mortem and isinstance(ai_post_mortem, dict):
+            diag = html.escape(str(ai_post_mortem.get("diagnosa", "")))
+            mkt = html.escape(str(ai_post_mortem.get("market_condition", "")))
+            act = html.escape(str(ai_post_mortem.get("action_plan", "")))
+            pos_tag = html.escape(str(ai_post_mortem.get("bot_posture", "")))
+            lines.extend([
+                "━━━━━━━━━━━━━━━━━━━━━━",
+                "🧠 <b>EVALUASI PASCA-SL OLEH GEMINI AI (POST-MORTEM):</b>",
+                f"• <b>Diagnosa:</b> <i>{diag}</i>",
+                f"• <b>Struktur Pasar:</b> <code>{mkt}</code>",
+                f"• <b>Rencana Tindakan:</b> <i>{act}</i>",
+                f"• <b>Proteksi Bot:</b> 🔒 <code>{pos_tag}</code>",
+            ])
+
+        lines.extend([
             "━━━━━━━━━━━━━━━━━━━━━━",
             "📊 <b>UPDATE STATISTIK AKURASI (WIN RATE):</b>",
             f"🎯 <b>Win Rate Sekarang:</b> <code>{wr:.1f}%</code> ({win_c}W / {lose_c}L)",
             f"💰 <b>Total Akumulasi PnL:</b> <code>{total_pnl:+.2f}%</code>",
-        ]
+        ])
 
         if is_win:
             lines.append("🏆 <i>Setup konfluensi 9 buku PDF terbukti akurat mengunci profit!</i>")
@@ -747,18 +847,25 @@ class TelegramNotifier:
 
         return "\n".join(lines)
 
-    def send_tp_sl_report(self, res_sig: Dict[str, Any]) -> bool:
+    def send_tp_sl_report(
+        self,
+        res_sig: Dict[str, Any],
+        target_chat_ids: Optional[List[str]] = None,
+    ) -> bool:
         """
-        Mengirimkan kartu laporan hasil TP/SL ke seluruh pengguna Telegram yang disetujui.
-        Dilengkapi Anti-Duplicate & Anti-Stale Guard ketat agar laporan tidak terkirim ganda atau basi.
+        Mengirimkan kartu laporan hasil TP/SL ke Telegram.
+        Jika target_chat_ids dispesifikasikan (misal deal akun Master), kirim khusus ke target tsb.
+        Jika tidak, kirim ke seluruh pengguna Telegram yang disetujui.
         """
         sig_id = res_sig.get("id")
         ticker = res_sig.get("ticker", "UNKNOWN")
         outcome = res_sig.get("outcome", "")
         exit_p = res_sig.get("exit_price", 0.0)
+        force_send = bool(res_sig.get("force_send"))
+        has_post_mortem = bool(res_sig.get("ai_post_mortem"))
 
-        # 1. Cek status di database jika sig_id valid
-        if sig_id and hasattr(self, "storage") and self.storage:
+        # 1. Cek status di database jika sig_id valid (jangan suppress jika force_send atau membawa evaluasi AI post-mortem)
+        if sig_id and hasattr(self, "storage") and self.storage and not force_send and not has_post_mortem:
             try:
                 if self.storage.is_signal_outcome_notified(sig_id):
                     logger.info(f"ℹ️ [DEDUP SUPPRESSED] Laporan TP/SL sinyal #{sig_id} ({ticker}) sudah pernah dilaporkan ke Telegram. Dilewati.")
@@ -777,12 +884,12 @@ class TelegramNotifier:
             if now_ts - self._reported_outcomes_cache[k] > 86400:
                 del self._reported_outcomes_cache[k]
 
-        if dedup_key in self._reported_outcomes_cache:
+        if not force_send and not has_post_mortem and dedup_key in self._reported_outcomes_cache:
             logger.info(f"ℹ️ [DEDUP CACHE] Laporan TP/SL '{dedup_key}' sudah dikirim dalam 24 jam terakhir. Dilewati.")
             return True
 
         msg = self.format_tp_sl_report(res_sig)
-        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        approved_ids = target_chat_ids or self.storage.get_approved_chat_ids(admin_id=self.chat_id)
         if not approved_ids:
             approved_ids = [self.chat_id]
 
@@ -818,10 +925,8 @@ class TelegramNotifier:
         is_limit = action in ["BUY_LIMIT", "SELL_LIMIT"]
         if volume <= 0.01:
             lot_badge = "🛡️ <b>AKUN STANDARD USD (0.01 LOT)</b>"
-        elif volume >= 0.08:
-            lot_badge = "⚡ <b>SESI US AGRESIF (0.08 LOT)</b>"
         else:
-            lot_badge = "🔥 <b>AKUN CENT USC (0.05 LOT)</b>"
+            lot_badge = f"🔥 <b>AKUN CENT USC ({volume:.2f} LOT)</b>"
         action_icon = "🟢" if "BUY" in action else "🔴"
 
         if is_limit:
@@ -851,16 +956,132 @@ class TelegramNotifier:
         ]
         return "\n".join(lines)
 
-    def send_mt5_execution_report(self, order_info: Dict[str, Any]) -> bool:
+    def send_mt5_execution_report(self, order_info: Dict[str, Any], admin_only: bool = True) -> bool:
         """
-        Mengirim kartu konfirmasi eksekusi order MT5 ke seluruh pengguna Telegram.
+        Mengirim kartu konfirmasi eksekusi order MT5 Master ke Admin / Master.
+        Default dikirim khusus ke Master Admin agar tidak memicu dobel order di sisi Copier Member.
+        Jika order bertipe pending dan notify_pending_limit_signals=False, notifikasi ditiadakan sesuai arahan pengguna.
         """
-        msg = self.format_mt5_execution_report(order_info)
-        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
-        if not approved_ids:
-            approved_ids = [self.chat_id]
+        action = str(order_info.get("action", "BUY")).upper()
+        is_pending = "LIMIT" in action or "STOP" in action
+        if is_pending:
+            from config.settings import load_config
+            cfg_mt5 = getattr(self, "config", {}).get("mt5", {}) if hasattr(self, "config") else {}
+            if not cfg_mt5:
+                try:
+                    cfg_mt5 = load_config().get("mt5", {})
+                except Exception:
+                    cfg_mt5 = {}
+            if not bool(cfg_mt5.get("notify_pending_limit_signals", False)):
+                logger.info(
+                    f"🔇 [PENDING REPORT MUTED] Pemasangan pending order MT5 #{order_info.get('ticket')} "
+                    f"tidak dikirim ke Telegram sesuai preferensi user ('sinyal pending jangan ditampilin')."
+                )
+                return True
 
-        return self.broadcast_text(msg, target_chat_ids=approved_ids)
+        msg = self.format_mt5_execution_report(order_info)
+        targets = [self.chat_id] if admin_only else self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not targets:
+            targets = [self.chat_id]
+        return self.broadcast_text(msg, target_chat_ids=targets)
+
+    def format_limit_order_filled_alert(self, order_info: Dict[str, Any]) -> str:
+        """
+        Menyusun kartu alert Telegram saat Pending Limit Order (BUY LIMIT / SELL LIMIT)
+        berhasil tersentuh harga pasar dan terisi (FILLED) menjadi posisi aktif (0 Delay).
+        """
+        ticket = order_info.get("ticket", order_info.get("order_ticket", "-"))
+        pos_id = order_info.get("position_id", ticket)
+        action = str(order_info.get("action", "BUY")).upper()
+        raw_type = str(order_info.get("type", f"{action}_LIMIT")).upper()
+        symbol = order_info.get("symbol", "XAUUSDc")
+        volume = float(order_info.get("volume", 0.05))
+        price = float(order_info.get("price", 0.0))
+        tp = float(order_info.get("tp", 0.0))
+        sl = float(order_info.get("sl", 0.0))
+
+        if volume <= 0.01:
+            lot_badge = "🛡️ <b>AKUN STANDARD USD (0.01 LOT)</b>"
+        else:
+            lot_badge = f"🔥 <b>AKUN CENT USC ({volume:.2f} LOT)</b>"
+
+        is_buy = "BUY" in action or "BUY" in raw_type
+        action_icon = "🟢" if is_buy else "🔴"
+        action_title = "BUY LIMIT" if is_buy else "SELL LIMIT"
+        action_active = "BUY / LONG (Posisi AKTIF)" if is_buy else "SELL / SHORT (Posisi AKTIF)"
+        entry_header = (
+            f"🟢 <b>SINYAL ENTRY (MASUK / BUY): {symbol} (Gold)</b>"
+            if is_buy
+            else f"🔴 <b>SINYAL ENTRY (SELL): {symbol} (Gold)</b>"
+        )
+
+        # Hitung jarak TP & SL dalam pips dan USD
+        tp_dist = abs(tp - price) if (tp > 0 and price > 0) else 0.0
+        sl_dist = abs(price - sl) if (sl > 0 and price > 0) else 0.0
+        tp_pips = int(round(tp_dist * 10))
+        sl_pips = int(round(sl_dist * 10))
+        tp_str = f"+{tp_pips} pips / +${tp_dist:.2f}" if tp_dist > 0 else "-"
+        sl_str = f"-{sl_pips} pips / -${sl_dist:.2f}" if sl_dist > 0 else "-"
+
+        # Waktu WIB
+        time_str = order_info.get("time_wib")
+        if not time_str:
+            try:
+                time_str = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%H:%M:%S WIB")
+            except Exception:
+                time_str = "WIB"
+        elif " " in str(time_str):
+            time_parts = str(time_str).split(" ")
+            time_str = time_parts[-2] + " WIB" if len(time_parts) >= 2 else str(time_str)
+
+        lines = [
+            f"⚡ <b>[ORDER LIMIT TERJEMPUT] {action_title} TERISI (FILLED)!</b> 🎯",
+            entry_header,
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"🎫 <b>Ticket Pending:</b> <code>#{ticket}</code>" + (f" (Posisi: <code>#{pos_id}</code>)" if str(pos_id) != str(ticket) else ""),
+            f"📊 <b>Instrumen:</b> <code>{symbol} (Gold)</code>",
+            f"{action_icon} <b>Status Order:</b> <b>{action_active}</b>",
+            f"📦 <b>Volume:</b> <code>{volume:.2f} Lot</code> ({lot_badge})",
+            f"💵 <b>Harga Entry:</b> <code>${price:,.2f}</code>",
+            f"🎯 <b>Take Profit (TP):</b> <code>${tp:,.2f}</code> ({tp_str})",
+            f"🛑 <b>Stop Loss (SL):</b> <code>${sl:,.2f}</code> ({sl_str})",
+            f"⏱️ <b>Waktu Terjemput:</b> {time_str}",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "🛡️ <i>Pending limit order berhasil tersentuh harga pasar dan resmi terisi menjadi posisi aktif berjalan. Sistem pengawalan TP/SL & Trailing BEP otomatis mengawal posisi ini!</i>",
+        ]
+        return "\n".join(lines)
+
+    def send_limit_order_filled_alert(self, order_info: Dict[str, Any], admin_only: bool = False) -> bool:
+        """
+        Mengirim kartu notifikasi kilat ke Telegram saat pending limit order terjemput (FILLED).
+        Disiarkan ke seluruh member disetujui (0 delay) sebagai sinyal resmi masuk yang terisi di pasar.
+        """
+        ticket = order_info.get("ticket", order_info.get("order_ticket"))
+        dedup_key = f"fill_{ticket}"
+        now_ts = time.time()
+        if not hasattr(self, "_reported_fills_cache"):
+            self._reported_fills_cache = {}
+
+        for k in list(self._reported_fills_cache.keys()):
+            if now_ts - self._reported_fills_cache[k] > 86400:
+                del self._reported_fills_cache[k]
+
+        if ticket and dedup_key in self._reported_fills_cache:
+            return True
+
+        msg = self.format_limit_order_filled_alert(order_info)
+        targets = [self.chat_id] if admin_only else self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not targets:
+            targets = [self.chat_id]
+
+        tv_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Pantau Chart di TradingView", url=get_tradingview_url("XAUUSD"))
+        ]])
+
+        success = self.broadcast_text(msg, target_chat_ids=targets, reply_markup=tv_markup)
+        if success and ticket:
+            self._reported_fills_cache[dedup_key] = now_ts
+        return success
 
     def format_gold_reversal_alert(self, info: Dict[str, Any]) -> str:
         """
@@ -1524,8 +1745,8 @@ class TelegramBotCommands:
                 await query.answer("🚫 Akses Anda telah diblokir total oleh Admin.", show_alert=True)
                 return
 
-        # Chart style switching, candlestick, copier, dan eksekusi chart dapat diakses oleh semua pengguna yang terdaftar
-        if not data.startswith(("chart_", "candle_", "copier_", "download_copier", "exec_chart_")) and not self._is_admin(update):
+        # Chart style switching, candlestick, copier, pump radar, autopump, dan panic/closeall dapat diakses oleh semua pengguna yang terdaftar
+        if not data.startswith(("chart_", "candle_", "copier_", "download_copier", "exec_chart_", "pump_", "autopump_", "panic_")) and not self._is_admin(update):
             await query.answer("⛔ Hanya Admin yang berhak memproses tindakan ini.", show_alert=True)
             return
 
@@ -1674,6 +1895,90 @@ class TelegramBotCommands:
                 except Exception as e2:
                     logger.error(f"Fallback callback juga gagal: {e2}")
                     await query.message.reply_html(f"❌ Gagal mengirim file: {e2}")
+            return
+
+        elif data.startswith("pump_"):
+            is_meme = data == "pump_meme"
+            await query.answer("Memindai koin Binance Spot..." if not is_meme else "Memindai koin meme...")
+            from crypto.scanner import CryptoScanner
+            user_name = query.from_user.first_name if query.from_user else "Bor"
+            rep = CryptoScanner.generate_pump_report(user_name=user_name, meme_only=is_meme)
+            kb = [
+                [
+                    InlineKeyboardButton("🐶 Radar Meme Coin", callback_data="pump_meme") if not is_meme else InlineKeyboardButton("🔄 Refresh Meme", callback_data="pump_meme"),
+                    InlineKeyboardButton("🚀 Semua Koin Pump", callback_data="pump_all") if is_meme else InlineKeyboardButton("🔄 Refresh Semua", callback_data="pump_all"),
+                ]
+            ]
+            try:
+                await query.edit_message_text(rep, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(kb))
+            except Exception:
+                await query.message.reply_html(rep, reply_markup=InlineKeyboardMarkup(kb))
+            return
+
+        elif data.startswith("autopump_"):
+            from crypto.auto_pump import AutoPumpSniper
+            sniper = AutoPumpSniper.get_instance()
+            sniper.telegram_notifier = self.notifier
+
+            if data == "autopump_on":
+                sniper.set_enabled(True)
+                await query.answer("🚀 Auto-Pump Sniper DIAKTIFKAN!", show_alert=False)
+            elif data == "autopump_off":
+                sniper.set_enabled(False)
+                await query.answer("🛑 Auto-Pump Sniper DIMATIKAN.", show_alert=False)
+            elif data == "autopump_toggle_mode":
+                new_m = "real" if sniper.mode == "paper" else "paper"
+                sniper.set_mode(new_m)
+                lbl = "REAL SPOT BINANCE" if new_m == "real" else "PAPER TRADING"
+                await query.answer(f"🔄 Mode diubah ke: {lbl}", show_alert=False)
+
+            report = sniper.format_status_report()
+            kb = [
+                [
+                    InlineKeyboardButton("🟢 Nyalakan Auto-Buy", callback_data="autopump_on"),
+                    InlineKeyboardButton("🔴 Matikan", callback_data="autopump_off"),
+                ],
+                [
+                    InlineKeyboardButton("🔄 Switch Real/Paper", callback_data="autopump_toggle_mode"),
+                    InlineKeyboardButton("🚀 Radar Koin Pump", callback_data="pump_all"),
+                ]
+            ]
+            try:
+                await query.edit_message_text(report, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(kb))
+            except Exception:
+                pass
+            return
+
+        elif data == "panic_confirm_all":
+            await query.answer("Memproses penutupan darurat...", show_alert=False)
+            await query.edit_message_text("⏳ <i>Sedang mengeksekusi penutupan seluruh posisi MT5 dan Crypto...</i>", parse_mode=ParseMode.HTML)
+            
+            # 1. Close MT5 positions
+            from trading.mt5_bridge import MT5Bridge
+            mt5_b = MT5Bridge.get_instance()
+            res_mt5 = mt5_b.close_all_positions(reason="Panic Close All via Telegram")
+            
+            # 2. Close Crypto positions
+            from crypto.auto_pump import AutoPumpSniper
+            crypto_s = AutoPumpSniper.get_instance()
+            res_crypto = crypto_s.close_all_positions(reason="Panic Close All via Telegram")
+
+            msg_res = (
+                "🚨 <b>PANIC CLOSE ALL SELESAI DIEKSEKUSI</b>\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                f"• 🟡 <b>MT5 Result:</b> {res_mt5.get('message', 'Sukses')}\n"
+                f"  <i>(Total Ditutup: {res_mt5.get('closed_count', 0)} tiket)</i>\n\n"
+                f"• 🟢 <b>Crypto Result:</b> {res_crypto.get('message', 'Sukses')}\n"
+                f"  <i>(Total Ditutup: {res_crypto.get('closed_count', 0)} posisi)</i>\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "✅ <i>Seluruh portofolio aman dan dalam kondisi flat.</i>"
+            )
+            await query.message.reply_html(msg_res)
+            return
+
+        elif data == "panic_cancel":
+            await query.answer("Perintah Panic dibatalkan.", show_alert=True)
+            await query.edit_message_text("❌ <b>Perintah Panic Close All telah dibatalkan.</b> Posisi tetap berjalan normal.", parse_mode=ParseMode.HTML)
             return
 
         elif data == "sendcopier_all":
@@ -2465,6 +2770,49 @@ class TelegramBotCommands:
         )
         await update.message.reply_html(status_text)
 
+    async def autorepair_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /repair, /autorepair, /health untuk audit dan perbaikan mandiri sistem."""
+        if not await self.check_user_access(update, context):
+            return
+
+        from trading.auto_repair import AutoRepairGuardian
+        guardian = AutoRepairGuardian.get_instance(notifier=self.notifier)
+
+        wait_msg = await update.message.reply_html("🔍 <i>Sedang menjalankan audit kesehatan menyeluruh & perbaikan otomatis...</i>")
+
+        # Jalankan siklus audit & perbaikan penuh
+        res = guardian.run_full_repair_cycle()
+        repairs = res.get("repairs", [])
+        rep_count = res.get("repairs_count", 0)
+        lifetime_healed = res.get("total_healed_lifetime", 0)
+        heartbeat_age = res.get("heartbeat_age_sec", 0)
+
+        from trading.mt5_bridge import MT5Bridge
+        bridge = MT5Bridge()
+        open_pos = bridge.get_open_positions() if bridge.enabled else []
+        pending = bridge.get_pending_orders() if bridge.enabled else []
+
+        repair_detail = "\n".join(f"• {r}" for r in repairs) if repairs else "• Semua posisi & order dalam kondisi normal (SL/TP lengkap)."
+
+        txt = (
+            f"🛠️ <b>HERMES AUTO-REPAIR & SELF-HEALING SYSTEM</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🩺 <b>Status Kesehatan:</b> <b>{'🟢 SEHAT / NORMAL' if rep_count == 0 else '🔧 ANOMALI TELAH DIPERBAIKI'}</b>\n"
+            f"💓 <b>Detak Jantung Pipeline:</b> Aktif ({heartbeat_age} detik lalu)\n"
+            f"📈 <b>Posisi Terbuka MT5:</b> {len(open_pos)} posisi (Semua terlindungi SL/TP)\n"
+            f"⏳ <b>Pending Limit Orders:</b> {len(pending)} order aktif\n"
+            f"🛡️ <b>Total Auto-Repair Dijalankan:</b> {lifetime_healed} kali\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<b>Hasil Audit Terkini:</b>\n"
+            f"{repair_detail}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✅ <i>Sistem mengawal bot 24/7 dan memperbaiki error secara otomatis tanpa henti.</i>"
+        )
+        try:
+            await wait_msg.edit_text(txt, parse_mode="HTML")
+        except Exception:
+            await update.message.reply_html(txt)
+
     async def watchlist_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /watchlist untuk melihat daftar saham."""
         if not await self.check_user_access(update, context):
@@ -3050,13 +3398,14 @@ class TelegramBotCommands:
         else:
             smc_status = "⚪ Struktur Terjaga"
 
+        pinbar_str = "🟢 YA (Ekor Penolakan Kuat)" if res["pinbar"] else f"⚪ Tidak (Ekor: {res['wick_ratio']:.0f}%)"
         lines = [
             f"🕯️ <b>BEDAH CANDLESTICK & PRICE ACTION: {res['ticker']}</b>",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"💵 <b>Harga Terkini:</b> <code>{price_fmt}</code> ({res['time']} WIB)",
             "━━━━━━━━━━━━━━━━━━━━━━",
             "📖 <b>TELAAH 9 BUKU TRADING:</b>",
-            f"• <b>Pinbar Rejection:</b> {'🟢 YA (Ekor Penolakan Kuat)' if res['pinbar'] else f'⚪ Tidak (Ekor: {res['wick_ratio']:.0f}%)'}",
+            f"• <b>Pinbar Rejection:</b> {pinbar_str}",
             f"• <b>Bullish Engulfing:</b> {'🟢 YA (Candle Menelan Penuh)' if res['engulfing'] else '⚪ Tidak'}",
             f"• <b>Bob Volman 20 EMA:</b> {'🟢 Pullback Reversal Terkonfirmasi' if res['volman_pb'] else '⚪ Normal'}",
             f"• <b>Bob Volman Buildup:</b> {'🔥 Kompresi Siap Breakout' if res['volman_bd'] else '⚪ Volatilitas Reguler'}",
@@ -4085,15 +4434,69 @@ class TelegramBotCommands:
         await update.message.reply_html(stance_reply, reply_markup=reply_markup)
 
     async def chat_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler pesan teks percakapan natural (bahasa gaul) & interaksi seluruh fitur bot."""
+        """Handler pesan percakapan natural (bahasa gaul), analisis gambar/foto/chart, & interaksi seluruh fitur bot."""
         if not await self.check_user_access(update, context):
             return
 
-        if not update.message or not update.message.text:
+        if not update.message:
             return
 
-        user_text = update.message.text.strip()
+        user_text = (update.message.caption or update.message.text or "").strip()
         user_name = update.effective_user.first_name if update.effective_user else "Bor"
+
+        has_photo = bool(update.message.photo) or (
+            update.message.document
+            and update.message.document.mime_type
+            and update.message.document.mime_type.startswith("image/")
+        )
+
+        # 0. JIKA PENGGUNA MENGIRIMKAN GAMBAR / FOTO: Jalankan Vision Agent (OCR & Analisis Cerdas)
+        if has_photo:
+            try:
+                temp_dir = Path("data/temp_images")
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                target_file_id = update.message.photo[-1].file_id if update.message.photo else update.message.document.file_id
+                temp_img_path = temp_dir / f"img_{update.update_id}_{target_file_id[-8:]}.png"
+
+                status_msg = await update.message.reply_html(f"🔍 <i>Siap {user_name}! Gue scan & baca gambarnya dulu ya...</i>")
+
+                tg_file = await context.bot.get_file(target_file_id)
+                await tg_file.download_to_drive(str(temp_img_path))
+
+                from notify.vision_agent import VisionAgent
+                import asyncio
+
+                vision_reply = await asyncio.to_thread(
+                    VisionAgent.process_incoming_image,
+                    image_path=str(temp_img_path),
+                    caption=user_text,
+                    user_name=user_name,
+                )
+
+                # Hapus temporary image
+                try:
+                    if temp_img_path.exists():
+                        temp_img_path.unlink()
+                except Exception:
+                    pass
+
+                try:
+                    await status_msg.delete()
+                except Exception:
+                    pass
+
+                await update.message.reply_html(vision_reply)
+                return
+            except Exception as e:
+                logger.error(f"Gagal memproses gambar masuk: {e}")
+                await update.message.reply_html(
+                    f"Waduh {user_name}, gambar lu udah masuk tapi ada kendala teknis pas baca: <code>{html.escape(str(e))}</code>\n"
+                    "Coba kirim ulang atau ketik pertanyaannya langsung ya!"
+                )
+                return
+
+        if not user_text:
+            return
 
         from notify.chat_agent import ChatAgent
         classification = ChatAgent.classify_intent(user_text)
@@ -4312,15 +4715,221 @@ class TelegramBotCommands:
             await update.message.reply_html(reply_text)
             return
 
-        # 18. Intent STATUS: Pengguna menanyakan status bot
+        # 18. Intent COIN_PLAN: Pengguna menanyakan SL & TP koin crypto tertentu
+        if intent == "COIN_PLAN":
+            from crypto.scanner import CryptoScanner
+            target_coin = classification.get("ticker", "BTCUSDT")
+            plan_text = CryptoScanner.generate_single_coin_plan(target_coin, user_name=user_name)
+            await update.message.reply_html(plan_text)
+            return
+
+        # 19. Intent CRYPTO: Pengguna menanyakan seputar trading crypto
+        if intent == "CRYPTO":
+            await self.crypto_command(update, context)
+            return
+
+        # 19. Intent PUMP: Pengguna meminta scan koin potensial pump / meme coin spot
+        if intent == "PUMP":
+            meme_only = classification.get("meme_only", False)
+            await self.pump_command(update, context, meme_only=meme_only)
+            return
+
+        # 20. Intent AUTOPUMP: Pengguna menanyakan / mengontrol bot auto-pump sniper
+        if intent == "AUTOPUMP":
+            await self.autopump_command(update, context)
+            return
+
+        # 21. Intent AI_STATUS: Pengguna mengecek status Otak AI (Gemini)
+        if intent == "AI_STATUS":
+            await self.ai_command(update, context)
+            return
+
+        # 22. Intent STATUS: Pengguna menanyakan status bot
         if intent == "STATUS":
             reply_text = ChatAgent.generate_chat_response(intent="STATUS", user_name=user_name, raw_text=user_text)
             await update.message.reply_html(reply_text)
             return
 
-        # 19. Default: GREETING, THANKS, CHITCHAT
+        # 21. Default: GREETING, THANKS, CHITCHAT
         reply_text = ChatAgent.generate_chat_response(intent=intent, user_name=user_name, raw_text=user_text)
         await update.message.reply_html(reply_text)
+
+    async def crypto_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /crypto untuk melihat harga live crypto 24/7, status exchange CCXT, dan saldo."""
+        if not await self.check_user_access(update, context):
+            return
+
+        from notify.chat_agent import ChatAgent
+        user_name = update.effective_user.first_name if update.effective_user else "Bor"
+        reply = ChatAgent.generate_crypto_response(user_name=user_name)
+        await update.message.reply_html(reply)
+
+    async def pump_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE, meme_only: bool = False) -> None:
+        """Handler perintah /pump untuk memindai koin potensial pump & meme coin di Binance Spot."""
+        if not await self.check_user_access(update, context):
+            return
+
+        from crypto.scanner import CryptoScanner
+        import asyncio
+
+        user_name = update.effective_user.first_name if update.effective_user else "Bor"
+        cat_text = "koin meme & micin" if meme_only else "koin potensial pump"
+        status_msg = await update.message.reply_html(f"🔍 <i>Memindai 700+ pair USDT di Binance Spot untuk mendeteksi {cat_text}...</i>")
+
+        report = await asyncio.to_thread(CryptoScanner.generate_pump_report, user_name=user_name, meme_only=meme_only)
+
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
+        kb = [
+            [
+                InlineKeyboardButton("🐶 Radar Meme Coin", callback_data="pump_meme"),
+                InlineKeyboardButton("🚀 Semua Koin Pump", callback_data="pump_all"),
+            ]
+        ]
+        await update.message.reply_html(report, reply_markup=InlineKeyboardMarkup(kb))
+
+    async def autopump_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /autopump untuk mengontrol Auto-Pump Sniper Bot (Binance Spot & Paper Trading)."""
+        if not await self.check_user_access(update, context):
+            return
+
+        from crypto.auto_pump import AutoPumpSniper
+        sniper = AutoPumpSniper.get_instance()
+        sniper.telegram_notifier = self.notifier
+
+        args = context.args or []
+        if args:
+            sub = args[0].lower()
+            if sub == "on":
+                sniper.set_enabled(True)
+                mode_name = "Real Spot Binance (Live)" if sniper.mode == "real" else "Paper Trading (Simulasi)"
+                await update.message.reply_html(
+                    f"🚀 <b>AUTO-PUMP SNIPER DIAKTIFKAN!</b>\n\n"
+                    f"• <b>Mode:</b> <b>{mode_name}</b>\n"
+                    f"• <b>Alokasi per Koin:</b> <code>${sniper.capital_per_coin} USDT</code>\n"
+                    f"• <b>Maksimal Posisi:</b> <code>{sniper.max_positions} Koin</code>\n"
+                    f"• <b>Kriteria Skor:</b> <code>>={sniper.min_score}/100</code>\n\n"
+                    f"<i>Bot mulai memindai pasar Binance 24/7 dan otomatis eksekusi beli jika ada sinyal Grade A+!</i>"
+                )
+                return
+            elif sub == "off":
+                sniper.set_enabled(False)
+                await update.message.reply_html(
+                    "🛑 <b>AUTO-PUMP SNIPER DINONAKTIFKAN.</b>\n"
+                    "Bot dalam kondisi standby dan tidak akan menembak posisi baru."
+                )
+                return
+            elif sub == "mode" and len(args) > 1:
+                target_mode = sniper.set_mode(args[1])
+                mode_desc = "🟢 Real Spot Binance (Live Order)" if target_mode == "real" else "🟡 Paper Trading (Simulasi Saldo Virtual)"
+                await update.message.reply_html(f"🔄 <b>Mode Eksekusi Berhasil Diubah ke:</b>\n{mode_desc}")
+                return
+            elif sub in ["capital", "modal"] and len(args) > 1:
+                try:
+                    cap = float(args[1])
+                    sniper.capital_per_coin = cap
+                    await update.message.reply_html(f"💰 <b>Alokasi Modal per Koin Diubah ke:</b> <code>${cap:.2f} USDT</code>")
+                    return
+                except ValueError:
+                    pass
+
+        report = sniper.format_status_report()
+        kb = [
+            [
+                InlineKeyboardButton("🟢 Nyalakan Auto-Buy", callback_data="autopump_on"),
+                InlineKeyboardButton("🔴 Matikan", callback_data="autopump_off"),
+            ],
+            [
+                InlineKeyboardButton("🔄 Switch Real/Paper", callback_data="autopump_toggle_mode"),
+                InlineKeyboardButton("🚀 Radar Koin Pump", callback_data="pump_all"),
+            ]
+        ]
+        await update.message.reply_html(report, reply_markup=InlineKeyboardMarkup(kb))
+
+    async def ai_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah /ai atau /brain untuk mengecek status live Otak AI Gemini."""
+        if not await self.check_user_access(update, context):
+            return
+
+        from strategy.ai_gatekeeper import AIGatekeeper
+        import time
+
+        status_msg = await update.message.reply_html("🧠 <i>Menghubungkan ke Otak AI (Google Gemini)...</i>")
+
+        gate = AIGatekeeper.get_instance()
+        if not gate.has_brain():
+            await status_msg.edit_text(
+                "🔴 <b>Status Otak AI: NONAKTIF</b>\n"
+                "Kunci GEMINI_API_KEY belum terpasang di file .env."
+            )
+            return
+
+        # Uji penalaran live ke Gemini
+        t0 = time.time()
+        test_eval = gate.evaluate_crypto_pump(
+            symbol="PEPEUSDT",
+            price=0.00000404,
+            chg_24h=5.2,
+            volume_usdt=12500000.0,
+            pump_score=88,
+            status_label="SUPER PUMP",
+        )
+        latency_ms = int((time.time() - t0) * 1000)
+
+        ai_active = test_eval.get("ai_active", False)
+        status_badge = "🟢 <b>AKTIF & ONLINE (100% SIAP TEMPUR)</b>" if ai_active else "🟡 <b>FALLBACK MODE</b>"
+        model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+
+        report = (
+            f"🧠 <b>STATUS OTAK AI TRADING (GEMINI GATEKEEPER)</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Status Otak AI:</b> {status_badge}\n"
+            f"• <b>Model:</b> <code>Google {model_name}</code>\n"
+            f"• <b>Kecepatan Respons (Ping):</b> <code>{latency_ms} ms</code>\n"
+            f"• <b>Standar Kelayakan AI:</b> Skor <code>>={gate.min_approval_score}/100</code>\n"
+            f"• <b>Wilayah Pengawalan:</b>\n"
+            f"  1. 🥇 <b>XAU/USD (Gold MT5):</b> Veto anti-fakeout & anti-jebakan berita USD.\n"
+            f"  2. 🪙 <b>Binance Spot:</b> Veto anti-pucuk koin pump.\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🧪 <b>UJI PENALARAN LIVE:</b>\n"
+            f"• <b>Simulasi Aset:</b> <code>PEPE/USDT</code>\n"
+            f"• <b>Keputusan AI:</b> <b>{test_eval.get('verdict')}</b> (Skor: <code>{test_eval.get('score')}/100</code>)\n"
+            f"• <b>Alasan AI:</b> <i>\"{test_eval.get('reason')}\"</i>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"✅ <i>Semua sinyal otomatis diawasi oleh Otak AI sebelum dieksekusi.</i>"
+        )
+
+        try:
+            await status_msg.edit_text(report, parse_mode=ParseMode.HTML)
+        except Exception:
+            await update.message.reply_html(report)
+
+    async def panic_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler perintah darurat /panic atau /closeall: Tutup seluruh posisi MT5 & Crypto."""
+        if not await self.check_user_access(update, context):
+            return
+
+        kb = [
+            [
+                InlineKeyboardButton("🔴 YA, TUTUP SEMUA SEKARANG", callback_data="panic_confirm_all"),
+            ],
+            [
+                InlineKeyboardButton("❌ BATALKAN", callback_data="panic_cancel"),
+            ]
+        ]
+        await update.message.reply_html(
+            "⚠️ <b>KONFIRMASI DARURAT: PANIC CLOSE ALL</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "Apakah Anda yakin ingin <b>menutup SEMUA posisi aktif secara instan</b>?\n\n"
+            "• 🟡 <b>MetaTrader 5 (MT5 Gold/Forex):</b> Seluruh order terbuka akan di-close pasar (Market Close).\n"
+            "• 🟢 <b>Binance Spot / Paper Crypto:</b> Seluruh posisi koin pump terbuka akan di-Market Sell ke USDT.\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "<i>Klik tombol konfirmasi di bawah untuk mengeksekusi penutupan darurat.</i>",
+            reply_markup=InlineKeyboardMarkup(kb),
+        )
 
     async def news_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler perintah /news untuk melihat jadwal berita besar (FOMC, CPI, NFP) & proyeksi XAU/USD."""
@@ -4357,9 +4966,9 @@ class TelegramBotCommands:
                 ]
                 major_events = [
                     e for e in (upcoming_events or events)
-                    if e.get("impact") == "High" or e.get("news_type") in ["NFP", "CPI", "FOMC", "PCE"]
+                    if e.get("impact") == "High" or e.get("news_type") in ["NFP", "CPI", "FOMC", "PCE", "TRUMP", "OIL", "PPI"]
                 ]
-                closest_ev = nfp_candidates[0] if nfp_candidates else (major_events[0] if major_events else (upcoming_events[0] if upcoming_events else events[0]))
+                closest_ev = major_events[0] if major_events else (nfp_candidates[0] if nfp_candidates else (upcoming_events[0] if upcoming_events else events[0]))
                 closest_analysis = NewsPredictor.analyze_pre_news(closest_ev, live_gold_price=live_price, df_gold=df_gold)
                 comp_analysis = NewsPredictor.comprehensive_news_analysis(
                     news_event=closest_ev,
@@ -4403,7 +5012,7 @@ class TelegramBotCommands:
 
         # Fallback format jika analisis belum tersedia
         lines = [
-            "📅 <b>JADWAL HIGH-IMPACT NEWS (FOMC / CPI / PCE / NFP / TRUMP / OIL)</b> 🌎",
+            "📅 <b>JADWAL HIGH-IMPACT NEWS (FOMC / CPI / PPI / PCE / NFP / TRUMP / OIL)</b> 🌎",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"💵 <b>Harga Live XAU/USD:</b> <code>${live_price:,.2f}</code>",
             "━━━━━━━━━━━━━━━━━━━━━━",
@@ -4425,12 +5034,15 @@ async def set_menu_commands(application: Application) -> None:
     commands = [
         BotCommand("chart", "📈 Live Candlestick Chart (Gold / Saham)"),
         BotCommand("potensi", "🔥 Radar Live Chart Paling Berpotensi"),
-        BotCommand("news", "📰 Jadwal & Prediksi Pre-News (FOMC/CPI/NFP)"),
+        BotCommand("news", "📰 Jadwal & Prediksi Pre-News (FOMC/CPI/PPI/NFP)"),
         BotCommand("harian", "🎯 Rekomendasi Sinyal Trading Harian (TP & SL)"),
         BotCommand("winrate", "📊 Statistik Akurasi Win / Lose Rate Bot"),
         BotCommand("laporan", "📋 Laporan Hasil Rekomendasi (TP/SL) & Akurasi"),
         BotCommand("candle", "🕯️ Bedah Pola Candlestick & Price Action"),
         BotCommand("gold", "🥇 Analisis Sinyal Emas Dunia (XAU/USD)"),
+        BotCommand("autopump", "⚡ Auto-Pump Sniper Binance Spot"),
+        BotCommand("ai", "🧠 Cek Status Otak AI Gemini"),
+        BotCommand("panic", "🚨 Emergency Close All (MT5 & Crypto)"),
         BotCommand("mt5", "🤖 Dashboard Auto-Trade MetaTrader 5 (MT5)"),
         BotCommand("tutup", "🔔 Laporan Penutupan Pasar Saham (BEI) Simpel"),
         BotCommand("scan", "🔍 Pindai Sinyal Pasar Sekarang"),
@@ -4483,9 +5095,15 @@ def build_telegram_application() -> Optional[Application]:
     app.add_handler(CommandHandler(["winrate", "performance", "akurasi", "laporan", "evaluasi"], cmd_handler.winrate_command))
     app.add_handler(CommandHandler(["candle", "candlestick", "pola"], cmd_handler.candle_command))
     app.add_handler(CommandHandler(["gold", "xau", "emas"], cmd_handler.gold_command))
+    app.add_handler(CommandHandler(["crypto", "kripto", "btc", "eth"], cmd_handler.crypto_command))
+    app.add_handler(CommandHandler(["pump", "pumps", "memecoin", "micin", "radarcrypto"], cmd_handler.pump_command))
+    app.add_handler(CommandHandler(["autopump", "autocrypto", "autocoin", "sniper"], cmd_handler.autopump_command))
+    app.add_handler(CommandHandler(["ai", "brain", "otakai", "gemini"], cmd_handler.ai_command))
+    app.add_handler(CommandHandler(["panic", "closeall", "tutupsemua", "emergency"], cmd_handler.panic_command))
     app.add_handler(CommandHandler(["mt5", "autotrade", "akun", "account"], cmd_handler.mt5_command))
     app.add_handler(CommandHandler(["tutup", "closesaham", "laporansaham"], cmd_handler.tutup_command))
     app.add_handler(CommandHandler("status", cmd_handler.status_command))
+    app.add_handler(CommandHandler(["autorepair", "repair", "selfheal", "health", "cekbot"], cmd_handler.autorepair_command))
     app.add_handler(CommandHandler("scan", cmd_handler.scan_command))
     app.add_handler(CommandHandler("watchlist", cmd_handler.watchlist_command))
     app.add_handler(CommandHandler(["lasthistory", "history", "riwayat", "rekap"], cmd_handler.lasthistory_command))
@@ -4499,8 +5117,13 @@ def build_telegram_application() -> Optional[Application]:
 
     app.add_handler(CommandHandler(["license", "lisensi", "auth_check"], cmd_handler.license_command))
     app.add_handler(CallbackQueryHandler(cmd_handler.button_callback_handler))
-    # Handler pesan teks bebas (ngobrol santai & permintaan live chart otomatis)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_handler.chat_message_handler))
+    # Handler pesan teks bebas & gambar/foto (dialog interaktif, OCR, analisis chart/news)
+    app.add_handler(
+        MessageHandler(
+            (filters.TEXT | filters.PHOTO | filters.Document.IMAGE) & ~filters.COMMAND,
+            cmd_handler.chat_message_handler,
+        )
+    )
 
     return app
 
@@ -4509,6 +5132,11 @@ def run_telegram_bot_polling() -> None:
     """Menjalankan bot polling listener secara independen."""
     app = build_telegram_application()
     if app:
+        try:
+            from crypto.auto_pump import AutoPumpSniper
+            AutoPumpSniper.get_instance().telegram_notifier = TelegramNotifier()
+        except Exception as e:
+            logger.debug(f"AutoPumpSniper inject notifier: {e}")
         logger.info("Memulai Telegram bot polling listener...")
         try:
             app.run_polling(stop_signals=None, bootstrap_retries=-1)

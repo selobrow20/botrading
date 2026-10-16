@@ -108,6 +108,15 @@ class NewsPredictor:
             "sl_offset_pct": 0.30,
             "description": "Data pasokan minyak mentah mingguan EIA & kebijakan kuota OPEC+. Lonjakan harga minyak mentah mengerek ekspektasi inflasi global (cost-push inflation), memicu reli lindung nilai Emas (Gold Bullish).",
         },
+        "PPI": {
+            "name": "Producer Price Index (Indeks Harga Produsen / Inflasi Grosir AS)",
+            "volatility_pct": 1.6,
+            "tp1_pct": 0.8,
+            "tp2_pct": 1.8,
+            "breakout_offset_pct": 0.35,
+            "sl_offset_pct": 0.30,
+            "description": "Indikator utama inflasi tingkat produsen (leading indicator bagi CPI). PPI memanas = Biaya produksi melonjak ke konsumen -> The Fed hawkish -> USD menguat & Gold tertekan. PPI dingin = Disinflasi -> Gold Bullish.",
+        },
     }
 
     @classmethod
@@ -275,6 +284,33 @@ class NewsPredictor:
                 "score": 15,
                 "sentiment": "BULLISH",
                 "reason": "Ketegangan suplai minyak global di Timur Tengah dan kuota ketat OPEC+ mempertahankan premi risiko inflasi pada Emas.",
+            }
+
+        # 7. PPI (Producer Price Index / Data Inflasi Tingkat Produsen AS)
+        elif news_type == "PPI":
+            if fc is not None and pv is not None:
+                if fc < pv:
+                    return {
+                        "score": 35,
+                        "sentiment": "BULLISH",
+                        "reason": f"Konsensus PPI ({forecast_str}) melambat dibanding rilis lalu ({previous_str}). Inflasi produsen melandai -> Beban harga konsumen berkurang (leading disinflation) -> Harapan pemangkasan suku bunga Fed terjaga -> USD melemah -> Gold Bullish.",
+                    }
+                elif fc > pv:
+                    return {
+                        "score": -35,
+                        "sentiment": "BEARISH",
+                        "reason": f"Konsensus PPI ({forecast_str}) naik dari periode lalu ({previous_str}). Tekanan inflasi tingkat produsen melonjak -> The Fed condong hawkish/menahan suku bunga tinggi -> USD menguat -> Gold Bearish.",
+                    }
+                else:
+                    return {
+                        "score": 0,
+                        "sentiment": "NEUTRAL",
+                        "reason": f"Konsensus PPI ({forecast_str}) setara dengan periode sebelumnya ({previous_str}). Pasar menunggu kejutan angka aktual rilis.",
+                    }
+            return {
+                "score": 10,
+                "sentiment": "SLIGHTLY_BULLISH",
+                "reason": "Tren inflasi produsen jangka menengah melandai, menopang pergerakan positif harga Emas.",
             }
 
         return {"score": 0, "sentiment": "NEUTRAL", "reason": "Data fundamental netral."}

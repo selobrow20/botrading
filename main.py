@@ -10,6 +10,7 @@ Perintah CLI:
   python main.py run-all            # Jalankan scheduler & bot Telegram bersamaan
 """
 
+import os
 import sys
 import argparse
 import threading
@@ -253,6 +254,11 @@ def cmd_run_all(args: argparse.Namespace) -> None:
 
     runner = PipelineRunner()
     scheduler = BackgroundScheduler()
+    # Redam spam peringatan skipped internal APScheduler agar console tetap bersih
+    import logging
+    logging.getLogger("apscheduler.executors.default").setLevel(logging.ERROR)
+    logging.getLogger("apscheduler.scheduler").setLevel(logging.ERROR)
+
     scheduler.add_job(
         runner.run_pipeline,
         trigger=IntervalTrigger(minutes=interval_mins),
@@ -261,8 +267,31 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         replace_existing=True,
     )
 
-    # Jadwalkan pemindaian khusus Gold XAU/USD real-time tiap 30 detik (0 Delay)
+    # Jadwalkan pemindaian khusus Gold XAU/USD real-time kilat (Konfigurasi Agresif)
+    gold_scan_sec = int(sched_cfg.get("gold_scan_interval_seconds", 5))
+    gold_scan_us_sec = int(sched_cfg.get("gold_scan_us_session_seconds", 2))
+    enable_adaptive = bool(sched_cfg.get("enable_adaptive_gold_scan", True))
+    deal_watcher_sec = int(sched_cfg.get("mt5_deal_watcher_seconds", 1))
+
+    _last_gold_scan_time = 0.0
+
     def scan_gold_job():
+        nonlocal _last_gold_scan_time
+        now_ts = time.time()
+
+        is_us = False
+        if enable_adaptive:
+            try:
+                from trading.mt5_bridge import MT5Bridge
+                is_us = MT5Bridge().is_us_session_window()
+            except Exception:
+                pass
+
+        target_interval = gold_scan_us_sec if is_us else gold_scan_sec
+        if target_interval > 1 and (now_ts - _last_gold_scan_time < (target_interval - 0.2)):
+            return
+
+        _last_gold_scan_time = now_ts
         try:
             gold_open, _ = is_gold_market_open(config=runner.config)
             if gold_open:
@@ -270,12 +299,21 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         except Exception as ex_g:
             logger.debug(f"Pengecekan real-time Gold: {ex_g}")
 
+    job_label = (
+        f"Pemindaian Real-Time Gold XAU/USD (Adaptive: {gold_scan_us_sec}s US / {gold_scan_sec}s Normal)"
+        if enable_adaptive and gold_scan_sec != gold_scan_us_sec
+        else f"Pemindaian Real-Time Gold XAU/USD ({gold_scan_sec} Detik Semua Sesi)"
+    )
+
+    scan_trigger_sec = max(2, min(gold_scan_sec, gold_scan_us_sec) if enable_adaptive else gold_scan_sec)
     scheduler.add_job(
         scan_gold_job,
-        trigger=IntervalTrigger(seconds=30),
+        trigger=IntervalTrigger(seconds=scan_trigger_sec),
         id="gold_realtime_job",
-        name="Pemindaian Real-Time Gold XAU/USD (30 Detik)",
+        name=job_label,
         replace_existing=True,
+        coalesce=True,
+        max_instances=1,
     )
 
     scheduler.add_job(
@@ -287,10 +325,21 @@ def cmd_run_all(args: argparse.Namespace) -> None:
     )
     scheduler.add_job(
         runner.check_and_report_mt5_deals,
-        trigger=IntervalTrigger(seconds=3),
+        trigger=IntervalTrigger(seconds=deal_watcher_sec),
         id="mt5_deal_watcher_job",
-        name="Pemantauan Real-Time TP/SL MT5",
+        name=f"Pemantauan Real-Time TP/SL MT5 ({deal_watcher_sec} Detik)",
         replace_existing=True,
+    )
+
+    # Sistem Auto-Repair & Self-Healing Mandiri (Audit Tiap 10 Detik)
+    scheduler.add_job(
+        runner.run_auto_repair_job,
+        trigger=IntervalTrigger(seconds=10),
+        id="auto_repair_watchdog_job",
+        name="Auto-Repair & Self-Healing Guardian (10s)",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
     )
 
     # Jadwalkan laporan penutupan pasar saham IDX simpel (16:05 WIB, Senin-Jumat)
@@ -323,7 +372,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         logger.info(f"Git Auto-Puller aktif: memeriksa commit origin/{git_cfg.get('branch', 'main')} tiap {pull_interval_mins} menit.")
 
     scheduler.start()
-    logger.info(f"BackgroundScheduler aktif (idx: {interval_mins}m, gold: 30s LIVE, news: 1m, MT5 watcher: 3s LIVE, git auto-pull: 5m).")
+    logger.info(f"BackgroundScheduler aktif (idx: {interval_mins}m, gold: {gold_scan_sec}s ULTRA-FAST, auto-repair: 10s, news: 1m, MT5 watcher: {deal_watcher_sec}s INSTANT, git auto-pull: 5m).")
 
     # Jalankan initial run & sync kalender di thread terpisah agar tidak menahan startup listener Telegram
     def _initial_startup_tasks():
@@ -342,6 +391,19 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         name="InitialScanThread",
     )
     t_init.start()
+
+    # Inisialisasi Auto-Pump Sniper Binance jika diaktifkan
+    try:
+        from crypto.auto_pump import AutoPumpSniper
+        crypto_sniper = AutoPumpSniper.get_instance()
+        crypto_sniper.telegram_notifier = runner.notifier
+        cfg = load_config()
+        crypto_cfg = cfg.get("crypto", {})
+        if crypto_cfg.get("enabled", False) or os.getenv("AUTOPUMP_AUTO_START", "false").lower() in ("true", "1"):
+            crypto_sniper.set_enabled(True)
+            logger.info(f"AutoPumpSniper Binance aktif (Mode: {crypto_sniper.mode.upper()}, Modal: ${crypto_sniper.capital_per_coin} USDT).")
+    except Exception as e:
+        logger.warning(f"Inisialisasi AutoPumpSniper di cmd_run_all: {e}")
 
     # Jalankan Telegram Bot Polling di main thread
     has_telegram = bool(build_telegram_application())
@@ -423,6 +485,60 @@ def cmd_send_copier(args: argparse.Namespace) -> None:
         print(f"Hasil broadcast: {res}")
 
 
+def cmd_autopump(args: argparse.Namespace) -> None:
+    """Kontrol dan eksekusi Auto-Pump Sniper Bot di Binance Spot."""
+    import time
+    from crypto.auto_pump import AutoPumpSniper
+    sniper = AutoPumpSniper.get_instance()
+
+    if getattr(args, "mode", None):
+        sniper.set_mode(args.mode)
+    if getattr(args, "capital", None):
+        sniper.capital_per_coin = float(args.capital)
+    if getattr(args, "max_pos", None):
+        sniper.max_positions = int(args.max_pos)
+    if getattr(args, "min_score", None):
+        sniper.min_score = int(args.min_score)
+
+    if getattr(args, "panic_close", False):
+        print("\n🚨 Menjalankan Panic Close All untuk Posisi Crypto...")
+        res = sniper.close_all_positions(reason="Manual CLI Panic Close")
+        print(f"Hasil: {res['message']}")
+        return
+
+    if getattr(args, "status", False):
+        print("\n" + sniper.format_status_report())
+        return
+
+    if getattr(args, "once", False):
+        print(f"\n🎯 Menjalankan 1x Scan & Snipe Binance Spot (Mode: {sniper.mode.upper()}, Capital: ${sniper.capital_per_coin} USDT)...")
+        sniper.set_enabled(True)
+        res = sniper.scan_and_snipe()
+        if res:
+            print(f"✅ Berhasil eksekusi order: {res['symbol']} @ ${res['entry_price']} (Skor: {res['pump_score']})")
+        else:
+            print("ℹ️ Tidak ada koin yang memenuhi kriteria snipe saat ini atau slot posisi penuh.")
+        return
+
+    # Loop / Live runner mode
+    print("=" * 70)
+    print("🚀 MEMULAI AUTO-PUMP SNIPER BINANCE SPOT")
+    print(f"• Mode: {sniper.mode.upper()}")
+    print(f"• Modal per Koin: ${sniper.capital_per_coin} USDT")
+    print(f"• Maks Posisi: {sniper.max_positions} Koin")
+    print(f"• Min Skor: {sniper.min_score}/100")
+    print("• Tekan Ctrl + C untuk berhenti.")
+    print("=" * 70)
+    sniper.set_enabled(True)
+    try:
+        while True:
+            time.sleep(1)
+    except (KeyboardInterrupt, SystemExit):
+        print("\n🛑 Menghentikan Auto-Pump Sniper...")
+        sniper.set_enabled(False)
+        print("Sniper berhasil dihentikan.")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Bot Analisis & Sinyal Trading Saham Indonesia (IDX)",
@@ -474,7 +590,15 @@ def main():
     p_copier = subparsers.add_parser("send-copier", help="Kirim/broadcast file member_copier.zip via Telegram")
     p_copier.add_argument("--target", "-t", type=str, help="Target Chat ID (opsional, jika kosong broadcast ke seluruh member & admin)")
     p_copier.add_argument("--path", "-p", type=str, help="Lokasi file ZIP (default: member_copier.zip)")
-    p_copier.add_argument("--caption", "-c", type=str, help="Caption pesan opsional")
+    # Command: autopump / crypto
+    p_pump = subparsers.add_parser("autopump", aliases=["crypto"], help="Jalankan Auto-Pump Sniper trading otomatis di Binance Spot")
+    p_pump.add_argument("--mode", "-m", type=str, choices=["real", "paper"], help="Pilih mode eksekusi ('real' untuk Binance Live, 'paper' untuk simulasi)")
+    p_pump.add_argument("--capital", "-c", type=float, help="Modal per koin dalam USDT (minimal 5.0 untuk Binance Spot)")
+    p_pump.add_argument("--max-pos", type=int, help="Maksimal koin posisi terbuka secara bersamaan (default: 3)")
+    p_pump.add_argument("--min-score", type=int, help="Skor minimal pump scanner (0-100, default: 85)")
+    p_pump.add_argument("--once", action="store_true", help="Jalankan pemindaian & eksekusi 1x saja lalu selesai")
+    p_pump.add_argument("--status", "-s", action="store_true", help="Lihat status saldo, mode, dan posisi terbuka saat ini")
+    p_pump.add_argument("--panic-close", action="store_true", help="Tutup dan jual seluruh posisi crypto seketika")
 
     args = parser.parse_args()
 
@@ -496,6 +620,8 @@ def main():
         cmd_learn_pdf(args)
     elif args.command == "send-copier":
         cmd_send_copier(args)
+    elif args.command in ("autopump", "crypto"):
+        cmd_autopump(args)
     else:
         parser.print_help()
 

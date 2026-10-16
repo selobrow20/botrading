@@ -155,6 +155,8 @@ class PipelineRunner:
         self._reported_early_warnings: set = set()
         self._startup_baseline_candles: dict = {}
         self._last_chart_alert_time: dict = {}
+        from trading.auto_repair import AutoRepairGuardian
+        self.guardian = AutoRepairGuardian.get_instance(notifier=self.notifier)
 
     def run_pipeline(
         self,
@@ -171,7 +173,11 @@ class PipelineRunner:
         5. Filter deduplikasi sinyal.
         6. Kirim notifikasi Telegram instan jika ada sinyal baru.
         """
-        logger.info("=== Memulai Siklus Pipeline Analisis Saham & Komoditas ===")
+        is_fast_gold = (watchlist == ["XAUUSD"] and not force_run)
+        if not is_fast_gold:
+            logger.info("=== Memulai Siklus Pipeline Analisis Saham & Komoditas ===")
+        else:
+            logger.debug("=== Memulai Siklus Pemindaian Kilat Gold XAU/USD ===")
 
         # 0. Cek transaksi deal tertutup MT5 secara instan (laporan TP / SL hit)
         self.check_and_report_mt5_deals()
@@ -179,10 +185,14 @@ class PipelineRunner:
         # 1. Cek Jam Pasar (IDX & Emas)
         idx_open, idx_reason = is_idx_market_open(config=self.config)
         gold_open, gold_reason = is_gold_market_open(config=self.config)
-        logger.info(f"Status Pasar: IDX={'BUKA' if idx_open else 'TUTUP'} | GOLD={'BUKA' if gold_open else 'TUTUP'}")
+        if not is_fast_gold:
+            logger.info(f"Status Pasar: IDX={'BUKA' if idx_open else 'TUTUP'} | GOLD={'BUKA' if gold_open else 'TUTUP'}")
+        else:
+            logger.debug(f"Status Pasar: IDX={'BUKA' if idx_open else 'TUTUP'} | GOLD={'BUKA' if gold_open else 'TUTUP'}")
 
         if not idx_open and not gold_open and not force_run:
-            logger.info("Melewatkan pipeline karena seluruh pasar sedang tutup.")
+            if not is_fast_gold:
+                logger.info("Melewatkan pipeline karena seluruh pasar sedang tutup.")
             return {"status": "skipped", "reason": f"IDX: {idx_reason} | Gold: {gold_reason}"}
 
         # Bersihkan pending order MT5 yang sudah kadaluarsa (> 120 menit / 2 jam)
@@ -210,9 +220,14 @@ class PipelineRunner:
             interval = trading_cfg.get("daily", {}).get("interval", "1d")
             period = self.config.get("data", {}).get("default_period", "2y")
 
-        logger.info(
-            f"Mode Trading: {trading_mode.upper()} (Interval: {interval}, Watchlist: {len(watchlist)})"
-        )
+        if not is_fast_gold:
+            logger.info(
+                f"Mode Trading: {trading_mode.upper()} (Interval: {interval}, Watchlist: {len(watchlist)})"
+            )
+        else:
+            logger.debug(
+                f"Mode Trading: {trading_mode.upper()} (Interval: {interval}, Watchlist: {len(watchlist)})"
+            )
 
         results = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -245,7 +260,10 @@ class PipelineRunner:
 
             try:
                 results["processed"] += 1
-                logger.info(f"Memproses {ticker}...")
+                if not is_fast_gold:
+                    logger.info(f"Memproses {ticker}...")
+                else:
+                    logger.debug(f"Memproses {ticker}...")
 
                 # Konfigurasi data per instrumen
                 if is_gold:
@@ -362,6 +380,21 @@ class PipelineRunner:
                 curr_live_p = float(df["Close"].iloc[-1]) if not df.empty else sig_result.price
                 is_fresh, fresh_reason = self._is_candle_fresh(sig_result, item_interval, current_live_price=curr_live_p)
 
+                # Deteksi tren makro H1 / H4 secara objektif untuk semua jalur:
+                real_macro_trend = ""
+                if is_gold and df_h1_ind is not None and not df_h1_ind.empty:
+                    c_h1 = float(df_h1_ind["Close"].iloc[-1])
+                    e50_h1 = float(df_h1_ind["EMA_50"].iloc[-1]) if "EMA_50" in df_h1_ind.columns else float(df_h1_ind["Close"].ewm(span=50).mean().iloc[-1])
+                    e20_h1 = float(df_h1_ind["EMA_20"].iloc[-1]) if "EMA_20" in df_h1_ind.columns else float(df_h1_ind["Close"].ewm(span=20).mean().iloc[-1])
+                    if c_h1 < e50_h1 or (c_h1 < e20_h1 and e20_h1 <= e50_h1):
+                        real_macro_trend = "BEARISH"
+                    elif c_h1 > e50_h1 or (c_h1 > e20_h1 and e20_h1 >= e50_h1):
+                        real_macro_trend = "BULLISH"
+                elif is_gold and df_h4_ind is not None and not df_h4_ind.empty:
+                    c_h4 = float(df_h4_ind["Close"].iloc[-1])
+                    e50_h4 = float(df_h4_ind["EMA_50"].iloc[-1]) if "EMA_50" in df_h4_ind.columns else c_h4
+                    real_macro_trend = "BEARISH" if c_h4 < e50_h4 else "BULLISH"
+
                 # PROTEKSI STARTUP & WARMUP:
                 # 1. Saat bot baru diaktifkan (warmup), catat candle saat ini sebagai baseline dan DILARANG buka posisi/kirim notif
                 # 2. Pada siklus berikutnya, candle yang terbentuk sebelum/saat bot aktif ditolak sampai ada candle baru yang selesai (close)
@@ -375,6 +408,15 @@ class PipelineRunner:
                     dup_reason = f"Candle {sig_result.candle_time} adalah baseline saat bot baru aktif. Menunggu candle baru berikutnya selesai."
                     should_notify = False
                 else:
+                    # Filter Anti-Melawan Tren Makro H1:
+                    # Jika tren makro BEARISH, dilarang keras BUY / BUY_LIMIT!
+                    # Jika tren makro BULLISH, dilarang keras SELL / SELL_LIMIT!
+                    if is_gold and real_macro_trend:
+                        if ("BEAR" in real_macro_trend and "BUY" in sig_result.signal) or ("BULL" in real_macro_trend and "SELL" in sig_result.signal):
+                            logger.info(f"🚫 [VETO TREN MAKRO H1] Sinyal {sig_result.signal} {ticker} dibatalkan karena melawan tren makro ({real_macro_trend})!")
+                            sig_result.signal = "HOLD"
+                            sig_result.reasons = [f"Dibatalkan: Sinyal {sig_result.signal} melawan tren makro H1 ({real_macro_trend})."]
+
                     should_notify = (sig_result.signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]) and (not is_duplicate) and is_fresh
 
                 if sig_result.signal in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]:
@@ -399,26 +441,11 @@ class PipelineRunner:
                 # Kirim Notifikasi jika sinyal valid, bukan duplikat, dan candle segar
                 if should_notify:
                     logger.info(f"🚨 Sinyal Baru Terdeteksi: {sig_result.signal} {sig_result.ticker} @ {sig_result.price}")
-                    chart_path = None
-                    try:
-                        from notify.chart_generator import ChartGenerator
-                        chart_path = ChartGenerator.generate_chart(
-                            df=df_ind,
-                            ticker_symbol=sig_result.ticker,
-                            interval=item_interval,
-                            signal_type=sig_result.signal,
-                            entry_price=sig_result.price,
-                            tp_price=sig_result.take_profit_price,
-                            sl_price=sig_result.stop_loss_price,
-                            setup_grade=sig_result.setup_grade,
-                            pdf_confluence_score=sig_result.pdf_confluence_score,
-                        )
-                    except Exception as e:
-                        logger.warning(f"Gagal membuat visual chart untuk {sig_result.ticker}: {e}")
-
-                    # Auto-Trade MT5 Execution (jika MT5 diaktifkan)
+                    # 1. INSTANT 0-DELAY MT5 AUTO-TRADE EXECUTION
+                    # Eksekusi instan ke broker MT5 terlebih dahulu sebelum render chart untuk menghilangkan delay eksekusi
                     skip_broadcast = False
                     skip_reason = ""
+                    order_ticket = None
                     if is_gold:
                         try:
                             from trading.mt5_bridge import MT5Bridge
@@ -472,16 +499,43 @@ class PipelineRunner:
                                             try:
                                                 with self.storage._get_connection() as conn:
                                                     conn.cursor().execute(
-                                                        "UPDATE signals SET outcome = 'SKIPPED', outcome_note = ? WHERE id = ?",
-                                                        (f"Dibatalkan MT5 Guard: {err_msg}", sig_db_id),
+                                                        "UPDATE signals SET is_notified = 0 WHERE id = ?",
+                                                        (sig_db_id,),
                                                     )
                                                     conn.commit()
-                                            except Exception as ex_db:
-                                                logger.warning(f"Gagal membatalkan status sinyal DB: {ex_db}")
-                                    else:
-                                        sig_result.reasons.append(f"ℹ️ Status MT5: Belum dieksekusi ({err_msg})")
+                                            except Exception:
+                                                pass
+                        except Exception as e_mt5:
+                            logger.error(f"Error eksekusi MT5 Auto-Trade: {e_mt5}")
+
+                    # 2. GENERATE VISUAL CHART SETELAH EKSEKUSI MT5 (NON-BLOCKING UNTUK EKSEKUSI)
+                    chart_path = None
+                    is_pending_sig = bool(
+                        getattr(sig_result, "is_limit_order", False)
+                        or str(getattr(sig_result, "signal", "")).endswith("_LIMIT")
+                        or (getattr(sig_result, "ladder_limit_orders", None) and len(sig_result.ladder_limit_orders) > 0)
+                    )
+                    cfg_mt5_chk = getattr(self, "config", {}).get("mt5", {}) if hasattr(self, "config") else load_config().get("mt5", {})
+                    if is_pending_sig and not bool(cfg_mt5_chk.get("notify_pending_limit_signals", False)):
+                        skip_broadcast = True
+                        skip_reason = "Sinyal pending ditiadakan dari Telegram sesuai instruksi pengguna (menunggu order terjemput)"
+
+                    if not skip_broadcast:
+                        try:
+                            from notify.chart_generator import ChartGenerator
+                            chart_path = ChartGenerator.generate_chart(
+                                df=df_ind,
+                                ticker_symbol=sig_result.ticker,
+                                interval=item_interval,
+                                signal_type=sig_result.signal,
+                                entry_price=sig_result.price,
+                                tp_price=sig_result.take_profit_price,
+                                sl_price=sig_result.stop_loss_price,
+                                setup_grade=sig_result.setup_grade,
+                                pdf_confluence_score=sig_result.pdf_confluence_score,
+                            )
                         except Exception as e:
-                            logger.error(f"Error saat mengeksekusi order MT5: {e}")
+                            logger.warning(f"Gagal membuat visual chart untuk {sig_result.ticker}: {e}")
 
                     if skip_broadcast:
                         logger.info(f"🚫 Sinyal {sig_result.signal} {sig_result.ticker} DIBATALKAN broadcast ke Telegram: {skip_reason}")
@@ -498,8 +552,9 @@ class PipelineRunner:
                 # lu lgsung open posisi aja kalo memang moment nya sudah sangat bagus"
                 # Jika sinyal awal tertahan (misal HOLD di dasar jurang), tetapi telaah chart membuktikan momen
                 # Grade A+ (≥80% winrate / arah Bearish atau Bullish kuat), LANGSUNG eksekusi open posisi ke MT5!
-                if not should_notify and is_gold and not is_startup_warmup:
+                if not should_notify and is_gold and not is_startup_warmup and not is_duplicate:
                     try:
+                        cfg_mt5 = getattr(self, "config", {}).get("mt5", {})
                         c_grade = str(getattr(sig_result, "setup_grade", "") or "")
                         c_score = float(getattr(sig_result, "pdf_confluence_score", 0.0) or 0.0)
                         c_pred = str(getattr(sig_result, "market_direction_prediction", "") or "")
@@ -524,15 +579,19 @@ class PipelineRunner:
 
                         # DISIPLIN 9 BUKU & HARD RULES VETO:
                         # Haram memaksakan auto-open jika ada veto mutlak, ketiadaan rejection wick, grade rendah, atau kontradiksi H4
-                        h4_context_str = str(
+                        macro_context_str = real_macro_trend or str(
                             getattr(sig_result, "macro_bias_h4", "")
                             or getattr(sig_result, "h4_context", "")
                             or ""
                         ).upper()
-                        if not h4_context_str and df_h4_ind is not None and not df_h4_ind.empty:
-                            c_h4 = df_h4_ind["Close"].iloc[-1]
-                            e50_h4 = df_h4_ind["EMA_50"].iloc[-1] if "EMA_50" in df_h4_ind.columns else c_h4
-                            h4_context_str = "BEARISH" if c_h4 < e50_h4 else "BULLISH"
+                        if not macro_context_str and df_h1_ind is not None and not df_h1_ind.empty:
+                            c_h1 = float(df_h1_ind["Close"].iloc[-1])
+                            e50_h1 = float(df_h1_ind["EMA_50"].iloc[-1]) if "EMA_50" in df_h1_ind.columns else float(df_h1_ind["Close"].ewm(span=50).mean().iloc[-1])
+                            macro_context_str = "BEARISH" if c_h1 < e50_h1 else "BULLISH"
+                        elif not macro_context_str and df_h4_ind is not None and not df_h4_ind.empty:
+                            c_h4 = float(df_h4_ind["Close"].iloc[-1])
+                            e50_h4 = float(df_h4_ind["EMA_50"].iloc[-1]) if "EMA_50" in df_h4_ind.columns else c_h4
+                            macro_context_str = "BEARISH" if c_h4 < e50_h4 else "BULLISH"
 
                         is_hard_veto = is_weak_or_no_wick or any(
                             k in r_text for k in [
@@ -540,17 +599,29 @@ class PipelineRunner:
                                 "Overextended",
                                 "overextended",
                                 "Veto Lapis 3",
-                                "OTAK UTAMA H4",
                                 "Judas",
                                 "Manipulasi",
                             ]
                         )
+                        # Filter Anti-Chop & Squeeze Konsolidasi Sempit:
+                        enable_chop = bool(cfg_mt5.get("enable_chop_filter", True))
+                        if enable_chop and is_gold:
+                            adx_val = float(df_ind["ADX"].iloc[-1]) if "ADX" in df_ind.columns else (float(df_ind["adx"].iloc[-1]) if "adx" in df_ind.columns else 25.0)
+                            chop_adx_th = float(cfg_mt5.get("chop_adx_threshold", 18.0))
+                            chop_rng_th = float(cfg_mt5.get("chop_range_threshold_usd", 3.5))
+                            recent_bars = df_ind.tail(10)
+                            range_10 = float(recent_bars["High"].max() - recent_bars["Low"].min()) if len(recent_bars) >= 5 else 10.0
+                            if adx_val < chop_adx_th and range_10 < chop_rng_th:
+                                logger.info(f"⏸️ [ANTI-CHOP GUARD] Auto-open {c_pred} ditahan: Pasar Flat Chop (ADX {adx_val:.1f} < {chop_adx_th}, Range 10-bar ${range_10:.2f} < ${chop_rng_th:.2f}).")
+                                continue
+
                         if is_a_plus and not is_hard_veto and ("Bearish" in c_pred or "Bullish" in c_pred):
                             c_action = "SELL" if "Bearish" in c_pred else "BUY"
 
-                            # Kunci Satu Arah Sesuai Tren H4:
-                            if ("BEAR" in h4_context_str and c_action == "BUY") or ("BULL" in h4_context_str and c_action == "SELL"):
-                                logger.info(f"🚫 [H4 TREND LOCK] Auto-open {c_action} dibatalkan karena berlawanan arah dengan H4 ({h4_context_str}).")
+                            # Keselarasan Tren Intraday H1/M15 (Anti-Melawan Tren):
+                            # Jika tren makro BEARISH, HARAM auto-open BUY. Jika BULLISH, HARAM auto-open SELL.
+                            if ("BEAR" in macro_context_str and "BUY" in c_action) or ("BULL" in macro_context_str and "SELL" in c_action):
+                                logger.info(f"🚫 [INTRADAY TREND GUARD] Auto-open {c_action} dibatalkan mutlak karena berlawanan arah dengan tren makro ({macro_context_str}). Dilarang melawan arus tren!")
                                 continue
 
                             c_time_key = f"{ticker}_{sig_result.candle_time}_{c_action}"
@@ -568,8 +639,9 @@ class PipelineRunner:
                                     c_sl = float(sig_result.stop_loss_price)
                                     sl_dist = abs(entry_p - c_sl)
                                     tp_dist = abs(c_tp - entry_p)
-                                    if sl_dist > 0 and (tp_dist / sl_dist) < 1.45:
-                                        tp_dist = round(sl_dist * 1.5, 2)
+                                    min_rr = float(cfg_mt5.get("min_risk_reward_ratio", 1.0))
+                                    if sl_dist > 0 and (tp_dist / sl_dist) < (min_rr - 0.05):
+                                        tp_dist = round(sl_dist * min_rr, 2)
                                         c_tp = round(entry_p + tp_dist if c_action == "BUY" else entry_p - tp_dist, 2)
                                 else:
                                     if c_action == "BUY":
@@ -587,25 +659,24 @@ class PipelineRunner:
                                         tp_dist = round(sl_dist * 1.5, 2)
                                         c_tp = round(entry_p - tp_dist, 2)
 
-                                # Buat visual grafik chart konfirmasi
-                                chart_img = None
-                                try:
-                                    from notify.chart_generator import ChartGenerator
-                                    chart_img = ChartGenerator.generate_chart(
-                                        df=df_ind,
-                                        ticker_symbol=sig_result.ticker,
-                                        interval=item_interval,
-                                        signal_type=c_action,
-                                        entry_price=entry_p,
-                                        tp_price=c_tp,
-                                        sl_price=c_sl,
-                                        setup_grade=c_grade,
-                                        pdf_confluence_score=c_score,
-                                    )
-                                except Exception as ex_cg:
-                                    logger.warning(f"Gagal generate chart konfirmasi: {ex_cg}")
+                                # Periksa Mode Limit Order (Sniper Pending Limit vs Eksekusi Langsung)
+                                always_limit = bool(cfg_mt5.get("always_use_limit_orders", False)) and is_gold
+                                if always_limit:
+                                    min_limit_pips = float(cfg_mt5.get("min_limit_distance_pips", 15.0))
+                                    min_dist = max(1.50, min_limit_pips / 10.0)
+                                    ema20_lvl = float(df_ind["EMA_20"].iloc[-1]) if "EMA_20" in df_ind.columns else (float(df_ind["ema_20"].iloc[-1]) if "ema_20" in df_ind.columns else entry_p)
+                                    if "BUY" in c_action:
+                                        c_action = "BUY_LIMIT"
+                                        entry_p = min(round(entry_p - min_dist, 2), round(ema20_lvl, 2))
+                                        c_sl = round(entry_p - sl_dist, 2)
+                                        c_tp = round(entry_p + tp_dist, 2)
+                                    else:
+                                        c_action = "SELL_LIMIT"
+                                        entry_p = max(round(entry_p + min_dist, 2), round(ema20_lvl, 2))
+                                        c_sl = round(entry_p + sl_dist, 2)
+                                        c_tp = round(entry_p - tp_dist, 2)
 
-                                # Bentuk Sinyal Eksekusi Otomatis Langsung (Tanpa Konfirmasi Manual)
+                                # Bentuk Sinyal Eksekusi Otomatis (Pending Limit Order Sniper / Eksekusi Langsung)
                                 from strategy.signal_engine import SignalResult
                                 auto_exec_sig = SignalResult(
                                     ticker=ticker,
@@ -614,7 +685,7 @@ class PipelineRunner:
                                     price=entry_p,
                                     candle_time=sig_result.candle_time,
                                     reasons=[
-                                        f"🚀 Eksekusi Otomatis Momen Sangat Bagus ({c_grade}, Skor {c_score:.0f}%)",
+                                        f"🟡 [PENDING ORDER SNIPER] {c_action} dipasang di ${entry_p:,.2f} ({c_grade}, Skor {c_score:.0f}%)" if always_limit else f"🚀 Eksekusi Otomatis Momen Sangat Bagus ({c_grade}, Skor {c_score:.0f}%)",
                                         f"🎯 Prediksi Arah: {c_pred}",
                                         f"⚖️ Target TP ${c_tp:.2f} & SL ${c_sl:.2f} (Struktural Dynamic R:R {tp_dist/max(sl_dist, 0.01):.1f}:1)",
                                     ] + (sig_result.reasons or []),
@@ -624,9 +695,11 @@ class PipelineRunner:
                                     pdf_confluence_score=c_score,
                                     setup_grade=c_grade,
                                     market_direction_prediction=c_pred,
+                                    is_limit_order=always_limit,
+                                    limit_order_type=c_action if always_limit else None,
                                 )
 
-                                # Eksekusi langsung ke MT5 (Langsung gas open posisi!)
+                                # 1. INSTANT / SNIPER LIMIT MT5 EXECUTION
                                 from trading.mt5_bridge import MT5Bridge
                                 mt5_bridge = MT5Bridge()
                                 if mt5_bridge.enabled:
@@ -634,10 +707,29 @@ class PipelineRunner:
                                     if mt5_res.get("success"):
                                         order_ticket = mt5_res.get("ticket")
                                         self._last_chart_alert_time[ticker] = c_time_key
+                                        log_tag = "🟡 [PENDING ORDER A+]" if always_limit else "🚀 [AUTO-EXECUTE A+]"
                                         logger.info(
-                                            f"🚀 [AUTO-EXECUTE A+] MT5 Order Sukses: #{order_ticket} "
+                                            f"{log_tag} MT5 Order Sukses: #{order_ticket} "
                                             f"{c_action} {mt5_res.get('volume')} lot @ ${entry_p:,.2f}"
                                         )
+
+                                        # Buat visual grafik chart konfirmasi setelah eksekusi order MT5 sukses
+                                        chart_img = None
+                                        try:
+                                            from notify.chart_generator import ChartGenerator
+                                            chart_img = ChartGenerator.generate_chart(
+                                                df=df_ind,
+                                                ticker_symbol=sig_result.ticker,
+                                                interval=item_interval,
+                                                signal_type=c_action,
+                                                entry_price=entry_p,
+                                                tp_price=c_tp,
+                                                sl_price=c_sl,
+                                                setup_grade=c_grade,
+                                                pdf_confluence_score=c_score,
+                                            )
+                                        except Exception as ex_cg:
+                                            logger.warning(f"Gagal generate chart konfirmasi: {ex_cg}")
 
                                         # Simpan ke Database
                                         sig_db_id = self.storage.save_signal(
@@ -719,15 +811,40 @@ class PipelineRunner:
 
             except Exception as e:
                 logger.error(f"Error memproses pipeline untuk {ticker}: {e}")
+                self.guardian.record_error(f"pipeline_{ticker}", str(e))
 
-        # Periksa apakah ada berita besar (FOMC, CPI, NFP) dalam 10-15 menit ke depan
-        self.check_upcoming_news_job()
+        # Periksa apakah ada berita besar (FOMC, CPI, NFP) dalam 10-15 menit ke depan (hanya di scan berkala, fast loop sudah ada job 1m)
+        if not is_fast_gold:
+            self.check_upcoming_news_job()
 
-        logger.info(
+        summary_msg = (
             f"=== Pipeline Selesai: {results['processed']} saham diproses, "
             f"{results['signals_triggered']} sinyal aktif, {results['signals_notified']} notifikasi terkirim ==="
         )
+        if is_fast_gold and results['signals_triggered'] == 0:
+            logger.debug(summary_msg)
+        else:
+            logger.info(summary_msg)
+
+        self.guardian.record_heartbeat()
         return results
+
+    def run_auto_repair_job(self) -> Dict[str, Any]:
+        """
+        Pekerjaan latar belakang pemulihan mandiri (Auto-Repair & Watchdog Sentinel).
+        Mengecek anomali posisi naked tanpa SL/TP, pending order usang, dan detak jantung freeze.
+        """
+        try:
+            # 1. Periksa watchdog freeze
+            is_frozen = self.guardian.audit_heartbeat(max_idle_sec=120)
+            if is_frozen:
+                self.run_pipeline(force_run=True, watchlist=["XAUUSD"])
+
+            # 2. Jalankan siklus audit posisi & pending order
+            return self.guardian.run_full_repair_cycle()
+        except Exception as ex:
+            logger.debug(f"Pengecekan siklus auto-repair guardian: {ex}")
+            return {"status": "ERROR", "message": str(ex)}
 
     def maintain_dual_sided_pending_limits(
         self,
@@ -749,6 +866,32 @@ class PipelineRunner:
         cfg_mt5 = getattr(self, "config", {}).get("mt5", {})
         if not bool(cfg_mt5.get("enable_limit_orders", True)):
             return
+
+        # Jeda percobaan deploy limit order (minimal 60 detik antar percobaan)
+        now_ts = time.time()
+        if not hasattr(self, "_last_limit_attempt_time"):
+            self._last_limit_attempt_time = {}
+        if (now_ts - self._last_limit_attempt_time.get(ticker, 0.0)) < 60.0:
+            return
+        self._last_limit_attempt_time[ticker] = now_ts
+
+        # 0. HARD GATEKEEPER MUTLAK SEBELUM MEMPROSES JARING PENDING LIMIT
+        # Hanya batalkan jika sinyal aktif memiliki veto keras atau berita besar aktif (News Guard)
+        if sig_result is not None and getattr(sig_result, "signal", "") not in ["HOLD", ""]:
+            from trading.mt5_bridge import can_place_order
+            # Notifier disetel None & silent=True agar pengecekan rutin latar belakang tidak membombardir Telegram
+            allowed, gate_reason = can_place_order(
+                sig=sig_result,
+                order_type="BUY_LIMIT",
+                active_pending_orders=None,
+                notifier=None,
+                min_confluence_score=80.0,
+                symbol=ticker,
+                silent=True,
+            )
+            if not allowed:
+                logger.info(f"🛑 [SCHEDULER GATEKEEPER VETO] Pemeliharaan jaring limit dibatalkan untuk {ticker}: {gate_reason}")
+                return
 
         # 1. News Guard Check
         if bool(cfg_mt5.get("enable_news_limit_guard", True)):
@@ -780,55 +923,68 @@ class PipelineRunner:
         target_limit_lot = float(cfg_mt5.get("limit_order_lot_cent", cfg_mt5.get("limit_order_lot", 0.05))) if is_cent else float(cfg_mt5.get("limit_order_lot_usd", 0.01))
 
         active_pending = b.get_pending_orders(symbol=ticker)
-        buy_limits = [o for o in active_pending if "BUY" in o.get("type", "")]
-        sell_limits = [o for o in active_pending if "SELL" in o.get("type", "")]
-        max_levels = int(cfg_mt5.get("max_limit_levels", 2))
+        buy_limits = [o for o in active_pending if "BUY" in str(o.get("type", "")).upper()]
+        sell_limits = [o for o in active_pending if "SELL" in str(o.get("type", "")).upper()]
 
-        # HARD RULE 1: Kunci Satu Arah Sesuai Tren H4 & Batalkan Antrean Berlawanan
+        # CEGAH SPAMMING ORDER BERULANG & DOUBLE EXPOSURE (PDF Section 20 - Strict 1 Layer):
+        # 1. Periksa posisi MARKET aktif di MT5 untuk mencegah staking / penumpukan lot di titik yang sama
+        open_positions = b.get_open_positions(symbol=ticker)
+        active_buys = [p for p in open_positions if "BUY" in str(p.get("type", "")).upper()]
+        active_sells = [p for p in open_positions if "SELL" in str(p.get("type", "")).upper()]
+
+        # Jika sudah ada posisi MARKET aktif atau pending order aktif, DILARANG pasang order baru searah
+        # ANTI-HEDGING: Jika ada posisi market berlawanan yang sedang aktif, DILARANG pasang limit order yang memicu tabrakan
+        needs_buy = (len(buy_limits) == 0 and len(active_buys) == 0 and len(active_sells) == 0)
+        needs_sell = (len(sell_limits) == 0 and len(active_sells) == 0 and len(active_buys) == 0)
+
         curr_p = float(sig_result.price) if sig_result and getattr(sig_result, "price", 0.0) else float(df_ind["Close"].iloc[-1])
-        curr_row = df_ind.iloc[-1] if not df_ind.empty else pd.Series()
-        macro_bias, _ = self.signal_engine.evaluate_macro_bias_h4(df_h4=df_h4_ind, curr_row=curr_row, curr_price=curr_p)
-        if not macro_bias or macro_bias == "NETRAL":
-            if sig_result and getattr(sig_result, "macro_bias_h4", ""):
-                macro_bias = str(sig_result.macro_bias_h4).upper()
 
-        if macro_bias == "BEARISH":
-            # Tren Turun: Nonaktifkan total BUY LIMIT (Anti-Pisau Jatuh). Batalkan jika ada yang menggantung!
-            for bo in buy_limits:
-                b.cancel_pending_order(bo["ticket"])
-                logger.info(f"🛑 [TREND LOCK H4] Membatalkan BUY LIMIT #{bo['ticket']} karena tren H4 = BEARISH.")
-            buy_limits = []
-            needs_buy = False
-            needs_sell = len(sell_limits) < max_levels
-        elif macro_bias == "BULLISH":
-            # Tren Naik: Nonaktifkan total SELL LIMIT (Anti-Hadang Kereta). Batalkan jika ada yang menggantung!
+        # HARD RULE 1: Manajemen Arah Limit Orders (Single-Sided Sniper Momen Bagus)
+        # Sesuai instruksi mutlak pengguna: "lu kasih sell limit sama buy limmit pas ada moment bagus aja bor di salah satu"
+        sig_action = str(getattr(sig_result, "signal", "") or "").upper()
+        sig_score = float(getattr(sig_result, "pdf_confluence_score", 0.0) or getattr(sig_result, "confluence_score", 0.0) or 0.0)
+        sig_grade = str(getattr(sig_result, "setup_grade", "") or "").upper()
+        is_good_moment = ("A" in sig_grade or sig_score >= 80.0) and sig_action in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]
+
+        enable_dual = bool(cfg_mt5.get("enable_dual_sided_limits", False))
+        if enable_dual:
+            # Mode Jaring Dua Sisi (Khusus Pengujian Bracket Dua Sisi)
+            needs_buy = (len(buy_limits) == 0 and len(active_buys) == 0 and len(active_sells) == 0)
+            needs_sell = (len(sell_limits) == 0 and len(active_sells) == 0 and len(active_buys) == 0)
+        elif not is_good_moment:
+            # Tidak ada momen bagus terkonfirmasi (Status HOLD / Netral) -> DILARANG pasang order baru!
+            logger.debug(f"[LIMIT SNIPER] Menunggu momen bagus (Skor {sig_score:.0f}%, Grade {sig_grade}, Aksi: {sig_action}). Tidak ada order dipasang.")
+            return
+        elif "BUY" in sig_action:
+            # Sinyal Momen Bagus BUY -> Hanya pasang BUY LIMIT di salah satu sisi (Retest Diskon Support / EMA 20)
             for so in sell_limits:
                 b.cancel_pending_order(so["ticket"])
-                logger.info(f"🛑 [TREND LOCK H4] Membatalkan SELL LIMIT #{so['ticket']} karena tren H4 = BULLISH.")
+                logger.info(f"🛑 [MOMEN SYNC] Membatalkan SELL LIMIT #{so['ticket']} karena momen terkonfirmasi BUY.")
             sell_limits = []
-            needs_buy = len(buy_limits) < max_levels
+            needs_buy = (len(buy_limits) == 0 and len(active_buys) == 0 and len(active_sells) == 0)
             needs_sell = False
+        elif "SELL" in sig_action:
+            # Sinyal Momen Bagus SELL -> Hanya pasang SELL LIMIT di salah satu sisi (Retest Premium Resisten / EMA 20)
+            for bo in buy_limits:
+                b.cancel_pending_order(bo["ticket"])
+                logger.info(f"🛑 [MOMEN SYNC] Membatalkan BUY LIMIT #{bo['ticket']} karena momen terkonfirmasi SELL.")
+            buy_limits = []
+            needs_buy = False
+            needs_sell = (len(sell_limits) == 0 and len(active_sells) == 0 and len(active_buys) == 0)
         else:
-            enable_dual = bool(cfg_mt5.get("enable_dual_sided_limits", False))
-            if enable_dual:
-                needs_buy = len(buy_limits) < max_levels
-                needs_sell = len(sell_limits) < max_levels
-            else:
-                ema50_val = float(df_ind["EMA_50"].iloc[-1]) if "EMA_50" in df_ind.columns else curr_p
-                if curr_p >= ema50_val:
-                    needs_buy = len(buy_limits) < max_levels
-                    needs_sell = False
-                else:
-                    needs_buy = False
-                    needs_sell = len(sell_limits) < max_levels
-
-        if not needs_buy and not needs_sell:
             return
 
-        # 4. Analisis ulang pasar terkini untuk mendapatkan level baru
+        # 4. Analisis pasar terkini untuk mendapatkan level baru
         ladder_orders = getattr(sig_result, "ladder_limit_orders", [])
         if not ladder_orders:
-            snapshot = self.signal_engine._extract_snapshot(df_ind, -1)
+            snapshot = getattr(sig_result, "indicators_snapshot", None)
+            if not snapshot:
+                row = df_ind.iloc[-1] if not df_ind.empty else {}
+                snapshot = {
+                    "atr": float(row.get("atr", 3.0) or 3.0),
+                    "ema_20": float(row.get("EMA_20", row.get("ema_20", curr_p)) or curr_p),
+                    "ema_50": float(row.get("EMA_50", row.get("ema_50", curr_p)) or curr_p),
+                }
             trade_type = getattr(sig_result, "trade_type", "SHORT") if sig_result else "SHORT"
             ladder_orders = self.signal_engine.generate_dual_sided_limit_orders(
                 df=df_ind,
@@ -844,14 +1000,14 @@ class PipelineRunner:
         if not ladder_orders:
             return
 
-        # Filter order yang benar-benar dibutuhkan & pastikan lot presisi sesuai jenis akun
+        # Filter order yang benar-benar dibutuhkan (Maksimal 1 order per arah yang belum antre)
         orders_to_deploy = []
         if needs_buy:
-            for o in [ord for ord in ladder_orders if "BUY" in ord.get("type", "")][:max_levels]:
+            for o in [ord for ord in ladder_orders if "BUY" in ord.get("type", "")][:1]:
                 o["lot"] = target_limit_lot
                 orders_to_deploy.append(o)
         if needs_sell:
-            for o in [ord for ord in ladder_orders if "SELL" in ord.get("type", "")][:max_levels]:
+            for o in [ord for ord in ladder_orders if "SELL" in ord.get("type", "")][:1]:
                 o["lot"] = target_limit_lot
                 orders_to_deploy.append(o)
 
@@ -859,8 +1015,8 @@ class PipelineRunner:
             return
 
         acc_type_lbl = "Cent (USC)" if is_cent else "Standard (USD)"
-        logger.info(f"🔄 [2-HOUR REFRESH] Memasang jaring pending limit order baru ({len(orders_to_deploy)} order @ {target_limit_lot} lot | {acc_type_lbl}) untuk {ticker}...")
-        deploy_res = b.deploy_dual_sided_limit_bracket(symbol=ticker, orders=orders_to_deploy)
+        logger.info(f"🔄 [2-HOUR REFRESH] Memasang pending limit order baru ({len(orders_to_deploy)} order @ {target_limit_lot} lot | {acc_type_lbl}) untuk {ticker}...")
+        deploy_res = b.deploy_dual_sided_limit_bracket(symbol=ticker, orders=orders_to_deploy, sig=sig_result)
         if deploy_res.get("success"):
             placed_orders = deploy_res.get("placed_orders", [])
             logger.info(f"✅ [2-HOUR REFRESH] {len(placed_orders)} Pending limit order ({target_limit_lot} lot) berhasil terpasang di MT5!")
@@ -1106,11 +1262,194 @@ class PipelineRunner:
         except Exception as e:
             logger.error(f"Error pada run_market_close_job: {e}")
 
+    def send_daily_performance_recap_job(self) -> None:
+        """
+        Laporan Rekap Performa Harian Otomatis pukul 22:00 WIB:
+        Merangkum hasil trading MT5 Gold (USC) dan Crypto Pump Scanner ke Telegram.
+        """
+        try:
+            logger.info("Menjalankan rekap performa harian 22:00 WIB...")
+            from trading.mt5_bridge import MT5Bridge
+            from crypto.auto_pump import AutoPumpSniper
+            from strategy.ai_gatekeeper import AIGatekeeper
+
+            today_str = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%A, %d %B %Y")
+            
+            # 1. MT5 Gold Stats
+            bridge = MT5Bridge.get_instance()
+            is_cent = bridge.is_cent_account()
+            curr_unit = "USC" if is_cent else "USD"
+            deals_today = bridge.get_closed_deals(hours=24)
+            wins_mt5 = len([d for d in deals_today if d.get("outcome") == "WIN"])
+            losses_mt5 = len([d for d in deals_today if d.get("outcome") == "LOSE"])
+            total_mt5 = len(deals_today)
+            pnl_mt5 = sum([d.get("profit", 0.0) for d in deals_today])
+            wr_mt5 = (wins_mt5 / total_mt5 * 100.0) if total_mt5 > 0 else 0.0
+            acc_info = bridge.get_account_info()
+            bal_mt5 = acc_info.get("balance", 0.0)
+            eq_mt5 = acc_info.get("equity", 0.0)
+
+            # 2. Crypto Pump Stats
+            crypto_s = AutoPumpSniper.get_instance()
+            crypto_stats = crypto_s.get_daily_pnl_summary()
+            total_crypto = crypto_stats.get("total_trades", 0)
+            wins_crypto = crypto_stats.get("wins", 0)
+            losses_crypto = crypto_stats.get("losses", 0)
+            pnl_crypto = crypto_stats.get("net_pnl_usdt", 0.0)
+            wr_crypto = crypto_stats.get("win_rate", 0.0)
+
+            # 3. AI Gatekeeper Status
+            ai_brain = AIGatekeeper.get_instance()
+            ai_status = "🟢 AKTIF (Gemini AI)" if ai_brain.has_brain() else "🟡 Mode Rule-Based"
+
+            sign_mt5 = "+" if pnl_mt5 >= 0 else ""
+            sign_crypto = "+" if pnl_crypto >= 0 else ""
+
+            recap_msg = (
+                f"🌙 <b>REKAP PERFORMA HARIAN (22:00 WIB)</b>\n"
+                f"📅 <i>{today_str}</i>\n"
+                f"━━━━━━━━━━━━━━━━━━\n\n"
+                f"🥇 <b>METATRADER 5 (GOLD XAU/USD):</b>\n"
+                f"• <b>Tipe Akun:</b> {'Cent (USC)' if is_cent else 'Standard (USD)'}\n"
+                f"• <b>Saldo / Equity:</b> <code>{bal_mt5:,.2f} / {eq_mt5:,.2f} {curr_unit}</code>\n"
+                f"• <b>Total Eksekusi Hari Ini:</b> <code>{total_mt5} Trade</code>\n"
+                f"• <b>Hasil:</b> 🟢 {wins_mt5} WIN | 🔴 {losses_mt5} LOSE\n"
+                f"• <b>Win Rate:</b> <code>{wr_mt5:.1f}%</code>\n"
+                f"• <b>Net PnL MT5:</b> <code>{sign_mt5}{pnl_mt5:,.2f} {curr_unit}</code>\n\n"
+                f"🪙 <b>CRYPTO PUMP (BINANCE SPOT):</b>\n"
+                f"• <b>Mode:</b> {crypto_s.mode.upper()}\n"
+                f"• <b>Total Selesai:</b> <code>{total_crypto} Trade</code>\n"
+                f"• <b>Hasil:</b> 🟢 {wins_crypto} WIN | 🔴 {losses_crypto} LOSE\n"
+                f"• <b>Win Rate:</b> <code>{wr_crypto:.1f}%</code>\n"
+                f"• <b>Net PnL Crypto:</b> <code>{sign_crypto}${pnl_crypto:.2f} USDT</code>\n\n"
+                f"🧠 <b>SISTEM PENGAWALAN:</b>\n"
+                f"• <b>Otak AI Decision:</b> {ai_status}\n"
+                f"• <b>Akun USC MT5:</b> <i>Bebas batas (Unrestricted Backtest)</i>\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"⚡ <i>Bot standby 24/7 memantau peluang pasar berikutnya.</i>"
+            )
+
+            if self.notifier:
+                self.notifier.broadcast_text(recap_msg)
+                logger.info("Rekap performa harian berhasil dikirim ke Telegram.")
+        except Exception as e:
+            logger.error(f"Error saat mengirim rekap performa harian: {e}")
+
+    def check_and_report_mt5_limit_fills(self) -> None:
+        """
+        Memeriksa pending limit orders (BUY LIMIT & SELL LIMIT) di MT5 yang berhasil terjemput (FILLED)
+        secara real-time kilat (0 delay).
+        Begitu pending limit order tersentuh harga dan berubah menjadi posisi aktif berjalan di broker,
+        langsung kirim kartu notifikasi konfirmasi ke Telegram!
+        """
+        try:
+            from trading.mt5_bridge import MT5Bridge
+            bridge = MT5Bridge()
+            if not bridge.enabled and not bridge.simulation_mode:
+                return
+
+            filled_limits = bridge.get_filled_limit_orders(hours=24)
+            if not filled_limits:
+                return
+
+            import time
+            now_ts = time.time()
+
+            for fl in filled_limits:
+                ticket = fl["ticket"]
+                pos_id = fl.get("position_id", ticket)
+
+                # 1. Cek apakah limit fill ini sudah pernah dilaporkan
+                if self.storage.is_mt5_limit_fill_reported(ticket):
+                    continue
+
+                # In-memory deduplication set
+                if not hasattr(self, "_reported_limit_fill_tickets"):
+                    self._reported_limit_fill_tickets = set()
+                if ticket in self._reported_limit_fill_tickets:
+                    continue
+
+                true_epoch = fl.get("true_utc_epoch") or fl.get("time") or int(now_ts)
+                age_seconds = max(0, int(now_ts) - true_epoch)
+
+                # Saring notifikasi Telegram jika limit fill sudah lewat (> 1800s / 30 menit)
+                if age_seconds > 1800:
+                    self.storage.mark_mt5_limit_fill_reported(
+                        order_ticket=ticket,
+                        position_id=pos_id,
+                        symbol=fl.get("symbol", "XAUUSD"),
+                        order_type=fl.get("type", "LIMIT"),
+                        price=fl.get("price", 0.0),
+                        volume=fl.get("volume", 0.0),
+                        sl=fl.get("sl", 0.0),
+                        tp=fl.get("tp", 0.0),
+                    )
+                    self._reported_limit_fill_tickets.add(ticket)
+                    continue
+
+                # 2. Catat atau sinkronkan ke database signals (agar TP/SL tracking bekerja sempurna saat selesai)
+                try:
+                    entry_sig = self.storage.find_signal_by_mt5_ticket(ticket, ticker="XAUUSD", signal_type=fl.get("action"))
+                    if entry_sig and entry_sig.get("id"):
+                        with self.storage._get_connection() as conn:
+                            conn.cursor().execute("""
+                                UPDATE signals
+                                SET price = ?, mt5_ticket = ?, outcome = 'OPEN', is_notified = 1
+                                WHERE id = ?
+                            """, (fl.get("price", 0.0), pos_id, entry_sig["id"]))
+                            conn.commit()
+                    else:
+                        from zoneinfo import ZoneInfo
+                        now_wib_str = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%Y-%m-%d %H:%M:%S")
+                        self.storage.save_signal(
+                            ticker=fl.get("symbol", "XAUUSD"),
+                            strategy_name="Pending_Limit_Sniper",
+                            signal_type=fl.get("action", "BUY"),
+                            price=fl.get("price", 0.0),
+                            reasons=[f"Order Limit Terjemput #{ticket}", "Konfluensi Grade A+ 3 Pilar"],
+                            candle_time=now_wib_str,
+                            is_notified=True,
+                            take_profit_price=fl.get("tp", 0.0),
+                            stop_loss_price=fl.get("sl", 0.0),
+                        )
+                except Exception as ex_sig:
+                    logger.debug(f"Sinkronisasi sinyal DB untuk limit fill #{ticket}: {ex_sig}")
+
+                # 3. Kirim notifikasi Telegram kilat (0 delay)
+                logger.info(
+                    f"⚡ [LIMIT TERJEMPUT] Order #{ticket} ({fl.get('type')}) terisi @ ${fl.get('price', 0.0):,.2f}! "
+                    f"Mengirim notifikasi ke Telegram (0 delay)..."
+                )
+                try:
+                    self.notifier.send_limit_order_filled_alert(fl)
+                except Exception as ex_notif:
+                    logger.warning(f"Gagal kirim notifikasi limit fill #{ticket} ke Telegram: {ex_notif}")
+
+                # 4. Tandai sudah dilaporkan di storage & in-memory cache
+                self.storage.mark_mt5_limit_fill_reported(
+                    order_ticket=ticket,
+                    position_id=pos_id,
+                    symbol=fl.get("symbol", "XAUUSD"),
+                    order_type=fl.get("type", "LIMIT"),
+                    price=fl.get("price", 0.0),
+                    volume=fl.get("volume", 0.0),
+                    sl=fl.get("sl", 0.0),
+                    tp=fl.get("tp", 0.0),
+                )
+                self._reported_limit_fill_tickets.add(ticket)
+
+        except Exception as e:
+            logger.debug(f"Pengecekan MT5 limit fills dilewati: {e}")
+
     def check_and_report_mt5_deals(self) -> None:
         """
-        Memeriksa riwayat penutupan transaksi live di MT5 (TP / SL hit).
-        Jika posisi ditutup oleh TP atau SL, langsung kirim kartu laporan hasil ke Telegram.
+        Memeriksa riwayat penutupan transaksi live di MT5 (TP / SL hit)
+        dan penjemputan pending limit order (0 delay).
+        Jika limit order terisi atau posisi ditutup oleh TP/SL, langsung kirim kartu laporan ke Telegram.
         """
+        # Pengecekan penjemputan pending limit order kilat (0 Delay)
+        self.check_and_report_mt5_limit_fills()
+
         try:
             from trading.mt5_bridge import MT5Bridge
             bridge = MT5Bridge()
@@ -1152,14 +1491,24 @@ class PipelineRunner:
                 tp_price = float(entry_sig.get("take_profit_price")) if entry_sig and entry_sig.get("take_profit_price") else None
                 sl_price = float(entry_sig.get("stop_loss_price")) if entry_sig and entry_sig.get("stop_loss_price") else None
 
-                # Hitung PnL %
+                # Hitung PnL % secara akurat
+                is_buy_type = "BUY" in str(sig_type).upper()
                 if entry_price > 0:
-                    if sig_type == "BUY":
+                    if is_buy_type:
                         pnl_pct = round(((exit_price - entry_price) / entry_price) * 100.0, 2)
                     else:
                         pnl_pct = round(((entry_price - exit_price) / entry_price) * 100.0, 2)
                 else:
                     pnl_pct = 0.0
+
+                # Sinkronkan tanda PnL % dan outcome dengan hasil riil MT5:
+                # Jika profit MT5 bernilai minus atau outcome LOSE, pnl_pct WAJIB minus!
+                if (pnl_cash is not None and float(pnl_cash) < 0) or outcome == "LOSE":
+                    outcome = "LOSE"
+                    pnl_pct = -abs(pnl_pct)
+                elif (pnl_cash is not None and float(pnl_cash) > 0) or outcome == "WIN":
+                    outcome = "WIN"
+                    pnl_pct = abs(pnl_pct)
 
                 from zoneinfo import ZoneInfo
                 tz_wib = ZoneInfo("Asia/Jakarta")
@@ -1188,6 +1537,8 @@ class PipelineRunner:
                     "take_profit_price": tp_price,
                     "stop_loss_price": sl_price,
                     "pnl_pct": pnl_pct,
+                    "pnl_cash": pnl_cash,
+                    "currency": unit_curr,
                     "outcome": outcome,
                     "candle_time": entry_sig.get("candle_time", "-") if entry_sig else "-",
                     "exit_time": exit_time_wib,
@@ -1202,7 +1553,7 @@ class PipelineRunner:
                             cursor = conn.cursor()
                             cursor.execute("""
                                 UPDATE signals
-                                SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?, is_outcome_notified = 1
+                                SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?
                                 WHERE id = ?
                             """, (outcome, exit_price, exit_time_wib, pnl_pct, note, entry_sig["id"]))
                             conn.commit()
@@ -1211,16 +1562,53 @@ class PipelineRunner:
 
                 # 2. Tandai deal MT5 sudah dicatat di database
                 self.storage.mark_mt5_deal_reported(deal_ticket, pos_id, outcome, pnl_pct)
-                if entry_sig and entry_sig.get("id"):
-                    self.storage.mark_signal_outcome_notified(entry_sig["id"])
 
-                # 2b. Set Directional Cooldown pada bridge jika SL — Anti-Revenge Re-entry
-                # Setelah kena SL BUY → lock arah BUY selama N menit (arah SELL tetap bebas).
-                # Setelah kena SL SELL → lock arah SELL selama N menit (arah BUY tetap bebas).
+                # 2b. Set Directional Cooldown & Evaluasi Pasca-SL (Gemini AI Post-Mortem)
+                ai_post_mortem = None
                 if reason_str == "SL" and outcome == "LOSE":
+                    # PANGGIL OTAK GEMINI UNTUK EVALUASI PASCA-SL INSTAN (POST-MORTEM)
+                    try:
+                        from strategy.ai_gatekeeper import AIGatekeeper
+                        ai_brain = AIGatekeeper.get_instance()
+                        if ai_brain.has_brain():
+                            # Ambil data snapshot pasar live
+                            df_live = self.fetcher.get_data("XAUUSD", interval="15m", period="3d", force_fetch=False)
+                            mkt_snap = {}
+                            if not df_live.empty:
+                                c_p = float(df_live["Close"].iloc[-1])
+                                ema50_v = float(df_live["EMA_50"].iloc[-1]) if "EMA_50" in df_live.columns else (float(df_live["ema_50"].iloc[-1]) if "ema_50" in df_live.columns else c_p)
+                                rsi_v = float(df_live["RSI"].iloc[-1]) if "RSI" in df_live.columns else (float(df_live["rsi"].iloc[-1]) if "rsi" in df_live.columns else 50.0)
+                                mkt_snap = {
+                                    "current_price": c_p,
+                                    "ema_50": ema50_v,
+                                    "rsi": rsi_v,
+                                    "macro_h4": str(getattr(entry_sig, "macro_bias_h4", "UNKNOWN")),
+                                }
+
+                            trade_info = {
+                                "ticket": pos_id,
+                                "type": sig_type,
+                                "entry_price": entry_price,
+                                "exit_price": exit_price,
+                                "pnl_cash": f"{pnl_cash} {unit_curr}",
+                                "pnl_pct": f"{pnl_pct}%",
+                                "candle_time": entry_sig.get("candle_time", "-") if entry_sig else "-",
+                            }
+
+                            ai_post_mortem = ai_brain.evaluate_sl_post_mortem(
+                                trade_details=trade_info,
+                                market_snapshot=mkt_snap
+                            )
+                            rep_dict["ai_post_mortem"] = ai_post_mortem
+                    except Exception as ex_pm:
+                        logger.debug(f"Pengecekan Gemini Post-Mortem SL: {ex_pm}")
+
                     try:
                         cfg_mt5_dc = self.config.get("mt5", {}) if hasattr(self, "config") else load_config().get("mt5", {})
                         dir_cd_mins = int(cfg_mt5_dc.get("directional_cooldown_mins", 35))
+                        if ai_post_mortem and ai_post_mortem.get("cooldown_mins"):
+                            dir_cd_mins = int(ai_post_mortem["cooldown_mins"])
+
                         if dir_cd_mins > 0 and sig_type in ("BUY", "SELL"):
                             from datetime import timedelta
                             tz_wib = ZoneInfo("Asia/Jakarta")
@@ -1228,7 +1616,7 @@ class PipelineRunner:
                             bridge.directional_sl_cooldown[sig_type] = lock_until
                             logger.info(
                                 f"🔒 [DIRECTIONAL COOLDOWN SET] Arah {sig_type} dikunci {dir_cd_mins} menit "
-                                f"setelah SL (posisi #{pos_id}). Lock berlaku sampai {lock_until.strftime('%H:%M')} WIB. "
+                                f"setelah SL (posisi #{pos_id}) via Gemini AI Evaluation. Lock berlaku sampai {lock_until.strftime('%H:%M')} WIB. "
                                 f"Anti-revenge re-entry aktif."
                             )
                     except Exception as dc_err:
@@ -1243,10 +1631,16 @@ class PipelineRunner:
                     )
                     continue
 
-                # 4. Kirim notifikasi kartu LIVE ke Telegram
-                logger.info(f"📢 Mengirim kartu hasil TP/SL MT5 #{pos_id} ({reason_str}) ke Telegram (LIVE)...")
+                # 4. Kirim notifikasi kartu LIVE ke Telegram (Hanya ke Master Admin, tidak ke member)
+                logger.info(f"📢 Mengirim kartu hasil TP/SL MT5 #{pos_id} ({reason_str}) ke Telegram Master...")
+                rep_dict["force_send"] = True
+                rep_dict["from_mt5"] = True
                 try:
-                    self.notifier.send_tp_sl_report(rep_dict)
+                    # NOTIFIKASI DEAL PRIBADI AKUN MASTER: HANYA KE MASTER ADMIN
+                    target_ids = [self.notifier.chat_id] if getattr(self.notifier, "chat_id", None) else None
+                    if self.notifier.send_tp_sl_report(rep_dict, target_chat_ids=target_ids):
+                        if entry_sig and entry_sig.get("id"):
+                            self.storage.mark_signal_outcome_notified(entry_sig["id"])
                 except Exception as ex_nt:
                     logger.warning(f"Gagal kirim kartu TP/SL MT5 ke Telegram: {ex_nt}")
 
@@ -1308,33 +1702,33 @@ class PipelineRunner:
                         hit_reason = None
                         hit_note = ""
 
-                        if s_type == "BUY":
+                        if "BUY" in s_type:
                             # Order BUY: exit saat bid menyentuh SL (bid <= sl) atau TP (bid >= tp)
                             if sl_p > 0 and bid_p <= sl_p:
                                 hit_outcome = "LOSE"
                                 hit_exit_price = bid_p
                                 hit_reason = "SL"
-                                pnl_pct = round(((hit_exit_price - entry_p) / entry_p) * 100.0, 2)
+                                pnl_pct = -abs(round(((entry_p - hit_exit_price) / entry_p) * 100.0, 2))
                                 hit_note = f"🛑 Sinyal XAU/USD #{sig_id} menyentuh Stop Loss di ${hit_exit_price:,.2f}. Batas toleransi risiko berhasil mengamankan modal trading Anda."
                             elif tp_p > 0 and bid_p >= tp_p:
                                 hit_outcome = "WIN"
                                 hit_exit_price = bid_p
                                 hit_reason = "TP"
-                                pnl_pct = round(((hit_exit_price - entry_p) / entry_p) * 100.0, 2)
+                                pnl_pct = abs(round(((hit_exit_price - entry_p) / entry_p) * 100.0, 2))
                                 hit_note = f"🎯 Sinyal XAU/USD #{sig_id} sukses menyentuh Take Profit di ${hit_exit_price:,.2f}. Target keuntungan 9 Buku PDF berhasil dicapai!"
-                        elif s_type == "SELL":
+                        elif "SELL" in s_type:
                             # Order SELL: exit saat ask menyentuh SL (ask >= sl) atau TP (ask <= tp)
                             if sl_p > 0 and ask_p >= sl_p:
                                 hit_outcome = "LOSE"
                                 hit_exit_price = ask_p
                                 hit_reason = "SL"
-                                pnl_pct = round(((entry_p - hit_exit_price) / entry_p) * 100.0, 2)
+                                pnl_pct = -abs(round(((hit_exit_price - entry_p) / entry_p) * 100.0, 2))
                                 hit_note = f"🛑 Sinyal XAU/USD #{sig_id} menyentuh Stop Loss di ${hit_exit_price:,.2f}. Batas toleransi risiko berhasil mengamankan modal trading Anda."
                             elif tp_p > 0 and ask_p <= tp_p:
                                 hit_outcome = "WIN"
                                 hit_exit_price = ask_p
                                 hit_reason = "TP"
-                                pnl_pct = round(((entry_p - hit_exit_price) / entry_p) * 100.0, 2)
+                                pnl_pct = abs(round(((entry_p - hit_exit_price) / entry_p) * 100.0, 2))
                                 hit_note = f"🎯 Sinyal XAU/USD #{sig_id} sukses menyentuh Take Profit di ${hit_exit_price:,.2f}. Target keuntungan 9 Buku PDF berhasil dicapai!"
 
                         if hit_outcome:
@@ -1343,7 +1737,7 @@ class PipelineRunner:
                                 c = conn.cursor()
                                 c.execute("""
                                     UPDATE signals
-                                    SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?, is_outcome_notified = 1
+                                    SET outcome = ?, exit_price = ?, exit_time = ?, pnl_pct = ?, outcome_note = ?
                                     WHERE id = ?
                                 """, (hit_outcome, hit_exit_price, now_wib_str, pnl_pct, hit_note, sig_id))
                                 conn.commit()
@@ -1386,9 +1780,11 @@ class PipelineRunner:
                                     "exit_time": now_wib_str,
                                     "outcome_note": hit_note,
                                     "is_gold": True,
+                                    "force_send": True,
                                 }
                                 try:
-                                    self.notifier.send_tp_sl_report(rep_dict)
+                                    if self.notifier.send_tp_sl_report(rep_dict):
+                                        self.storage.mark_signal_outcome_notified(sig_id)
                                 except Exception as ex_nt:
                                     logger.warning(f"Gagal broadcast laporan live tick #{sig_id} ke Telegram: {ex_nt}")
         except Exception as ex_tick_res:
@@ -1741,20 +2137,44 @@ class PipelineRunner:
                         f"Floating: {pnl_pct}%. Tipe: {rev_type}. Melakukan Cut Loss Dini & Auto-Flip!"
                     )
                 elif is_rev:
+                    ema20_val = float(df_ind["ema_20"].iloc[-1]) if ("ema_20" in df_ind.columns and not df_ind.empty) else price_open
                     ema50_val = float(df_ind["ema_50"].iloc[-1]) if ("ema_50" in df_ind.columns and not df_ind.empty) else price_open
-                    is_trend_broken = (price_curr < ema50_val) if pos_type == "BUY" else (price_curr > ema50_val)
-                    rev_threshold = float(cfg_mt5.get("reversal_auto_close_min_score", 90.0))
+                    is_trend_broken = (price_curr < ema20_val or price_curr < ema50_val) if pos_type == "BUY" else (price_curr > ema20_val or price_curr > ema50_val)
+                    rev_threshold = float(cfg_mt5.get("reversal_auto_close_min_score", 80.0))
 
-                    if enable_auto_close and rev_score >= rev_threshold and len(rev_reasons) >= 3 and is_trend_broken:
+                    # Konsultasikan dengan Otak AI Gemini untuk akurasi mutlak:
+                    gemini_cut_ok = False
+                    gemini_cut_reason = ""
+                    try:
+                        from strategy.ai_gatekeeper import AIGatekeeper
+                        ai_brain = AIGatekeeper.get_instance()
+                        if ai_brain.has_brain():
+                            eval_ai = ai_brain.evaluate_reversal_exit_or_flip(
+                                current_positions=[pos],
+                                new_signal={"type": "SELL" if pos_type == "BUY" else "BUY", "price": price_curr, "reversal_type": rev_type},
+                                indicators={"price": price_curr, "ema_50": ema50_val, "reversal_score": rev_score}
+                            )
+                            if eval_ai.get("should_cut_loss", False):
+                                gemini_cut_ok = True
+                                gemini_cut_reason = eval_ai.get("reason", "")
+                    except Exception as ex_ai:
+                        logger.debug(f"Pemeriksaan Gemini auto close: {ex_ai}")
+
+                    has_smc_reversal = any("SMC" in r or "CHoCH" in r or "BOS" in r for r in rev_reasons)
+                    quant_cut_ok = (rev_score >= rev_threshold and len(rev_reasons) >= 3 and is_trend_broken) or \
+                                   (has_smc_reversal and rev_score >= 70.0 and len(rev_reasons) >= 2)
+
+                    if enable_auto_close and (gemini_cut_ok or quant_cut_ok):
                         should_auto_close = True
+                        close_tag = "🧠 [GEMINI VERIFIED CUT LOSS]" if gemini_cut_ok else ("🏛️ [SMC CHoCH AUTO CUT LOSS]" if has_smc_reversal else "🚨 [REVERSAL AUTO-CLOSE]")
                         logger.info(
-                            f"🚨 [REVERSAL AUTO-CLOSE] Posisi #{ticket} ({pos_type}) ditutup otomatis (Cut Loss/SL Dini) "
-                            f"karena konfirmasi pembalikan 9 Buku PDF mencapai {rev_score}% >= {rev_threshold}%."
+                            f"{close_tag} Posisi #{ticket} ({pos_type}) ditutup otomatis (Cut Loss/SL Dini) "
+                            f"Alasan: {gemini_cut_reason or f'Konfirmasi pembalikan SMC & 9 Buku PDF {rev_score}% ({len(rev_reasons)} alasan)'}"
                         )
                     else:
                         logger.info(
                             f"ℹ️ [REVERSAL ALERT ONLY] Posisi #{ticket} ({pos_type}) mendeteksi pembalikan (Skor: {rev_score}%). "
-                            f"Auto-close {'nonaktif' if not enable_auto_close else f'ditahan (skor {rev_score}% < {rev_threshold}% atau tren mayor belum jebol)'}. Posisi tetap berjalan menuju hard TP/SL."
+                            f"Auto-close {'nonaktif' if not enable_auto_close else f'ditahan (skor {rev_score}% < {rev_threshold}% dan Otak AI belum merekomendasikan cut loss)'}. Posisi tetap berjalan menuju hard TP/SL."
                         )
 
                 if should_auto_close:
@@ -1892,19 +2312,23 @@ class PipelineRunner:
                 if opposite_pos:
                     pdf_score = float(getattr(sig, "pdf_confluence_score", 0.0) or 0.0)
                     enable_flip = bool(cfg_mt5.get("enable_reversal_flip", True))
-                    min_flip_score = float(cfg_mt5.get("min_reversal_flip_score", 90.0))
+                    min_flip_score = float(cfg_mt5.get("min_reversal_flip_score", 85.0))
+                    total_opp_profit = sum(float(p.get("profit", 0.0)) for p in opposite_pos)
+                    is_opp_profit = total_opp_profit > 0.0
 
-                    if enable_flip and pdf_score >= min_flip_score:
+                    if enable_flip and (is_opp_profit or pdf_score >= min_flip_score):
+                        action_label = f"Amankan Cuan TP (+{total_opp_profit:.2f} USC)" if is_opp_profit else f"Cut Loss Dini ({total_opp_profit:.2f} USC)"
                         logger.info(
-                            f"🔄 [REVERSAL FLIP AUTHORIZED] Sinyal pembalikan {sig.signal} {sig.ticker} (Skor: {pdf_score}%) "
-                            f"diizinkan melewati Anti-Hedging Guard untuk pembalikan arah (Cut Loss posisi lawan & Masuk {sig.signal})!"
+                            f"🔄 [HYBRID FLIP AUTHORIZED] Sinyal pembalikan {sig.signal} {sig.ticker} "
+                            f"(Skor: {pdf_score}%, Aksi Lawan: {action_label}) "
+                            f"diizinkan melewati Anti-Hedging Guard untuk pembalikan arah (Tutup posisi lawan & Masuk {sig.signal})!"
                         )
                         # Diizinkan untuk Reversal Flip
                     else:
-                        opp_summary = ", ".join(f"#{p['ticket']} ({p['type']} @ {p['price_open']})" for p in opposite_pos)
+                        opp_summary = ", ".join(f"#{p['ticket']} ({p['type']} @ {p['price_open']}, PnL: {p.get('profit', 0):+.2f} USC)" for p in opposite_pos)
                         return True, (
-                            f"Posisi berlawanan [{opp_summary}] masih aktif di MT5 berjalan menuju TP/SL. "
-                            f"Skor sinyal {pdf_score}% < batas pembalikan 90%. Mencegah sinyal bentrok {sig.signal} (Anti-Hedging Guard)."
+                            f"Posisi berlawanan [{opp_summary}] masih aktif di MT5. "
+                            f"Skor sinyal {pdf_score}% < batas pembalikan {min_flip_score:.0f}%. Mencegah tabrakan order {sig.signal} (Anti-Hedging Guard)."
                         )
 
                 same_dir_pos = [
@@ -2051,6 +2475,11 @@ def start_scheduler() -> None:
     logger.info(f"Inisialisasi APScheduler dengan interval {interval_mins} menit...")
     runner = PipelineRunner()
 
+    # Redam spam peringatan skipped internal APScheduler agar console tetap bersih
+    import logging
+    logging.getLogger("apscheduler.executors.default").setLevel(logging.ERROR)
+    logging.getLogger("apscheduler.scheduler").setLevel(logging.ERROR)
+
     scheduler = BlockingScheduler()
     # Jadwalkan eksekusi berkala analisa saham & gold (IDX 15m)
     scheduler.add_job(
@@ -2061,9 +2490,32 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
-    # Jadwalkan pemindaian khusus Gold XAU/USD real-time tiap 1 menit (0 delay)
-    # Menjamin sinyal langsung terdeteksi & dieksekusi ke MT5 & Telegram tepat saat candle baru
+    gold_scan_sec = int(sched_cfg.get("gold_scan_interval_seconds", 5))
+    gold_scan_us_sec = int(sched_cfg.get("gold_scan_us_session_seconds", 2))
+    enable_adaptive = bool(sched_cfg.get("enable_adaptive_gold_scan", True))
+    deal_watcher_sec = int(sched_cfg.get("mt5_deal_watcher_seconds", 1))
+
+    # Jadwalkan pemindaian khusus Gold XAU/USD real-time kilat
+    # Mendukung Adaptive US Session Turbo: 1-2 detik saat Sesi US, 5 detik saat Sesi Asia/London
+    _last_gold_scan_time = 0.0
+
     def scan_gold_job():
+        nonlocal _last_gold_scan_time
+        now_ts = time.time()
+
+        is_us = False
+        if enable_adaptive:
+            try:
+                from trading.mt5_bridge import MT5Bridge
+                is_us = MT5Bridge().is_us_session_window()
+            except Exception:
+                pass
+
+        target_interval = gold_scan_us_sec if is_us else gold_scan_sec
+        if target_interval > 1 and (now_ts - _last_gold_scan_time < (target_interval - 0.2)):
+            return
+
+        _last_gold_scan_time = now_ts
         try:
             gold_open, _ = is_gold_market_open(config=runner.config)
             if gold_open:
@@ -2071,12 +2523,21 @@ def start_scheduler() -> None:
         except Exception as ex_g:
             logger.debug(f"Pengecekan real-time Gold: {ex_g}")
 
+    job_label = (
+        f"Pemindaian Real-Time Gold XAU/USD (Adaptive: {gold_scan_us_sec}s US / {gold_scan_sec}s Normal)"
+        if enable_adaptive and gold_scan_sec != gold_scan_us_sec
+        else f"Pemindaian Real-Time Gold XAU/USD ({gold_scan_sec} Detik Semua Sesi)"
+    )
+
+    scan_trigger_sec = max(2, min(gold_scan_sec, gold_scan_us_sec) if enable_adaptive else gold_scan_sec)
     scheduler.add_job(
         scan_gold_job,
-        trigger=IntervalTrigger(seconds=30),
+        trigger=IntervalTrigger(seconds=scan_trigger_sec),
         id="gold_realtime_job",
-        name="Pemindaian Real-Time Gold XAU/USD (30 Detik)",
+        name=job_label,
         replace_existing=True,
+        coalesce=True,
+        max_instances=1,
     )
 
     # Jadwalkan pengecekan berita besar (FOMC, CPI, NFP) tiap 1 menit untuk alert T-10 menit
@@ -2088,12 +2549,12 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
-    # Jadwalkan pengecekan deal penutupan posisi MT5 (TP/SL hit) tiap 3 detik (LIVE INSTANT)
+    # Jadwalkan pengecekan deal penutupan posisi MT5 (TP/SL hit) tiap 1 detik (LIVE INSTANT)
     scheduler.add_job(
         runner.check_and_report_mt5_deals,
-        trigger=IntervalTrigger(seconds=3),
+        trigger=IntervalTrigger(seconds=deal_watcher_sec),
         id="mt5_deal_watcher_job",
-        name="Pemantauan Real-Time TP/SL MT5",
+        name=f"Pemantauan Real-Time TP/SL MT5 ({deal_watcher_sec} Detik)",
         replace_existing=True,
     )
 
@@ -2103,6 +2564,15 @@ def start_scheduler() -> None:
         trigger=CronTrigger(day_of_week="mon-fri", hour=16, minute=5, timezone=ZoneInfo("Asia/Jakarta")),
         id="idx_market_close_report_job",
         name="Laporan Penutupan Pasar Saham IDX Simpel",
+        replace_existing=True,
+    )
+
+    # Jadwalkan Rekap Performa Harian MT5 (USC) & Crypto (22:00 WIB Setiap Hari)
+    scheduler.add_job(
+        runner.send_daily_performance_recap_job,
+        trigger=CronTrigger(hour=22, minute=0, timezone=ZoneInfo("Asia/Jakarta")),
+        id="daily_2200_recap_job",
+        name="Laporan Rekap Performa Harian 22:00 WIB (MT5 & Crypto)",
         replace_existing=True,
     )
 
@@ -2125,6 +2595,18 @@ def start_scheduler() -> None:
             replace_existing=True,
         )
         logger.info(f"Git Auto-Puller aktif: memeriksa commit origin/{git_cfg.get('branch', 'main')} tiap {pull_interval_mins} menit.")
+
+    # Inisialisasi Auto-Pump Sniper Binance jika diaktifkan
+    crypto_cfg = runner.config.get("crypto", {})
+    if crypto_cfg.get("enabled", False) or os.getenv("AUTOPUMP_AUTO_START", "false").lower() in ("true", "1"):
+        try:
+            from crypto.auto_pump import AutoPumpSniper
+            crypto_sniper = AutoPumpSniper.get_instance()
+            crypto_sniper.telegram_notifier = runner.notifier
+            crypto_sniper.set_enabled(True)
+            logger.info(f"AutoPumpSniper Binance aktif (Mode: {crypto_sniper.mode.upper()}, Modal: ${crypto_sniper.capital_per_coin} USDT).")
+        except Exception as e:
+            logger.warning(f"Gagal mengaktifkan AutoPumpSniper di start_scheduler: {e}")
 
     # Jalankan 1 kali saat startup jika jam pasar buka
     logger.info("Menjalankan pipeline inisial pertama kali saat startup...")

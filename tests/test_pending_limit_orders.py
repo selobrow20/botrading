@@ -97,7 +97,7 @@ def test_mt5_bridge_execute_limit_order_success():
         assert res_sell["success"] is True
         assert res_sell["action"] == "SELL_LIMIT"
         assert res_sell["price"] == 2660.0
-        assert res_sell["volume"] == 0.08
+        assert res_sell["volume"] == 0.05
 
 
 def test_mt5_bridge_reject_low_grade_limit():
@@ -623,6 +623,7 @@ def test_news_guard_cancel_all_pending_orders_and_block():
         assert res["success"] is False
         assert res["status"] == "news_guard_blocked"
         assert "NEWS GUARD" in res["message"]
+    bridge.storage = None
 
 
 def test_member_copier_news_guard_telegram_message_handling():
@@ -744,5 +745,167 @@ def test_limit_orders_lot_size_usd_vs_cent():
         res_exec_cent = bridge.execute_limit_order(sig_limit)
         assert res_exec_cent["success"] is True
         assert res_exec_cent["volume"] == 0.05
+
+
+def test_storage_limit_fill_reported(tmp_path):
+    """Menguji rekam jejak limit order fill di StockStorage."""
+    from data.storage import StockStorage
+    db_file = tmp_path / "test_storage.db"
+    storage = StockStorage(db_path=db_file)
+
+    test_ticket = 99887766
+    assert storage.is_mt5_limit_fill_reported(test_ticket) is False
+
+    storage.mark_mt5_limit_fill_reported(
+        order_ticket=test_ticket,
+        position_id=test_ticket,
+        symbol="XAUUSDc",
+        order_type="SELL_LIMIT",
+        price=4116.97,
+        volume=0.05,
+        sl=4128.97,
+        tp=4104.97,
+    )
+
+    assert storage.is_mt5_limit_fill_reported(test_ticket) is True
+
+
+def test_telegram_limit_order_filled_alert_formatting():
+    """Menguji format kartu pesan Telegram saat pending limit order terjemput (FILLED)."""
+    notifier = TelegramNotifier()
+
+    fill_info = {
+        "ticket": 15285081317,
+        "position_id": 15285081317,
+        "symbol": "XAUUSDc",
+        "action": "SELL",
+        "type": "SELL_LIMIT",
+        "volume": 0.05,
+        "price": 4116.97,
+        "tp": 4104.97,
+        "sl": 4128.97,
+        "time_wib": "2026-10-14 21:30:15 WIB",
+    }
+
+    msg = notifier.format_limit_order_filled_alert(fill_info)
+
+    assert "ORDER LIMIT TERJEMPUT" in msg
+    assert "SELL LIMIT TERISI (FILLED)" in msg
+    assert "#15285081317" in msg
+    assert "$4,116.97" in msg
+    assert "$4,104.97" in msg
+    assert "$4,128.97" in msg
+    assert "0.05 Lot" in msg
+    assert "AKUN CENT USC" in msg
+
+    # Tes BUY LIMIT
+    fill_buy = {
+        "ticket": 15285081318,
+        "position_id": 15285081318,
+        "symbol": "XAUUSD",
+        "action": "BUY",
+        "type": "BUY_LIMIT",
+        "volume": 0.01,
+        "price": 4090.50,
+        "tp": 4105.00,
+        "sl": 4075.00,
+        "time_wib": "21:30:15 WIB",
+    }
+    msg_buy = notifier.format_limit_order_filled_alert(fill_buy)
+    assert "BUY LIMIT TERISI (FILLED)" in msg_buy
+    assert "AKUN STANDARD USD (0.01 LOT)" in msg_buy
+    assert "$4,090.50" in msg_buy
+
+
+def test_mt5_bridge_simulate_limit_order_fill():
+    """Menguji simulasi limit order fill pada MT5Bridge."""
+    bridge = MT5Bridge(simulation_mode=True)
+    bridge._simulated_pending_orders.clear()
+    bridge._simulated_positions.clear()
+    bridge._simulated_filled_limit_orders.clear()
+
+    # Pasang pending order simulasi
+    po_res = bridge.place_pending_order(
+        order_type="SELL_LIMIT",
+        price=4116.97,
+        sl=4128.97,
+        tp=4104.97,
+        volume=0.05,
+        symbol="XAUUSDc",
+    )
+    assert po_res["success"] is True
+    t_id = po_res["ticket"]
+
+    assert len(bridge.get_pending_orders()) == 1
+    assert len(bridge.get_open_positions()) == 0
+
+    # Simulasikan limit order terjemput
+    fill_res = bridge.simulate_limit_order_fill(t_id, fill_price=4116.97)
+    assert fill_res is not None
+    assert fill_res["ticket"] == t_id
+    assert fill_res["price"] == 4116.97
+
+    # Pending order harus hilang dan berpindah ke open positions
+    assert len(bridge.get_pending_orders()) == 0
+    assert len(bridge.get_open_positions()) == 1
+    assert bridge.get_open_positions()[0]["ticket"] == t_id
+
+    # get_filled_limit_orders harus mengembalikan order tersebut
+    filled_list = bridge.get_filled_limit_orders(hours=24)
+    assert len(filled_list) == 1
+    assert filled_list[0]["ticket"] == t_id
+
+    # Cleanup state simulasi
+    bridge._simulated_positions.clear()
+    bridge._simulated_pending_orders.clear()
+    bridge._simulated_filled_limit_orders.clear()
+
+
+def test_scheduler_check_and_report_mt5_limit_fills(tmp_path):
+    """Menguji eksekusi check_and_report_mt5_limit_fills di scheduler."""
+    from scheduler.run_scheduler import PipelineRunner
+    from data.storage import StockStorage
+    from unittest.mock import patch, MagicMock
+
+    db_file = tmp_path / "test_sched.db"
+    storage = StockStorage(db_path=db_file)
+
+    runner = PipelineRunner(storage=storage)
+    runner.notifier = MagicMock()
+    runner.notifier.send_limit_order_filled_alert = MagicMock(return_value=True)
+
+    fake_fill = {
+        "ticket": 778899,
+        "order_ticket": 778899,
+        "position_id": 778899,
+        "symbol": "XAUUSDc",
+        "action": "SELL",
+        "type": "SELL_LIMIT",
+        "volume": 0.05,
+        "price": 4116.97,
+        "price_open": 4116.97,
+        "sl": 4128.97,
+        "tp": 4104.97,
+        "time": int(datetime.now().timestamp()),
+        "time_wib": "2026-10-14 21:30:00 WIB",
+        "true_utc_epoch": int(datetime.now().timestamp()),
+        "comment": "9PDF-SELL_",
+    }
+
+    mock_bridge = MagicMock()
+    mock_bridge.enabled = True
+    mock_bridge.simulation_mode = True
+    mock_bridge.get_filled_limit_orders = MagicMock(return_value=[fake_fill])
+
+    with patch("trading.mt5_bridge.MT5Bridge", return_value=mock_bridge):
+        # Siklus 1: Harap kirim notifikasi
+        runner.check_and_report_mt5_limit_fills()
+        assert runner.notifier.send_limit_order_filled_alert.call_count == 1
+        assert storage.is_mt5_limit_fill_reported(778899) is True
+
+        # Siklus 2: Deduplikasi harus mencegah notifikasi ganda
+        runner.check_and_report_mt5_limit_fills()
+        assert runner.notifier.send_limit_order_filled_alert.call_count == 1
+
 
 

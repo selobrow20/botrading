@@ -130,8 +130,6 @@ def test_mt5_dynamic_lot_sizing_by_confluence():
     bridge = MT5Bridge(simulation_mode=True)
     bridge.enabled = True
     bridge.trading_hours = "all"
-    bridge.is_us_session_window = lambda: False
-
     # 1. Momen Super Bagus (Grade A+ >= 80%) -> 0.05 lot
     super_sig = SignalResult(
         ticker="XAUUSD",
@@ -144,43 +142,44 @@ def test_mt5_dynamic_lot_sizing_by_confluence():
         pdf_confluence_score=85.0,
         setup_grade="Grade A+",
     )
-    bridge._simulated_positions.clear()
-    res_super = bridge.execute_signal(super_sig)
-    assert res_super["success"] is True
-    assert res_super["volume"] == 0.05
+    with patch.object(bridge, "is_us_session_window", return_value=False):
+        bridge._simulated_positions.clear()
+        res_super = bridge.execute_signal(super_sig)
+        assert res_super["success"] is True
+        assert res_super["volume"] == 0.05
 
-    # 2. Momen Standar / Masih Riskan (Grade A 65% - 79%) -> Ditolak / diskip jika cent_only_high_grade=True
-    bridge._simulated_positions.clear()
-    standard_sig = SignalResult(
-        ticker="XAUUSD",
-        strategy_name="Master_Confluence",
-        signal="BUY",
-        price=2750.0,
-        candle_time="2026-09-25T08:00:00",
-        take_profit_price=2775.0,
-        stop_loss_price=2735.0,
-        pdf_confluence_score=70.0,
-        setup_grade="Grade A",
-    )
-    # Default (cent_only_high_grade=True) -> skip
-    res_skip = bridge.execute_signal(standard_sig)
-    assert res_skip["success"] is False
-    assert res_skip["status"] in ("cent_skip_standard_grade", "pdf_rejected")
+        # 2. Momen Standar / Masih Riskan (Grade A 65% - 79%) -> Ditolak / diskip jika cent_only_high_grade=True
+        bridge._simulated_positions.clear()
+        standard_sig = SignalResult(
+            ticker="XAUUSD",
+            strategy_name="Master_Confluence",
+            signal="BUY",
+            price=2750.0,
+            candle_time="2026-09-25T08:00:00",
+            take_profit_price=2775.0,
+            stop_loss_price=2735.0,
+            pdf_confluence_score=70.0,
+            setup_grade="Grade A",
+        )
+        # Default (cent_only_high_grade=True) -> skip
+        res_skip = bridge.execute_signal(standard_sig)
+        assert res_skip["success"] is False
+        assert res_skip["status"] in ("cent_skip_standard_grade", "pdf_rejected")
 
-    # Jika cent_only_high_grade dimatikan -> baru masuk 0.01 lot (backward compatibility test)
-    bridge.cent_only_high_grade = False
-    with patch.dict(bridge.config.get("mt5", {}), {"cent_only_high_grade": False, "min_confluence_score": 65.0}):
-        res_standard = bridge.execute_signal(standard_sig)
-        assert res_standard["success"] is True
-        assert res_standard["volume"] == 0.01
-    bridge.cent_only_high_grade = True
+        # Jika cent_only_high_grade dimatikan -> baru masuk 0.01 lot (backward compatibility test)
+        bridge.cent_only_high_grade = False
+        with patch.dict(bridge.config.get("mt5", {}), {"cent_only_high_grade": False, "min_confluence_score": 65.0}):
+            res_standard = bridge.execute_signal(standard_sig)
+            assert res_standard["success"] is True
+            assert res_standard["volume"] == 0.01
+        bridge.cent_only_high_grade = True
 
-    # 3. Khusus Sesi US (19:00 - 24:00 WIB) Akun Cent -> 0.08 lot
-    bridge.is_us_session_window = lambda: True
-    bridge._simulated_positions.clear()
-    res_us = bridge.execute_signal(super_sig)
-    assert res_us["success"] is True
-    assert res_us["volume"] == 0.08
+    # 3. Khusus Sesi US (19:00 - 24:00 WIB) Akun Cent -> 0.05 lot (diubah dari 0.08 ke 0.05)
+    with patch.object(bridge, "is_us_session_window", return_value=True):
+        bridge._simulated_positions.clear()
+        res_us = bridge.execute_signal(super_sig)
+        assert res_us["success"] is True
+        assert res_us["volume"] == 0.05
 
 
 def test_mt5_trading_hours_restriction():
@@ -444,6 +443,7 @@ def test_anti_hedging_blocks_duplicate_and_cancels_broadcast():
     bridge = MT5Bridge()
     bridge.enabled = True
     runner = PipelineRunner()
+    runner.config.setdefault("mt5", {})["enable_reversal_flip"] = False
     
     # Sinyal BUY baru saat ada posisi SELL aktif di MT5
     buy_sig = SignalResult(
@@ -581,54 +581,56 @@ def test_us_session_aggressive_mode_and_position_limits():
     bridge = MT5Bridge(simulation_mode=True)
     bridge.enabled = True
     bridge.trading_hours = "all"
-    bridge.config["mt5"]["us_session_aggressive_lot"] = 0.08
-    bridge.config["mt5"]["high_confidence_lot"] = 0.05
-    bridge.config["mt5"]["us_session_max_positions"] = 2
-    bridge.config["mt5"]["max_positions_cent"] = 1
-    bridge._simulated_positions.clear()
+    with patch.dict(bridge.config["mt5"], {
+        "us_session_aggressive_lot": 0.08,
+        "high_confidence_lot": 0.05,
+        "us_session_max_positions": 2,
+        "max_positions_cent": 1
+    }):
+        bridge._simulated_positions.clear()
 
-    grade_aplus_sig = SignalResult(
-        ticker="XAUUSD",
-        strategy_name="Master_Confluence",
-        signal="BUY",
-        price=2750.0,
-        candle_time="2026-10-02 20:00:00",
-        take_profit_price=2775.0,
-        stop_loss_price=2735.0,
-        pdf_confluence_score=85.0,
-        setup_grade="Grade A+",
-    )
+        grade_aplus_sig = SignalResult(
+            ticker="XAUUSD",
+            strategy_name="Master_Confluence",
+            signal="BUY",
+            price=2750.0,
+            candle_time="2026-10-02 20:00:00",
+            take_profit_price=2775.0,
+            stop_loss_price=2735.0,
+            pdf_confluence_score=85.0,
+            setup_grade="Grade A+",
+        )
 
-    # 1. Di dalam Sesi US (is_us_session_window=True) -> Lot 0.08
-    with patch.object(bridge, "is_cent_account", return_value=True), \
-         patch.object(bridge, "is_us_session_window", return_value=True):
-        lot_us = bridge.calculate_lot_size("XAUUSD", 2750.0, 2735.0, confluence_score=85.0, setup_grade="Grade A+")
-        assert lot_us == 0.08
+        # 1. Di dalam Sesi US (is_us_session_window=True) -> Lot 0.08
+        with patch.object(bridge, "is_cent_account", return_value=True), \
+             patch.object(bridge, "is_us_session_window", return_value=True):
+            lot_us = bridge.calculate_lot_size("XAUUSD", 2750.0, 2735.0, confluence_score=85.0, setup_grade="Grade A+")
+            assert lot_us == 0.08
 
-    # 2. Di luar Sesi US (is_us_session_window=False) -> Lot 0.05
-    with patch.object(bridge, "is_cent_account", return_value=True), \
-         patch.object(bridge, "is_us_session_window", return_value=False):
-        lot_non_us = bridge.calculate_lot_size("XAUUSD", 2750.0, 2735.0, confluence_score=85.0, setup_grade="Grade A+")
-        assert lot_non_us == 0.05
+        # 2. Di luar Sesi US (is_us_session_window=False) -> Lot 0.05
+        with patch.object(bridge, "is_cent_account", return_value=True), \
+             patch.object(bridge, "is_us_session_window", return_value=False):
+            lot_non_us = bridge.calculate_lot_size("XAUUSD", 2750.0, 2735.0, confluence_score=85.0, setup_grade="Grade A+")
+            assert lot_non_us == 0.05
 
-    # 3. Batas Posisi: Di luar Sesi US -> Maksimal 1 Posisi
-    bridge._simulated_positions = [
-        {"ticket": 101, "symbol": "XAUUSD", "type": "BUY", "price_open": 2740.0, "volume": 0.05}
-    ]
-    with patch.object(bridge, "is_cent_account", return_value=True), \
-         patch.object(bridge, "is_us_session_window", return_value=False):
-        res_non_us = bridge.execute_signal(grade_aplus_sig)
-        assert res_non_us["success"] is False
-        assert res_non_us["status"] == "already_open"
-        assert "Batas posisi tercapai" in res_non_us["message"]
+        # 3. Batas Posisi: Di luar Sesi US -> Maksimal 1 Posisi
+        bridge._simulated_positions = [
+            {"ticket": 101, "symbol": "XAUUSD", "type": "BUY", "price_open": 2740.0, "volume": 0.05}
+        ]
+        with patch.object(bridge, "is_cent_account", return_value=True), \
+             patch.object(bridge, "is_us_session_window", return_value=False):
+            res_non_us = bridge.execute_signal(grade_aplus_sig)
+            assert res_non_us["success"] is False
+            assert res_non_us["status"] == "already_open"
+            assert "Batas posisi tercapai" in res_non_us["message"]
 
-    # 4. Batas Posisi: Di dalam Sesi US -> Diizinkan sampai 2 Posisi
-    with patch.object(bridge, "is_cent_account", return_value=True), \
-         patch.object(bridge, "is_us_session_window", return_value=True):
-        res_us = bridge.execute_signal(grade_aplus_sig)
-        assert res_us["success"] is True
-        assert res_us["volume"] == 0.08
-        assert res_us["status"] == "executed"
+        # 4. Batas Posisi: Di dalam Sesi US -> Diizinkan sampai 2 Posisi
+        with patch.object(bridge, "is_cent_account", return_value=True), \
+             patch.object(bridge, "is_us_session_window", return_value=True):
+            res_us = bridge.execute_signal(grade_aplus_sig)
+            assert res_us["success"] is True
+            assert res_us["volume"] == 0.08
+            assert res_us["status"] == "executed"
 
 
 

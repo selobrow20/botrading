@@ -81,18 +81,20 @@ def check_h1_snr(
         if lows[i] < lows[i - 1] and lows[i] < lows[i - 2] and lows[i] <= lows[i + 1] and lows[i] <= lows[i + 2]:
             swing_lows.append(float(lows[i]))
 
-    # Fallback jika pivot bar sedikit: gunakan extremum lokal
+    # Fallback jika pivot bar sedikit: gunakan extremum lokal candle lampau (bukan candle berjalan saat ini)
+    past_highs = highs[:-1] if n > 1 else highs
+    past_lows = lows[:-1] if n > 1 else lows
     if not swing_highs:
-        swing_highs = [float(np.max(highs))]
+        swing_highs = [float(np.max(past_highs))]
     if not swing_lows:
-        swing_lows = [float(np.min(lows))]
+        swing_lows = [float(np.min(past_lows))]
 
     # Cari Key Resistance terdekat di atas harga dan Key Support terdekat di bawah harga
     res_above = [r for r in swing_highs if r >= curr_price]
     sup_below = [s for s in swing_lows if s <= curr_price]
 
-    key_resistance = min(res_above) if res_above else float(np.max(highs))
-    key_support = max(sup_below) if sup_below else float(np.min(lows))
+    key_resistance = min(res_above) if res_above else round(curr_price + 20.0, 2)
+    key_support = max(sup_below) if sup_below else round(max(0.0, curr_price - 20.0), 2)
 
     dist_to_resistance = round(key_resistance - curr_price, 2)
     dist_to_support = round(curr_price - key_support, 2)

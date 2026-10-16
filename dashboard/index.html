@@ -3,20 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Botrading - 3D Isometric Trading Office & Copier Dashboard</title>
+  <title>Botrading - Command Center & Live Bot Monitor</title>
   
   <!-- Font & Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@500;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=5.0">
 
-  <!-- Three.js & OrbitControls (Local fallback with CDN) -->
+  <!-- PWA & Mobile Web App Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <meta name="theme-color" content="#030712">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Botrading">
+  <!-- Three.js & OrbitControls for 3D Office -->
   <script src="assets/js/three.min.js"></script>
   <script src="assets/js/OrbitControls.js"></script>
   <script>
-    // Fallback if local script failed to load
     if (typeof THREE === 'undefined') {
       document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>');
       document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>');
@@ -24,425 +32,1466 @@
   </script>
 </head>
 <body class="theme-night">
+  <canvas id="matrix-mesh-canvas"></canvas>
 
-  <!-- TOP HEADER BAR (Seperti UI Referensi) -->
+  <!-- ======================================================================
+       TOP NAVBAR
+       ====================================================================== -->
   <header id="top-navbar">
     <div class="nav-left">
-      <div class="brand-pill">
+      <div class="brand-pill" id="btn-brand-home" title="Kembali ke Ringkasan Utama">
         <div class="brand-logo">⚡</div>
         <div class="brand-text">
-          <span class="brand-title">BOTRADING OFFICE</span>
-          <span class="brand-badge">ISOMETRIC TRADING FLOOR</span>
+          <span class="brand-title ats-brand-glow">ATSMATRIX // BOTRADING</span>
+          <span class="brand-badge">HUD OPERATING DESK • v2.5</span>
         </div>
       </div>
-      <div class="vps-status-badge" id="vps-badge">
+
+      <div class="bot-status-badge" id="bot-status-badge">
         <span class="pulse-dot"></span>
-        <span class="status-label">MASTER BOT VPS: <strong id="vps-status-text">LISTENING (@selo_saham_bot)</strong></span>
+        <span class="status-label">BOT: <strong id="bot-status-text">MEMERIKSA...</strong></span>
       </div>
     </div>
 
-    <!-- AGENT AVATAR LIST (Seperti UI Gambar 2) -->
-    <div class="agent-roster" id="agent-roster">
-      <div class="roster-chip active" data-agent-id="master" title="Master Bot (VPS)">
-        <span class="chip-avatar master">👑</span>
-        <span class="chip-name">Master</span>
-        <span class="chip-dot dot-purple"></span>
+    <!-- CENTER MARKET STATUS CHIPS -->
+    <div class="nav-center-tickers">
+      <div class="market-chip" id="chip-idx">
+        <span class="dot"></span>
+        <span>IDX: <strong id="chip-idx-desc">...</strong></span>
       </div>
-      <div class="roster-chip active" data-agent-id="deden" title="Deden (Local MT5)">
-        <span class="chip-avatar deden">💻</span>
-        <span class="chip-name">Deden (You)</span>
-        <span class="chip-dot dot-green"></span>
+      <div class="market-chip" id="chip-gold">
+        <span class="dot"></span>
+        <span>GOLD: <strong id="chip-gold-desc">...</strong></span>
       </div>
-      <div class="roster-chip active" data-agent-id="luke" title="Luke (Gold Scalper)">
-        <span class="chip-avatar">🧑‍💼</span>
-        <span class="chip-name">Luke</span>
-        <span class="chip-dot dot-green"></span>
+      <div class="market-chip crypto" id="chip-crypto">
+        <span class="dot"></span>
+        <span>CRYPTO: <strong>24/7 AKTIF</strong></span>
       </div>
-      <div class="roster-chip active" data-agent-id="allan" title="Allan (Cent Copier)">
-        <span class="chip-avatar">👨‍💻</span>
-        <span class="chip-name">Allan</span>
-        <span class="chip-dot dot-green"></span>
-      </div>
-      <div class="roster-chip active" data-agent-id="ben" title="Ben (Cent Copier)">
-        <span class="chip-avatar">🧑‍💻</span>
-        <span class="chip-name">Ben</span>
-        <span class="chip-dot dot-green"></span>
-      </div>
-      <div class="roster-chip active" data-agent-id="cory" title="Cory (Cent Copier)">
-        <span class="chip-avatar">👨‍💼</span>
-        <span class="chip-name">Cory</span>
-        <span class="chip-dot dot-green"></span>
-      </div>
-      <div class="roster-chip active" data-agent-id="susie" title="Susie (Standard USD)">
-        <span class="chip-avatar">👩‍💻</span>
-        <span class="chip-name">Susie</span>
-        <span class="chip-dot dot-green"></span>
-      </div>
-      <div class="roster-chip active" data-agent-id="andrew" title="Andrew (VPS Copier)">
-        <span class="chip-avatar">🧑‍💼</span>
-        <span class="chip-name">Andrew</span>
-        <span class="chip-dot dot-green"></span>
-      </div>
-      <div class="roster-counter" id="roster-counter">7/7 Active</div>
     </div>
 
-    <!-- RIGHT CONTROLS & TICKER -->
+    <!-- RIGHT TICKERS & CONTROLS -->
     <div class="nav-right">
       <div class="ticker-chip">
         <span class="ticker-symbol">XAUUSD</span>
-        <span class="ticker-price" id="nav-gold-price">$4,175.80</span>
-        <span class="ticker-change up" id="nav-gold-change">+0.48%</span>
-      </div>
-      <div class="sync-indicator connected" id="sync-status" title="Status Sinkronisasi Backend">
-        <span class="sync-dot"></span>
-        <span class="sync-text" id="sync-text">LIVE MT5</span>
+        <span class="ticker-price" id="nav-gold-price">$4,185.00</span>
       </div>
       <div class="quick-tools">
-        <button class="tool-btn" id="btn-theme-toggle" title="Ganti Tema (Night / Day)">🌙</button>
-        <button class="tool-btn" id="btn-sound-toggle" title="Mute/Unmute Audio FX">🔊</button>
-        <button class="tool-btn" id="btn-reset-cam" title="Reset Kamera Isometric">🎥</button>
+        <button class="tool-btn" id="btn-pwa-install" title="📱 Pasang Aplikasi di HP" style="display: none; color: #00f3ff; border: 1px solid rgba(0, 243, 255, 0.4); font-size: 10px; font-weight: 700; padding: 3px 8px; font-family: var(--font-mono); border-radius: 4px;">📲 PASANG APK</button>
+        <button class="tool-btn" id="btn-mobile-modal" title="Buka di HP Android via WiFi" style="color: #00ff88; border: 1px solid rgba(0, 255, 136, 0.4); font-size: 10px; font-weight: 700; padding: 3px 8px; font-family: var(--font-mono); border-radius: 4px;">📱 BUKA DI HP</button>
+        <button class="tool-btn" id="btn-theme-toggle" title="Ganti Tema (Gelap / Terang)">🌙</button>
+        <button class="tool-btn" id="btn-sound-toggle" title="Bunyi / Senyap Audio FX">🔊</button>
+        <button class="tool-btn active" id="btn-refresh-toggle" title="Auto-Refresh Aktif (2s)">⚡</button>
       </div>
     </div>
   </header>
 
-  <!-- 3D CANVAS VIEWPORT CONTAINER -->
-  <main id="viewport-container">
-    <canvas id="office-canvas"></canvas>
-
-    <!-- FLOATING 2D OVERLAYS ON TOP OF 3D SCENE -->
-    <div id="labels-container"></div>
-    <div id="speech-bubbles-container"></div>
-
-    <!-- QUICK STATUS HUD (Kiri Atas) -->
-    <div class="hud-panel left-hud">
-      <div class="hud-item">
-        <span class="hud-label">AKUN MT5 LOKAL</span>
-        <span class="hud-val highlight" id="hud-mt5-login">HFMarkets #114201000</span>
-      </div>
-      <div class="hud-item">
-        <span class="hud-label">BALANCE / EQUITY</span>
-        <span class="hud-val" id="hud-mt5-balance">$475.26 USC / <strong class="equity-up" id="hud-mt5-equity">$476.31</strong></span>
-      </div>
-      <div class="hud-item">
-        <span class="hud-label">OPEN POSISI</span>
-        <span class="hud-val" id="hud-open-positions"><span class="badge-buy">BUY</span> 0.05 Lot @ 4,175.77 (+1.05 USC)</span>
-      </div>
+  <!-- ======================================================================
+       SUB-NAVBAR TABS (TAB SWITCHER)
+       ====================================================================== -->
+  <nav id="sub-navbar">
+    <div class="dash-tabs" id="dash-tabs">
+      <button class="dash-tab active" data-tab="overview">
+        <span>📊 Ringkasan (Overview)</span>
+      </button>
+      <button class="dash-tab" data-tab="stocks">
+        <span>📈 Saham IDX</span>
+        <span class="tab-badge" id="tab-stocks-count">27</span>
+      </button>
+      <button class="dash-tab" data-tab="forex">
+        <span>🥇 Gold & MT5</span>
+        <span class="tab-badge" id="tab-mt5-pos">1 Pos</span>
+      </button>
+      <button class="dash-tab" data-tab="crypto">
+        <span>🚀 Crypto Sniper</span>
+        <span class="tab-badge" id="tab-crypto-pos">2 Pos</span>
+      </button>
+      <button class="dash-tab" data-tab="futures" id="tab-btn-futures" style="border-bottom: 2px solid #f0b90b;">
+        <span>🔮 Binance Futures</span>
+        <span class="tab-badge" id="tab-futures-count" style="background: rgba(240, 185, 11, 0.2); color: #f0b90b; border: 1px solid #f0b90b;">LIVE</span>
+      </button>
+      <button class="dash-tab ats-flagship-tab" data-tab="atsmatrix">
+        <span>⚡ NIULAI4 // ATS MATRIX</span>
+        <span class="tab-badge ats-badge-neon">3D HUD</span>
+      </button>
+      <button class="dash-tab" data-tab="signals">
+        <span>🎯 Riwayat Sinyal</span>
+        <span class="tab-badge" id="tab-signals-count">267</span>
+      </button>
+      <button class="dash-tab" data-tab="calendar">
+        <span>📰 Kalender Berita</span>
+      </button>
+      <button class="dash-tab" data-tab="terminal">
+        <span>💻 Live Terminal</span>
+      </button>
+      <button class="dash-tab" data-tab="office">
+        <span>🏢 3D Trading Floor</span>
+      </button>
     </div>
+  </nav>
 
-    <!-- LAST SIGNAL HUD (Kanan Atas) -->
-    <div class="hud-panel right-hud">
-      <div class="hud-title">⚡ SINYAL TERAKHIR DARI MASTER</div>
-      <div class="signal-card" id="hud-last-signal">
-        <div class="sig-header">
-          <span class="sig-badge buy" id="hud-sig-action">BUY XAUUSD</span>
-          <span class="sig-time" id="hud-sig-time">22:42:51</span>
+  <!-- ======================================================================
+       MAIN CONTENT CONTAINER (PANE SWITCHER)
+       ====================================================================== -->
+  <main id="main-content">
+
+    <!-- ==================================================================
+         ATSMATRIX // 5-PHASE CONFLUENCE PIPELINE HUD (ON THE GLASS)
+         ================================================================== -->
+    <div class="ats-pipeline-bar">
+      <div class="pipeline-header">
+        <div class="pipeline-title">
+          <span class="hud-glitch-tag">ATSMATRIX // HUD</span>
+          <span class="hud-phase-label">AUTONOMOUS MULTI-AGENT INFERENCE PIPELINE</span>
         </div>
-        <div class="sig-grid">
-          <div><small>Entry</small><strong id="hud-sig-entry">$4,168.92</strong></div>
-          <div><small>TP</small><strong class="green" id="hud-sig-tp">$4,173.49</strong></div>
-          <div><small>SL</small><strong class="red" id="hud-sig-sl">$4,164.49</strong></div>
-        </div>
-        <div class="sig-status" id="hud-sig-status">
-          ✅ Dieksekusi ke MT5 (#15247953082)
-        </div>
-      </div>
-    </div>
-
-    <!-- CAMERA VIEW MODES (Floating Di Kanan Bawah) -->
-    <div class="cam-modes-bar">
-      <button class="cam-btn active" data-cam="iso" title="Pandangan Isometric Utama">Isometric</button>
-      <button class="cam-btn" data-cam="deden" title="Fokus ke Meja Deden">Meja Deden</button>
-      <button class="cam-btn" data-cam="server" title="Fokus ke Ruang Server VPS">Server VPS</button>
-      <button class="cam-btn" data-cam="top" title="Pandangan Atas (Top-Down)">Top-Down</button>
-    </div>
-  </main>
-
-  <!-- BOTTOM FLOATING ACTION DOCK (Mirip UI Gambar 2) -->
-  <footer id="bottom-dock">
-    <div class="dock-pill">
-      <div class="dock-indicator">
-        <span class="radar-ping"></span>
-        <span class="dock-icon">⚡</span>
-      </div>
-      <div class="dock-status-info">
-        <span class="dock-title">MAIN AGENT (MASTER VPS)</span>
-        <span class="dock-subtitle" id="dock-subtitle">Mendengarkan Sinyal Telegram • 7 Member Siap Eksekusi Otomatis</span>
-      </div>
-      <div class="dock-actions">
-        <button class="dock-btn primary" id="btn-broadcast-test">
-          <span class="btn-icon">📡</span>
-          <span>Broadcast Sinyal Uji</span>
-        </button>
-        <button class="dock-btn" id="btn-toggle-terminal">
-          <span class="btn-icon">💻</span>
-          <span>Terminal MT5 Log</span>
-          <span class="unread-badge" id="terminal-badge" style="display:none;">0</span>
-        </button>
-        <button class="dock-btn" id="btn-open-members">
-          <span class="btn-icon">👥</span>
-          <span>Kelola Member</span>
-        </button>
-        <button class="dock-btn" id="btn-open-settings">
-          <span class="btn-icon">⚙️</span>
-          <span>Config Copier</span>
-        </button>
-      </div>
-    </div>
-  </footer>
-
-  <!-- TERMINAL DRAWER (TAMPILAN PERSIS GAMBAR 1 - POWERSHELL STYLE) -->
-  <div id="terminal-drawer" class="terminal-drawer collapsed">
-    <div class="terminal-header">
-      <div class="term-tabs">
-        <div class="term-tab active">
-          <span class="tab-icon">⚡</span>
-          <span class="tab-title">Windows PowerShell - Copier Monitor</span>
-          <span class="tab-close" id="btn-close-terminal">✕</span>
+        <div class="pipeline-radar-badge">
+          <span class="radar-dot"></span>
+          <span>ON-THE-GLASS // CONTINUOUS TELEMETRY</span>
         </div>
       </div>
-      <div class="term-actions">
-        <button class="term-action-btn" id="btn-clear-term" title="Bersihkan Layar">Bersihkan</button>
-        <button class="term-action-btn" id="btn-copy-term" title="Salin Log">Salin</button>
-        <button class="term-action-btn" id="btn-minimize-term" title="Tutup">▼</button>
+      <div class="pipeline-stages">
+        <div class="stage-card" id="pipe-stage-1">
+          <div class="stage-step">PHASE 01</div>
+          <div class="stage-name">MARKET RADAR</div>
+          <div class="stage-meta" id="pipe-meta-1">SCAN TOP 50 COINS</div>
+        </div>
+        <div class="stage-arrow">▶</div>
+        <div class="stage-card" id="pipe-stage-2">
+          <div class="stage-step">PHASE 02</div>
+          <div class="stage-name">AI CONFLUENCE</div>
+          <div class="stage-meta" id="pipe-meta-2">GEMINI 2.5 FLASH-LITE</div>
+        </div>
+        <div class="stage-arrow">▶</div>
+        <div class="stage-card" id="pipe-stage-3">
+          <div class="stage-step">PHASE 03</div>
+          <div class="stage-name">NOTIONAL CAP</div>
+          <div class="stage-meta" id="pipe-meta-3">MAX $1.00 STRICT</div>
+        </div>
+        <div class="stage-arrow">▶</div>
+        <div class="stage-card active" id="pipe-stage-4">
+          <div class="stage-step">PHASE 04</div>
+          <div class="stage-name">CLOB SNIPER</div>
+          <div class="stage-meta" id="pipe-meta-4">BINANCE SPOT DIRECT</div>
+        </div>
+        <div class="stage-arrow">▶</div>
+        <div class="stage-card" id="pipe-stage-5">
+          <div class="stage-step">PHASE 05</div>
+          <div class="stage-name">RESOLUTION FUNNEL</div>
+          <div class="stage-meta" id="pipe-meta-5">SL -5.5% / TP +11%</div>
+        </div>
       </div>
     </div>
-    <div class="terminal-body" id="terminal-output">
-      <!-- Isi log akan dirender persis seperti di Gambar 1 -->
-      <div class="term-line prompt">Windows PowerShell</div>
-      <div class="term-line prompt">Copyright (C) Microsoft Corporation. All rights reserved.</div>
-      <div class="term-line prompt">PS C:\Projects\botrading\member_copier&gt; python client_copier.py</div>
-      <div class="term-line info">======================================================================</div>
-      <div class="term-line info">🚀 CLIENT COPIER AKTIF - SIAP MENERIMA SINYAL DARI MASTER BOT VPS</div>
-      <div class="term-line info">Akun MT5: HFMarkets #114201000 | Tipe: CENT (USC) | Default Lot: 0.05</div>
-      <div class="term-line info">======================================================================</div>
-      <div class="term-line signal-header">⚡ [22:42:51] SINYAL DITERIMA DARI MASTER BOT:</div>
-      <div class="term-line signal-body">   Aksi  : BUY XAUUSD</div>
-      <div class="term-line signal-body">   Entry : $4,168.92</div>
-      <div class="term-line signal-body">   TP    : $4,173.49</div>
-      <div class="term-line signal-body">   SL    : $4,164.49</div>
-      <div class="term-line order-success">   ✅ [ORDER MT5 SUKSES] #15247953082 BUY 0.05 Lot @ $4,169.26 pada XAUUSDc</div>
-      <div class="term-line signal-header">⚡ [22:57:52] SINYAL DITERIMA DARI MASTER BOT:</div>
-      <div class="term-line signal-body">   Aksi  : BUY XAUUSD</div>
-      <div class="term-line signal-body">   Entry : $4,170.41</div>
-      <div class="term-line signal-body">   TP    : $4,174.90</div>
-      <div class="term-line signal-body">   SL    : $4,165.90</div>
-      <div class="term-line order-success">   ✅ [ORDER MT5 SUKSES] #15247974852 BUY 0.05 Lot @ $4,170.33 pada XAUUSDc</div>
-      <div class="term-line signal-header">⚡ [23:57:37] SINYAL DITERIMA DARI MASTER BOT:</div>
-      <div class="term-line signal-body">   Aksi  : SELL XAUUSD</div>
-      <div class="term-line signal-body">   Entry : $4,160.50</div>
-      <div class="term-line signal-body">   TP    : $4,155.70</div>
-      <div class="term-line signal-body">   SL    : $4,164.70</div>
-      <div class="term-line order-success">   ✅ [ORDER MT5 SUKSES] #15248032980 SELL 0.05 Lot @ $4,160.51 pada XAUUSDc</div>
-      <div class="term-line signal-header">⚡ [00:12:38] SINYAL DITERIMA DARI MASTER BOT:</div>
-      <div class="term-line signal-body">   Aksi  : BUY XAUUSD</div>
-      <div class="term-line signal-body">   Entry : $4,172.85</div>
-      <div class="term-line signal-body">   TP    : $4,177.67</div>
-      <div class="term-line signal-body">   SL    : $4,168.67</div>
-      <div class="term-line order-success">   ✅ [ORDER MT5 SUKSES] #15248047102 BUY 0.05 Lot @ $4,172.96 pada XAUUSDc</div>
-      <div class="term-line signal-header">⚡ [00:20:37] SINYAL DITERIMA DARI MASTER BOT:</div>
-      <div class="term-line signal-body">   Aksi  : BUY XAUUSD</div>
-      <div class="term-line signal-body">   Entry : $4,173.20</div>
-      <div class="term-line signal-body">   TP    : $1.00</div>
-      <div class="term-line signal-body">   SL    : $0.00</div>
-      <div class="term-line order-failed">   ❌ [ORDER GAGAL] RetCode: 10016 - Invalid stops</div>
-    </div>
-  </div>
 
-  <!-- MODAL: DETAIL AGENT / MEMBER PROFILE (Muncul saat klik meja / avatar 3D) -->
-  <div id="modal-agent-detail" class="modal-overlay hidden">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="agent-title-row">
-          <div class="agent-avatar-lg" id="modal-agent-avatar">💻</div>
+    <!-- ------------------------------------------------------------------
+         TAB 1: OVERVIEW (RINGKASAN UTAMA COMMAND CENTER)
+         ------------------------------------------------------------------ -->
+    <section class="tab-pane active" id="pane-overview">
+      
+      <!-- 4 MAJOR KPI METRICS -->
+      <div class="kpi-grid">
+        <!-- KPI 1: BOT CORE HEALTH -->
+        <div class="kpi-card" id="kpi-bot-health">
+          <div class="kpi-header">
+            <span class="kpi-title">STATUS MESIN BOT</span>
+            <span class="kpi-icon">🤖</span>
+          </div>
+          <div class="kpi-val" id="ov-bot-status">ONLINE</div>
+          <div class="kpi-sub">
+            <span id="ov-bot-pid">PID #14040</span> • <span id="ov-bot-uptime">Uptime 1j 20m</span>
+          </div>
+        </div>
+
+        <!-- KPI 2: MT5 FOREX & GOLD -->
+        <div class="kpi-card kpi-gold" id="kpi-mt5">
+          <div class="kpi-header">
+            <span class="kpi-title">METATRADER 5 (XAUUSD)</span>
+            <span class="kpi-icon">🥇</span>
+          </div>
+          <div class="kpi-val" id="ov-mt5-equity">363.61 USC</div>
+          <div class="kpi-sub">
+            <span>Saldo: <strong id="ov-mt5-balance">377.61 USC</strong></span> • <span id="ov-mt5-positions">1 Posisi Terbuka</span>
+          </div>
+        </div>
+
+        <!-- KPI 3: CRYPTO AUTO-PUMP SNIPER -->
+        <div class="kpi-card kpi-purple" id="kpi-crypto">
+          <div class="kpi-header">
+            <span class="kpi-title">BINANCE AUTO-PUMP</span>
+            <span class="kpi-icon">🚀</span>
+          </div>
+          <div class="kpi-val" id="ov-crypto-val">$10.50 USDT</div>
+          <div class="kpi-sub">
+            <span id="ov-crypto-open">3 Koin Aktif</span> • <span>Kas: <strong id="ov-crypto-balance">$2.91 USDT</strong></span>
+          </div>
+        </div>
+
+        <!-- KPI 4: STATISTIK AKURASI SINYAL -->
+        <div class="kpi-card kpi-green" id="kpi-signals">
+          <div class="kpi-header">
+            <span class="kpi-title">AKURASI & WIN RATE</span>
+            <span class="kpi-icon">🎯</span>
+          </div>
+          <div class="kpi-val" id="ov-win-rate">87.5%</div>
+          <div class="kpi-sub">
+            <span>Menang: <strong class="val-green" id="ov-wins-count">92</strong></span> • 
+            <span>Kalah: <strong class="val-red" id="ov-losses-count">156</strong></span> • 
+            <span>Total: <strong id="ov-total-signals">267 Sinyal</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- REALIZED PNL & PERFORMANCE SNAPSHOT -->
+      <div class="pnl-suite-container" style="margin-bottom: 24px;">
+        <div class="pnl-suite-header">
+          <div class="pnl-suite-title">
+            <span style="font-size: 20px;">💰</span>
+            <div>
+              <h3 style="margin: 0;">REALIZED PROFIT & LOSS HISTORY</h3>
+              <p style="margin: 0; color: var(--text-muted); font-size: 12px;">Akumulasi keuntungan dan kerugian bersih dari eksekusi bot di Binance Spot.</p>
+            </div>
+          </div>
+          <button class="btn btn-secondary" id="btn-goto-crypto-pnl" style="padding: 5px 12px; font-size: 12px;">
+            <span>Lihat History Detail Crypto ↗</span>
+          </button>
+        </div>
+
+        <div class="pnl-grid-4">
+          <div class="pnl-stat-card card-net">
+            <div class="pnl-stat-label"><span>Net Realized PnL</span><span>⚡</span></div>
+            <div class="pnl-stat-value" id="ov-pnl-net">+$0.0000 USDT</div>
+            <div class="pnl-stat-sub" id="ov-pnl-mode">Binance Spot Live</div>
+          </div>
+
+          <div class="pnl-stat-card card-profit">
+            <div class="pnl-stat-label"><span>Total Keuntungan (Win)</span><span>🏆</span></div>
+            <div class="pnl-stat-value val-green" id="ov-pnl-profit">+$0.0000 USDT</div>
+            <div class="pnl-stat-sub" id="ov-pnl-win-count">0 Trade Menang</div>
+          </div>
+
+          <div class="pnl-stat-card card-loss">
+            <div class="pnl-stat-label"><span>Total Kerugian (Cutloss)</span><span>🛡️</span></div>
+            <div class="pnl-stat-value val-red" id="ov-pnl-loss">-$0.0000 USDT</div>
+            <div class="pnl-stat-sub" id="ov-pnl-lose-count">0 Trade Cutloss</div>
+          </div>
+
+          <div class="pnl-stat-card card-rate">
+            <div class="pnl-stat-label"><span>Win Rate Bot</span><span>🎯</span></div>
+            <div class="pnl-stat-value" id="ov-pnl-winrate" style="color: var(--purple-master);">0%</div>
+            <div class="pnl-stat-sub" id="ov-pnl-counts">0W / 0L (0 BEP)</div>
+          </div>
+        </div>
+
+        <!-- Mini PnL Tape (Recent Closed) -->
+        <div style="font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px;">
+          ⚡ Transaksi Terakhir Ditutup (Live PnL Tape)
+        </div>
+        <div class="overview-pnl-tape" id="ov-pnl-tape">
+          <div class="overview-pnl-item" style="color: var(--text-muted); font-size: 12px; justify-content: center;">
+            Memuat transaksi terakhir...
+          </div>
+        </div>
+      </div>
+
+      <!-- MARKET SESSIONS BAR -->
+      <div class="market-sessions-bar">
+        <div class="session-item">
+          <span class="session-dot" id="dot-session-idx"></span>
           <div>
-            <h3 id="modal-agent-name">Deden (You - Local MT5)</h3>
-            <span class="role-badge" id="modal-agent-role">Client Copier (Lokal Windows)</span>
+            <div class="session-name">Bursa Efek Indonesia (IDX)</div>
+            <div class="session-time" id="desc-session-idx">09:00 - 15:50 WIB</div>
           </div>
         </div>
-        <button class="modal-close" id="btn-close-agent-modal">✕</button>
+        <div class="session-item">
+          <span class="session-dot" id="dot-session-gold"></span>
+          <div>
+            <div class="session-name">Pasar Emas & Forex (XAUUSD)</div>
+            <div class="session-time" id="desc-session-gold">24 Jam Aktif (Senin-Sabtu)</div>
+          </div>
+        </div>
+        <div class="session-item">
+          <span class="session-dot active"></span>
+          <div>
+            <div class="session-name">Crypto Binance 24/7</div>
+            <div class="session-time">Non-Stop Tanpa Libur</div>
+          </div>
+        </div>
+        <div class="session-item">
+          <span class="session-dot" id="dot-session-london"></span>
+          <div>
+            <div class="session-name">London Session</div>
+            <div class="session-time">14:00 - 23:00 WIB</div>
+          </div>
+        </div>
+        <div class="session-item">
+          <span class="session-dot" id="dot-session-ny"></span>
+          <div>
+            <div class="session-name">New York Session</div>
+            <div class="session-time">19:00 - 04:00 WIB</div>
+          </div>
+        </div>
       </div>
 
-      <div class="modal-body">
-        <div class="stats-grid">
-          <div class="stat-box">
-            <span class="stat-lbl">Status Koneksi</span>
-            <span class="stat-val green" id="modal-agent-status">🟢 Online / Terhubung</span>
+      <!-- 2-COLUMN SPLIT: LAST SIGNAL vs QUICK TERMINAL -->
+      <div class="split-grid-2">
+        <!-- PANEL KIRI: SINYAL TERAKHIR DARI MASTER BOT -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <span class="panel-icon">⚡</span>
+              <h3 class="panel-title">Sinyal Rekomendasi Terkini</h3>
+            </div>
+            <span class="panel-badge" id="ov-sig-time">12:30:00 WIB</span>
           </div>
-          <div class="stat-box">
-            <span class="stat-lbl">Akun MT5</span>
-            <span class="stat-val" id="modal-agent-account">114201000 (Cent)</span>
+          
+          <div class="signal-card">
+            <div class="sig-header">
+              <span class="sig-badge buy" id="ov-sig-action">BUY XAUUSD</span>
+              <span class="sig-time" id="ov-sig-date">Candle M15</span>
+            </div>
+            <div class="sig-grid">
+              <div><small>Harga Entry</small><strong id="ov-sig-entry">$4,187.22</strong></div>
+              <div><small>Target Profit (TP)</small><strong class="green" id="ov-sig-tp">$4,201.05</strong></div>
+              <div><small>Stop Loss (SL)</small><strong class="red" id="ov-sig-sl">$4,178.00</strong></div>
+            </div>
+            <div class="sig-status" id="ov-sig-reasons">
+              Eksekusi Otomatis Momen Sangat Bagus (Grade A+ Setup Sempurna, Skor 82%). Konfluensi: Bob Volman 20 EMA Retest + Golden Pocket Fibonacci.
+            </div>
           </div>
-          <div class="stat-box">
-            <span class="stat-lbl">Broker & Server</span>
-            <span class="stat-val" id="modal-agent-server">HFMarketsGlobal-Live7</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-lbl">Default Lot</span>
-            <span class="stat-val" id="modal-agent-lot">0.05 Lot</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-lbl">Balance</span>
-            <span class="stat-val" id="modal-agent-balance">$475.26 USC</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-lbl">Equity</span>
-            <span class="stat-val highlight" id="modal-agent-equity">$476.31 USC</span>
+
+          <div style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-primary" id="btn-quick-scan">
+              <span>🔍 Scan Watchlist Sekarang</span>
+            </button>
+            <button class="btn btn-secondary" id="btn-quick-broadcast">
+              <span>📡 Uji Sinyal MT5</span>
+            </button>
+            <button class="btn btn-secondary" id="btn-goto-office">
+              <span>🏢 Masuk Kantor 3D ↗</span>
+            </button>
           </div>
         </div>
 
-        <div class="agent-positions-section">
-          <h4>Posisi Trading Terbuka</h4>
-          <div id="modal-agent-positions-list" class="positions-list">
-            <div class="pos-item">
-              <div class="pos-main">
-                <span class="badge-buy">BUY</span>
-                <span class="pos-sym">XAUUSDc</span>
-                <span class="pos-lot">0.05 Lot</span>
-                <span class="pos-price">@ $4,175.77</span>
-              </div>
-              <div class="pos-pnl green">+$1.05 USC</div>
+        <!-- PANEL KANAN: STREAM LOG LANGSUNG -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <span class="panel-icon">💻</span>
+              <h3 class="panel-title">Live Log Stream (stock_bot.log)</h3>
+            </div>
+            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" id="btn-goto-terminal">
+              Buka Full Terminal ↗
+            </button>
+          </div>
+
+          <div class="terminal-box">
+            <div class="quick-terminal-stream" id="ov-quick-logs">
+              <div class="log-entry"><span class="log-time">[13:19:51]</span> <span class="log-level INFO">[INFO]</span> <span class="log-msg">Memuat log aktivitas bot...</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------
+         TAB 2: SAHAM IDX (WATCHLIST & SCANNER)
+         ------------------------------------------------------------------ -->
+    <section class="tab-pane" id="pane-stocks">
+      <div class="action-bar">
+        <div>
+          <h2>Watchlist Saham Bursa Efek Indonesia (IDX)</h2>
+          <p style="color: var(--text-muted); font-size: 13px;">Daftar saham terdaftar, sinyal teknikal (Moving Average, Bandarmologi, Breakout), dan harga bar terkini.</p>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input type="text" class="search-box" id="search-stocks" placeholder="Cari kode saham (misal BBCA)...">
+          <button class="btn btn-primary" id="btn-run-stock-scan">
+            <span>🔍 Scan Watchlist Sekarang</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="modern-table" id="table-stocks">
+          <thead>
+            <tr>
+              <th>Kode Ticker</th>
+              <th>Sinyal Terakhir</th>
+              <th>Harga Bar (Rp)</th>
+              <th>Target TP</th>
+              <th>Stop Loss</th>
+              <th>Waktu Candle</th>
+              <th>Outcome Sinyal</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-stocks">
+            <tr><td colspan="7" style="text-align:center; padding: 20px;">Memuat data watchlist saham IDX...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top: 30px;">
+        <h3 style="margin-bottom: 12px;">Riwayat Sinyal Saham IDX Terbaru</h3>
+        <div class="table-responsive">
+          <table class="modern-table" id="table-stocks-signals">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Ticker</th>
+                <th>Strategi</th>
+                <th>Tipe Sinyal</th>
+                <th>Harga Entry</th>
+                <th>Take Profit</th>
+                <th>Stop Loss</th>
+                <th>Waktu Candle</th>
+                <th>Status / Outcome</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-stocks-signals">
+              <tr><td colspan="9" style="text-align:center; padding: 20px;">Memuat sinyal saham...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------
+         TAB 3: FOREX & GOLD (METATRADER 5)
+         ------------------------------------------------------------------ -->
+    <section class="tab-pane" id="pane-forex">
+      <div class="action-bar">
+        <div>
+          <h2>MetaTrader 5 Bridge & XAUUSD Gold Trading</h2>
+          <p style="color: var(--text-muted); font-size: 13px;">Koneksi langsung terminal MT5, eksekutor sinyal otomatis 9 Buku PDF, dan status posisi terbuka.</p>
+        </div>
+        <button class="btn btn-secondary" id="btn-test-mt5-ping">
+          <span>⚡ Refresh Data MT5</span>
+        </button>
+      </div>
+
+      <!-- MT5 ACCOUNT HUD CARD -->
+      <div class="panel-card" style="margin-bottom: 24px;">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <span class="panel-icon">💻</span>
+            <h3 class="panel-title">Akun Terminal MetaTrader 5</h3>
+          </div>
+          <span class="panel-badge" id="mt5-badge-server">HFMarketsGlobal-Live7</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+          <div>
+            <small style="color: var(--text-dim); display: block;">Nomor Login Akun</small>
+            <strong class="cell-mono" style="font-size: 16px; color: #fff;" id="mt5-login">114202389</strong>
+          </div>
+          <div>
+            <small style="color: var(--text-dim); display: block;">Tipe Akun & Saldo</small>
+            <strong class="cell-mono val-green" style="font-size: 16px;" id="mt5-balance">377.61 USC</strong>
+          </div>
+          <div>
+            <small style="color: var(--text-dim); display: block;">Ekuitas (Equity)</small>
+            <strong class="cell-mono" style="font-size: 16px; color: var(--cyan-glow);" id="mt5-equity">363.61 USC</strong>
+          </div>
+          <div>
+            <small style="color: var(--text-dim); display: block;">Margin Bebas</small>
+            <strong class="cell-mono" style="font-size: 16px; color: #fff;" id="mt5-free-margin">350.00 USC</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- OPEN POSITIONS TABLE -->
+      <h3 style="margin-bottom: 12px;">Posisi Trading Terbuka di MT5</h3>
+      <div class="table-responsive" style="margin-bottom: 28px;">
+        <table class="modern-table" id="table-mt5-positions">
+          <thead>
+            <tr>
+              <th>Ticket Order</th>
+              <th>Simbol</th>
+              <th>Tipe</th>
+              <th>Lot</th>
+              <th>Harga Buka</th>
+              <th>Harga Saat Ini</th>
+              <th>Stop Loss</th>
+              <th>Take Profit</th>
+              <th>Floating PnL (USC)</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-mt5-positions">
+            <tr><td colspan="9" style="text-align:center; padding: 20px;">Memuat posisi terbuka MT5...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- GOLD SIGNALS RECENT -->
+      <h3 style="margin-bottom: 12px;">Sinyal Emas (XAUUSD) Terbaru & Konfluensi Buku PDF</h3>
+      <div class="table-responsive">
+        <table class="modern-table" id="table-gold-signals">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Sinyal</th>
+              <th>Entry Price</th>
+              <th>Take Profit</th>
+              <th>Stop Loss</th>
+              <th>Waktu Candle</th>
+              <th>Outcome</th>
+              <th>Alasan / Konfluensi 9 Buku PDF</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-gold-signals">
+            <tr><td colspan="8" style="text-align:center; padding: 20px;">Memuat riwayat sinyal Gold...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------
+         TAB 4: CRYPTO AUTO-PUMP SNIPER (BINANCE)
+         ------------------------------------------------------------------ -->
+    <section class="tab-pane" id="pane-crypto">
+      <div class="action-bar">
+        <div>
+          <h2>Auto-Pump Sniper Bot (Binance Spot & Paper Trading)</h2>
+          <p style="color: var(--text-muted); font-size: 13px;">Mendeteksi koin sweet-spot pump (+3% s/d +15%), eksekusi cepat, pengawalan SL -5.5%, TP1 +11%, TP2 +25%.</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-secondary" id="btn-toggle-crypto-mode">
+            <span>🔄 Ganti Mode (Real / Paper)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ATS-MATRIX // RESOLUTION FUNNEL & CLOB TELEMETRY DECK -->
+      <div class="ats-telemetry-grid">
+        <div class="ats-glass-card">
+          <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+          <div class="telemetry-head">
+            <span class="telemetry-badge">RESOLUTION FUNNEL // NIULAI READ</span>
+            <span class="telemetry-ping" id="ats-live-ping">FEED LATENCY: 24ms</span>
+          </div>
+          <div class="funnel-metrics">
+            <div class="funnel-metric-item">
+              <span class="label">p(Win) ESTIMATE CONE</span>
+              <strong class="val val-green" id="ats-win-prob">84.2%</strong>
+              <div class="meter-bar"><div class="meter-fill green" style="width: 84.2%;"></div></div>
+            </div>
+            <div class="funnel-metric-item">
+              <span class="label">LATE-FLIP RISK INDEX</span>
+              <strong class="val val-cyan" id="ats-flip-risk">1.2 / 10 (MINIMAL)</strong>
+              <div class="meter-bar"><div class="meter-fill cyan" style="width: 12%;"></div></div>
+            </div>
+            <div class="funnel-metric-item">
+              <span class="label">SETTLEMENT POLICY</span>
+              <strong class="val val-purple">HOLD TO TP1 +11% / SL -5.5% GUARD</strong>
+              <div class="meter-bar"><div class="meter-fill purple" style="width: 100%;"></div></div>
             </div>
           </div>
         </div>
 
-        <div class="agent-actions-row">
-          <button class="action-btn outline" id="btn-ping-agent">⚡ Test Ping MT5</button>
-          <button class="action-btn primary" id="btn-focus-cam-agent">🎥 Pusatkan Kamera</button>
+        <div class="ats-glass-card">
+          <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+          <div class="telemetry-head">
+            <span class="telemetry-badge">ON-THE-GLASS CLOB PROTOCOL</span>
+            <span class="ats-telemetry-pill">LIVE WEBSOCKET</span>
+          </div>
+          <div class="clob-specs">
+            <div class="clob-spec-row">
+              <span>EXCHANGE SHELL</span>
+              <strong>BINANCE SPOT (MAINNET)</strong>
+            </div>
+            <div class="clob-spec-row">
+              <span>ORDER PROTOCOL</span>
+              <strong class="val-cyan">MARKET (QUOTE_QTY)</strong>
+            </div>
+            <div class="clob-spec-row">
+              <span>AI GATEKEEPER</span>
+              <strong class="val-purple">GEMINI 2.5 FLASH-LITE</strong>
+            </div>
+            <div class="clob-spec-row">
+              <span>CAPITAL ALLOCATION</span>
+              <strong class="val-green">$1.00 USDT HARD CAP</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CRYPTO STATUS CARDS -->
+      <div class="kpi-grid" style="margin-bottom: 24px;">
+        <div class="kpi-card kpi-purple">
+          <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+          <div class="kpi-header"><span class="kpi-title">TOTAL ESTIMASI NILAI SPOT</span><span>💎</span></div>
+          <div class="kpi-val" id="crypto-est-total">-- USDT</div>
+          <div class="kpi-sub">Total Nilai Dompet (Kas + Koin)</div>
+        </div>
+        <div class="kpi-card">
+          <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+          <div class="kpi-header"><span class="kpi-title">SALDO KAS USDT</span><span>💵</span></div>
+          <div class="kpi-val" id="crypto-free-usdt">-- USDT</div>
+          <div class="kpi-sub">Free Available Cash Siap Pakai</div>
+        </div>
+        <div class="kpi-card">
+          <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+          <div class="kpi-header"><span class="kpi-title">MODAL DALAM KOIN</span><span>💰</span></div>
+          <div class="kpi-val" id="crypto-invested-usdt">-- USDT</div>
+          <div class="kpi-sub">Koin Aktif: <strong id="crypto-max-pos">--</strong></div>
+        </div>
+        <div class="kpi-card kpi-green">
+          <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+          <div class="kpi-header"><span class="kpi-title">TOTAL REALIZED PNL</span><span>📈</span></div>
+          <div class="kpi-val" id="crypto-total-pnl">+$0.0000 USDT</div>
+          <div class="kpi-sub">Win Rate: <strong id="crypto-win-rate">0% (0W / 0L)</strong></div>
+        </div>
+      </div>
+
+      <!-- SPOT WALLET HOLDINGS TABLE -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div>
+          <h3 style="margin-bottom: 4px;">Rincian Aset Dompet Spot Binance (Live Holdings)</h3>
+          <p style="color: var(--text-muted); font-size: 13px;">Daftar saldo koin dan kas USDT di dompet Spot akun Binance Anda secara real-time.</p>
+        </div>
+        <span class="badge badge-live-pulse" id="badge-spot-sync">Live Binance Stream (1 Detik)</span>
+      </div>
+      <div class="table-responsive" style="margin-bottom: 28px;">
+        <table class="modern-table" id="table-crypto-holdings">
+          <thead>
+            <tr>
+              <th>Aset / Koin</th>
+              <th>Total Saldo</th>
+              <th>Saldo Bebas (Free)</th>
+              <th>Terkunci (Locked)</th>
+              <th>Harga Terkini</th>
+              <th>Estimasi Nilai (USDT)</th>
+              <th>Porsi Portofolio</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-crypto-holdings">
+            <tr><td colspan="7" style="text-align:center; padding: 20px;">Memuat rincian dompet Spot Binance...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- OPEN POSITIONS TABLE -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h3 style="margin-bottom: 0;">Posisi Koin Crypto Aktif Terbuka</h3>
+        <span class="badge badge-open" id="badge-open-crypto-count">2 Koin Berjalan</span>
+      </div>
+      <div class="table-responsive" style="margin-bottom: 28px;">
+        <table class="modern-table" id="table-crypto-open">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Simbol</th>
+              <th>Mode</th>
+              <th>Harga Entry</th>
+              <th>Harga Terkini</th>
+              <th>Floating PnL</th>
+              <th>Jumlah Koin</th>
+              <th>Modal (USDT)</th>
+              <th>Nilai Pasar</th>
+              <th>Stop Loss (-5.5%)</th>
+              <th>TP1 (+11%)</th>
+              <th>TP2 (+25%)</th>
+              <th>Waktu Entry</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-crypto-open">
+            <tr><td colspan="14" style="text-align:center; padding: 20px;">Memuat posisi terbuka crypto...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- PROFIT & LOSS PERFORMANCE SUITE -->
+      <div class="pnl-suite-container" id="crypto-pnl-suite">
+        <div class="pnl-suite-header">
+          <div class="pnl-suite-title">
+            <span style="font-size: 22px;">📊</span>
+            <div>
+              <h3 style="margin: 0;">REKAP REALIZED PROFIT & LOSS TRADING</h3>
+              <p style="margin: 0; color: var(--text-muted); font-size: 13px;">Statistik performa riwayat transaksi tertutup (Win vs Loss) dengan durasi hold dan alasan exit.</p>
+            </div>
+          </div>
+          <span class="badge" id="badge-pnl-mode" style="background: rgba(168, 85, 247, 0.2); color: var(--purple-master); border: 1px solid rgba(168, 85, 247, 0.4); padding: 6px 12px; font-size: 12px;">
+            MODE REAL (BINANCE SPOT)
+          </span>
+        </div>
+
+        <!-- 4 KPI Cards -->
+        <div class="pnl-grid-4">
+          <div class="pnl-stat-card card-net">
+            <div class="pnl-stat-label"><span>Net Realized PnL</span><span>⚡</span></div>
+            <div class="pnl-stat-value" id="crypto-pnl-net">+$0.0000 USDT</div>
+            <div class="pnl-stat-sub">Keuntungan Bersih Setelah Cutloss</div>
+          </div>
+
+          <div class="pnl-stat-card card-profit">
+            <div class="pnl-stat-label"><span>Total Gross Profit (Win)</span><span>🏆</span></div>
+            <div class="pnl-stat-value val-green" id="crypto-pnl-profit">+$0.0000 USDT</div>
+            <div class="pnl-stat-sub" id="crypto-pnl-wins-sub">0 Posisi Profit Sukses</div>
+          </div>
+
+          <div class="pnl-stat-card card-loss">
+            <div class="pnl-stat-label"><span>Total Cutloss (Loss)</span><span>🛡️</span></div>
+            <div class="pnl-stat-value val-red" id="crypto-pnl-loss">-$0.0000 USDT</div>
+            <div class="pnl-stat-sub" id="crypto-pnl-losses-sub">0 Posisi Terkena Cutloss</div>
+          </div>
+
+          <div class="pnl-stat-card card-rate">
+            <div class="pnl-stat-label"><span>Win Rate & Rasio</span><span>🎯</span></div>
+            <div class="pnl-stat-value" id="crypto-pnl-winrate" style="color: var(--purple-master);">0%</div>
+            <div class="pnl-stat-sub" id="crypto-pnl-ratio-sub">0W / 0L (0 BEP)</div>
+          </div>
+        </div>
+
+        <!-- Filter Controls Bar -->
+        <div class="pnl-filter-bar">
+          <div class="pnl-pills" id="pnl-filter-pills">
+            <button class="pnl-pill active" data-filter="all">Semua Trade (<span id="count-pill-all">0</span>)</button>
+            <button class="pnl-pill pill-profit" data-filter="profit">🟢 Profit Saja (<span id="count-pill-profit">0</span>)</button>
+            <button class="pnl-pill pill-loss" data-filter="loss">🔴 Loss / Cutloss (<span id="count-pill-loss">0</span>)</button>
+            <button class="pnl-pill pill-bep" data-filter="bep">🔵 BEP (<span id="count-pill-bep">0</span>)</button>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" class="search-box" id="search-crypto-closed" placeholder="Cari koin (misal: INJ, PEPE)..." style="padding: 6px 12px; font-size: 12px; min-width: 220px;">
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-responsive">
+          <table class="modern-table" id="table-crypto-closed">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Koin</th>
+                <th>Mode</th>
+                <th>Hasil</th>
+                <th>Entry Price</th>
+                <th>Close Price</th>
+                <th>Modal</th>
+                <th>PnL (USDT)</th>
+                <th>ROI (%)</th>
+                <th>Durasi Hold</th>
+                <th>Waktu Tutup</th>
+                <th>Alasan Exit</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-crypto-closed">
+              <tr><td colspan="12" style="text-align:center; padding: 20px;">Memuat riwayat trade crypto...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; gap: 8px;">
+          <span id="pnl-filter-summary">Menampilkan 0 trade</span>
+          <span id="pnl-filter-total-usdt" class="cell-mono font-bold">Total PnL Terfilter: $0.0000 USDT</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------
+         TAB 4B: BINANCE FUTURES LIVE MONITOR (HERMES SCANNER)
+         ------------------------------------------------------------------ -->
+    <section class="tab-pane" id="pane-futures">
+      <div class="action-bar" style="border-left: 3px solid #f0b90b;">
+        <div>
+          <h2 style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: #f0b90b;">🔮</span> Binance Futures Real-Time Desk
+            <span class="live-pill" style="font-size: 11px; background: rgba(240, 185, 11, 0.15); color: #f0b90b; border: 1px solid #f0b90b; padding: 2px 8px; border-radius: 12px;">● LIVE 1s STREAM</span>
+          </h2>
+          <p class="subtitle">Pantauan Real-Time Order Limit Antri, Order Kejemput, Stop Loss &amp; Take Profit, serta Harga Live (Tanpa Refresh)</p>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <div class="futures-stat-pill" style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(240, 185, 11, 0.3); padding: 6px 14px; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 11px; color: var(--text-muted);">SLOT TRADE:</span>
+            <span id="fut-slot-badge" style="font-weight: 700; color: #00ff88; font-family: var(--font-mono); font-size: 13px;">0 / 3 AKTIF</span>
+          </div>
+          <button class="btn btn-secondary" id="btn-refresh-futures" title="Ambil Data Terbaru Sekarang" style="border-color: #f0b90b; color: #f0b90b;">
+            <span>🔄 Segarkan</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 4 MAJOR KPI METRICS -->
+      <div class="kpi-grid">
+        <div class="kpi-card kpi-gold">
+          <div class="kpi-header">
+            <span class="kpi-title">TOTAL SALDO FUTURES</span>
+            <span class="kpi-icon">💰</span>
+          </div>
+          <div class="kpi-val" id="fut-wallet-total" style="color: #f0b90b;">$8.5723 USDT</div>
+          <div class="kpi-sub" id="fut-wallet-sub">Kas Bebas: $6.3736 USDT</div>
+        </div>
+
+        <div class="kpi-card" style="border-top: 3px solid #00f3ff;">
+          <div class="kpi-header">
+            <span class="kpi-title">ATURAN INITIAL MARGIN</span>
+            <span class="kpi-icon">🛡️</span>
+          </div>
+          <div class="kpi-val" style="color: #00f3ff;">&le; $0.55 USDT</div>
+          <div class="kpi-sub" style="color: #00ff88;">✓ Terkunci Ketat (55 Cent)</div>
+        </div>
+
+        <div class="kpi-card kpi-purple">
+          <div class="kpi-header">
+            <span class="kpi-title">MARGIN TERPAKAI</span>
+            <span class="kpi-icon">📊</span>
+          </div>
+          <div class="kpi-val" id="fut-wallet-used" style="color: #c084fc;">$0.0000 USDT</div>
+          <div class="kpi-sub" id="fut-margin-ratio">Buffer kas bebas terjaga aman</div>
+        </div>
+
+        <div class="kpi-card kpi-green" id="fut-card-pnl">
+          <div class="kpi-header">
+            <span class="kpi-title">FLOATING PnL (LIVE)</span>
+            <span class="kpi-icon">📈</span>
+          </div>
+          <div class="kpi-val" id="fut-wallet-pnl" style="color: #00ff88;">+$0.0000 USDT</div>
+          <div class="kpi-sub" id="fut-pnl-status">0 Posisi Running</div>
+        </div>
+      </div>
+
+      <!-- SECTION 1: POSISI AKTIF (ORDER KEJEMPUT) -->
+      <div class="panel-card" style="margin-bottom: 24px; border: 1px solid rgba(0, 255, 136, 0.25);">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <div class="pulse-dot" style="background: #00ff88; box-shadow: 0 0 10px #00ff88;"></div>
+            <h3 class="panel-title">⚡ Order yang Sudah Kejemput (Posisi Aktif Berjalan)</h3>
+            <span class="badge" id="badge-running-count" style="background: rgba(0, 255, 136, 0.15); color: #00ff88; border: 1px solid #00ff88;">0 Posisi</span>
+          </div>
+          <span style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">Auto Stop Loss &amp; Take Profit aktif di Binance Cloud</span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="modern-table">
+            <thead>
+              <tr>
+                <th style="min-width: 140px;">KOIN</th>
+                <th style="min-width: 100px;">POSISI</th>
+                <th style="min-width: 80px;">LEVERAGE</th>
+                <th style="min-width: 120px;">MARGIN AWAL</th>
+                <th style="min-width: 120px;">HARGA ENTRY</th>
+                <th style="min-width: 120px;">HARGA LIVE</th>
+                <th style="min-width: 120px;">STOP LOSS (SL)</th>
+                <th style="min-width: 120px;">TAKE PROFIT (TP)</th>
+                <th style="min-width: 130px;">FLOATING PnL</th>
+                <th style="min-width: 100px; text-align: center;">AKSI</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-futures-positions">
+              <tr><td colspan="10" style="text-align: center; padding: 30px; color: var(--text-muted);">Memeriksa posisi aktif di Binance Futures...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SECTION 2: ORDER LIMIT (ANTRIAN MENUNGGU KEJEMPUT) -->
+      <div class="panel-card" style="margin-bottom: 24px; border: 1px solid rgba(240, 185, 11, 0.25);">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <div class="pulse-dot" style="background: #f0b90b; box-shadow: 0 0 10px #f0b90b;"></div>
+            <h3 class="panel-title">⏳ Order Limit Menunggu Kejemput (Pending Orders)</h3>
+            <span class="badge" id="badge-pending-count" style="background: rgba(240, 185, 11, 0.15); color: #f0b90b; border: 1px solid #f0b90b;">0 Antrian</span>
+          </div>
+          <span style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">Live stream 1 detik • Margin otomatis &le; $0.55</span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="modern-table">
+            <thead>
+              <tr>
+                <th style="min-width: 140px;">KOIN</th>
+                <th style="min-width: 110px;">TIPE / SISI</th>
+                <th style="min-width: 120px;">HARGA LIMIT</th>
+                <th style="min-width: 120px;">HARGA LIVE</th>
+                <th style="min-width: 110px;">JARAK ENTRY</th>
+                <th style="min-width: 90px;">KUANTITAS</th>
+                <th style="min-width: 100px;">NOTIONAL</th>
+                <th style="min-width: 130px;">INITIAL MARGIN</th>
+                <th style="min-width: 120px;">PROTEKSI SL</th>
+                <th style="min-width: 120px;">PROTEKSI TP</th>
+                <th style="min-width: 80px;">WAKTU</th>
+                <th style="min-width: 100px; text-align: center;">AKSI</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-futures-orders">
+              <tr><td colspan="12" style="text-align: center; padding: 30px; color: var(--text-muted);">Memeriksa order limit di Binance Futures...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SECTION 3: STRATEGY PROTECTION ORDERS (ALGO SL & TP) -->
+      <div class="panel-card" style="border: 1px solid rgba(56, 189, 248, 0.25);">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <span class="panel-icon">🛡️</span>
+            <h3 class="panel-title">Status Proteksi Stop Loss &amp; Take Profit (Binance Strategy Orders)</h3>
+          </div>
+          <span id="fut-algo-badge" class="badge" style="background: rgba(0, 255, 136, 0.15); color: #00ff88; border: 1px solid #00ff88; font-family: var(--font-mono);">✓ Terproteksi Penuh di Server Binance</span>
+        </div>
+        <div style="padding: 10px 0 4px 0; font-size: 12px; color: var(--text-muted); line-height: 1.7;">
+          Setiap order limit yang dikirimkan oleh bot telah otomatis disertai dengan instruksi <strong>STOP_MARKET</strong> dan <strong>TAKE_PROFIT_MARKET</strong> di server Binance Cloud. Apabila harga pasar menjemput order Anda dan kemudian menyentuh level Stop Loss atau Take Profit, sistem Binance akan otomatis melikuidasi posisi tersebut untuk mengunci profit atau membatasi kerugian tanpa bergantung pada koneksi internet lokal.
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------
+         TAB 5: RIWAYAT SINYAL LENGKAP & WIN RATE
+         ------------------------------------------------------------------ -->
+    <section class="tab-pane" id="pane-signals">
+      <div class="action-bar">
+        <div>
+          <h2>Database Riwayat Sinyal & Performa Trading</h2>
+          <p style="color: var(--text-muted); font-size: 13px;">Catatan rekam jejak sinyal bot trading lengkap dengan hasil Take Profit, Stop Loss, dan catatan analisis.</p>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <select class="select-filter" id="filter-sig-cat">
+            <option value="all">Semua Aset (Saham & Gold)</option>
+            <option value="idx">Hanya Saham IDX</option>
+            <option value="gold">Hanya Gold (XAUUSD)</option>
+          </select>
+
+          <select class="select-filter" id="filter-sig-outcome">
+            <option value="all">Semua Status</option>
+            <option value="WIN">Hanya WIN (TP Hit)</option>
+            <option value="LOSE">Hanya LOSE (SL Hit)</option>
+            <option value="OPEN">Hanya OPEN (Aktif)</option>
+          </select>
+
+          <input type="text" class="search-box" id="search-signals" placeholder="Cari ticker...">
+        </div>
+      </div>
+
+      <!-- STATS SUMMARY BAR -->
+      <div class="market-sessions-bar" style="margin-bottom: 18px;">
+        <div class="session-item">
+          <span class="session-name">Total Sinyal Tercatat: <strong class="cell-mono" id="sig-stat-total">267</strong></span>
+        </div>
+        <div class="session-item">
+          <span class="session-name">Sinyal Menang (WIN): <strong class="cell-mono val-green" id="sig-stat-wins">92</strong></span>
+        </div>
+        <div class="session-item">
+          <span class="session-name">Sinyal Kalah (LOSE): <strong class="cell-mono val-red" id="sig-stat-losses">156</strong></span>
+        </div>
+        <div class="session-item">
+          <span class="session-name">Sinyal Terbuka (OPEN): <strong class="cell-mono" style="color: var(--cyan-glow);" id="sig-stat-open">17</strong></span>
+        </div>
+        <div class="session-item">
+          <span class="session-name">Rasio Kemenangan: <strong class="cell-mono val-green" id="sig-stat-winrate">37.1%</strong></span>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="modern-table" id="table-signals-all">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Ticker</th>
+              <th>Strategi</th>
+              <th>Aksi</th>
+              <th>Harga Entry</th>
+              <th>TP</th>
+              <th>SL</th>
+              <th>Waktu Candle</th>
+              <th>Outcome</th>
+              <th>PnL (%)</th>
+              <th>Catatan / Alasan Teknikal</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-signals-all">
+            <tr><td colspan="11" style="text-align:center; padding: 20px;">Memuat database sinyal...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------
+         TAB 6: KALENDER BERITA EKONOMI
+         ------------------------------------------------------------------ -->
+    <section class="tab-pane" id="pane-calendar">
+      <div class="action-bar">
+        <div>
+          <h2>Kalender Ekonomi & High-Impact News Guard</h2>
+          <p style="color: var(--text-muted); font-size: 13px;">Jadwal rilis berita finansial dunia (Forex Factory) dan proteksi otomatis pembatalan limit order.</p>
+        </div>
+      </div>
+
+      <div class="panel-card" style="margin-bottom: 24px; border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.05);">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 24px;">🛡️</span>
+          <div>
+            <h4 style="color: var(--gold-accent); margin-bottom: 4px;">Sistem Proteksi News Limit Guard: AKTIF</h4>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+              Bot otomatis menghapus pending Buy Limit & Sell Limit <strong>10 menit sebelum berita besar</strong> dirilis, serta membekukan order baru selama <strong>15 menit setelah rilis</strong> demi melindungi akun dari slippage tajam.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="modern-table" id="table-calendar">
+          <thead>
+            <tr>
+              <th>Waktu (WIB)</th>
+              <th>Mata Uang</th>
+              <th>Dampak</th>
+              <th>Nama Peristiwa / Berita</th>
+              <th>Perkiraan (Forecast)</th>
+              <th>Sebelumnya (Previous)</th>
+              <th>Status Alert</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-calendar">
+            <tr><td colspan="7" style="text-align:center; padding: 20px;">Memuat kalender ekonomi...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------
+         TAB 7: LIVE TERMINAL LOG VIEWER
+         ------------------------------------------------------------------ -->
+    <section class="tab-pane" id="pane-terminal">
+      <div class="action-bar">
+        <div>
+          <h2>Console Terminal Real-Time (stock_bot.log)</h2>
+          <p style="color: var(--text-muted); font-size: 13px;">Streaming langsung log aktivitas bot tanpa perlu membuka terminal PowerShell di server.</p>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <select class="select-filter" id="filter-log-level">
+            <option value="ALL">Semua Level Log</option>
+            <option value="INFO">Hanya INFO</option>
+            <option value="WARNING">Hanya WARNING</option>
+            <option value="ERROR">Hanya ERROR</option>
+          </select>
+          <button class="btn btn-secondary" id="btn-toggle-autoscroll">
+            <span>Scroll Otomatis: ON</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-copy-terminal-logs">
+            <span>Salin Log</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="terminal-box">
+        <div class="terminal-top-bar">
+          <div class="term-title-row">
+            <span class="term-dot dot-red"></span>
+            <span class="term-dot dot-yellow"></span>
+            <span class="term-dot dot-green"></span>
+            <span>stock_bot.log • Live Daemon Stream</span>
+          </div>
+          <span style="font-size: 11px; color: var(--cyan-glow);">● STREAMING REAL-TIME (2s)</span>
+        </div>
+        <div class="terminal-stream" id="full-terminal-stream">
+          <div class="log-entry"><span class="log-time">[13:19:51]</span> <span class="log-level INFO">[INFO]</span> <span class="log-msg">Menghubungkan ke live log stream...</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------
+         TAB 8: 3D ISOMETRIC TRADING FLOOR
+         ------------------------------------------------------------------ -->
+    <section class="tab-pane" id="pane-office">
+      <div id="tab-office">
+        <div id="viewport-container">
+          <canvas id="office-canvas"></canvas>
+          <div id="labels-container"></div>
+          <div id="speech-bubbles-container"></div>
+
+          <!-- QUICK HUD OVERLAYS IN 3D -->
+          <div class="hud-panel left-hud">
+            <div class="hud-item">
+              <span class="hud-label">AKUN MT5 LOKAL</span>
+              <span class="hud-val highlight" id="hud-mt5-login">HFMarkets #114202389</span>
+            </div>
+            <div class="hud-item">
+              <span class="hud-label">BALANCE / EQUITY</span>
+              <span class="hud-val" id="hud-mt5-balance">377.61 USC / <strong class="val-green" id="hud-mt5-equity">363.61 USC</strong></span>
+            </div>
+            <div class="hud-item">
+              <span class="hud-label">OPEN POSISI MT5</span>
+              <span class="hud-val" id="hud-open-positions"><span class="badge badge-buy">BUY</span> 0.05 Lot @ 4,187.87 (-14.00 USC)</span>
+            </div>
+          </div>
+
+          <div class="hud-panel right-hud">
+            <div class="hud-label">⚡ SINYAL TERAKHIR DARI MASTER</div>
+            <div class="signal-card" style="margin-top: 6px;">
+              <div class="sig-header">
+                <span class="sig-badge buy" id="hud-sig-action">BUY XAUUSD</span>
+                <span class="sig-time" id="hud-sig-time">12:30:00</span>
+              </div>
+              <div class="sig-grid">
+                <div><small>Entry</small><strong id="hud-sig-entry">$4,187.22</strong></div>
+                <div><small>TP</small><strong class="green" id="hud-sig-tp">$4,201.05</strong></div>
+                <div><small>SL</small><strong class="red" id="hud-sig-sl">$4,178.00</strong></div>
+              </div>
+              <div class="sig-status" id="hud-sig-status">
+                ✅ Dieksekusi ke MT5 (#15279619084)
+              </div>
+            </div>
+          </div>
+
+          <div class="cam-modes-bar">
+            <button class="cam-btn active" data-cam="iso">Isometric</button>
+            <button class="cam-btn" data-cam="deden">Meja Deden</button>
+            <button class="cam-btn" data-cam="server">Server VPS</button>
+            <button class="cam-btn" data-cam="top">Top-Down</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------
+         TAB 9: ATS MATRIX // NIULAI4 QUANTUM COCKPIT (FUTURISTIC 3D HUD)
+         ------------------------------------------------------------------ -->
+    <section class="tab-pane" id="pane-atsmatrix">
+      <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+
+      <!-- TOP HUD BAR -->
+      <div class="ats-hud-topbar">
+        <div class="ats-hud-left">
+          <button class="ats-btn-fs" id="ats-btn-fullscreen" title="Toggle Fullscreen Mode">[FS] NIULAI4</button>
+          <div class="ats-title-group">
+            <span class="ats-main-title">NIULAI4 // QUANT COCKPIT</span>
+            <span class="ats-sub-tag">LATE DIRECTIONAL</span>
+            <span class="ats-sub-tag">HOLD TO TP1 +11%</span>
+            <span class="ats-sub-tag highlight">SL -5.5% GUARD ACTIVE</span>
+          </div>
+        </div>
+        <div class="ats-hud-right">
+          <div class="ats-ticker-pill">
+            <span>BTC:</span>
+            <strong id="ats-ticker-btc" class="val-cyan">$83,558.00</strong>
+          </div>
+          <div class="ats-ticker-pill">
+            <span>DOGE:</span>
+            <strong id="ats-ticker-doge" class="val-green">$0.08722</strong>
+          </div>
+          <div class="ats-ticker-pill">
+            <span>PEPE:</span>
+            <strong id="ats-ticker-pepe" class="val-purple">$0.00000423</strong>
+          </div>
+          <div class="ats-ticker-pill">
+            <span>POS:</span>
+            <strong id="ats-ticker-pos" class="val-cyan">2 KOIN</strong>
+          </div>
+          <div class="ats-utc-clock" id="ats-utc-clock">00:00:00 UTC</div>
+        </div>
+      </div>
+
+      <!-- STREAMER SUBBAR -->
+      <div class="ats-streamer-subbar">
+        <span class="ats-feed-live-badge">• LIVE FEED</span>
+        <div class="ats-streamer-text" id="ats-streamer-text">
+          FEED: BINANCE SPOT • POS: <span>DOGEUSDT</span> & <span>PEPEUSDT</span> • TOTAL ASSET: <span>$10.50 USDT</span> • MAX ALLOC: <span>$1.00 STRICT</span> • GUARD: <span>SL -5.5% / TP1 +11.0%</span>
+        </div>
+      </div>
+
+      <!-- TOP QUAD GRID -->
+      <div class="ats-quad-grid">
+        <!-- 1. WALLET TELEMETRY -->
+        <div class="ats-quad-card">
+          <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+          <div class="ats-quad-head">
+            <span id="ats-wallet-head-title">BINANCE SPOT // MAINNET</span>
+            <span class="badge-open" id="ats-wallet-badge">REAL LIVE</span>
+          </div>
+          <div style="font-size: 10px; color: var(--ats-text-dim); font-family: var(--font-mono);" id="ats-hero-label">TOTAL ESTIMASI NILAI SPOT</div>
+          <div class="ats-hero-pnl" id="ats-hero-pnl">$10.50 USDT</div>
+          <div class="ats-mono-sub" id="ats-hero-sub">KAS FREE: $0.00 USDT • KOIN: $10.50 USDT</div>
+          <div class="ats-mini-stats-grid">
+            <div class="ats-mini-stat"><span class="lbl">KOIN AKTIF</span><span class="val val-cyan" id="ats-stat-openpos">2 Posisi</span></div>
+            <div class="ats-mini-stat"><span class="lbl">REALIZED PNL</span><span class="val val-green" id="ats-stat-pnl">+$0.0000 USDT</span></div>
+            <div class="ats-mini-stat"><span class="lbl">MAX ALLOC</span><span class="val" id="ats-stat-cap">$1.00 / Koin</span></div>
+            <div class="ats-mini-stat"><span class="lbl">SAFEGUARD</span><span class="val val-green" id="ats-stat-guard">SL -5.5% / TP +11%</span></div>
+          </div>
+          <div class="ats-mono-foot" id="ats-sub-real-pnl">
+            SYNCED TO BINANCE SPOT WALLET • 5 ASET AKTIF
+          </div>
+        </div>
+
+        <!-- 2. BTC/DOGE SPOT ORDER BOOK DEPTH LADDER -->
+        <div class="ats-quad-card">
+          <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+          <div class="ats-quad-head">
+            <span id="ats-ladder-title">DOGE/USDT SPOT // LIVE CLOB DEPTH</span>
+            <span class="val-green" id="ats-ladder-sub">AKTIF</span>
+          </div>
+          <div class="ats-depth-ladder" id="ats-depth-ladder">
+            <!-- Populated dynamically via JS -->
+          </div>
+          <div class="ats-mono-foot" id="ats-ladder-foot">
+            CLOB SPREAD: ~0.00005 USDT • SYNC 100%
+          </div>
+        </div>
+
+        <!-- 3. REAL-TIME CHART // LIVE PRICE ACTION & CANDLESTICKS -->
+        <div class="ats-quad-card ats-chart-quad-card" id="ats-chart-card">
+          <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+          <div class="ats-quad-head">
+            <div class="ats-chart-head-left">
+              <span class="ats-head-title">REAL-TIME CHART // <strong id="ats-chart-active-sym" class="val-cyan">DOGE/USDT</strong></span>
+              <span class="badge-live-pulse" id="ats-chart-live-badge">• LIVE</span>
+            </div>
+            <div class="ats-chart-head-right">
+              <span id="ats-chart-cur-px" class="val-gold font-mono font-bold">$0.08712</span>
+              <span id="ats-chart-pnl-pill" class="tape-badge tape-buy font-mono">+0.25%</span>
+              <button class="ats-btn-mini" id="ats-chart-btn-expand" title="Expand Chart">[EXPAND]</button>
+            </div>
+          </div>
+
+          <!-- COIN SELECTOR TABS (DYNAMICALLY POPULATED FROM ACTIVE OPEN POSITIONS) -->
+          <div class="ats-coin-selector-bar" id="ats-coin-selector-bar">
+            <!-- Populated via JS: [⚡ PEOPLE] [⚡ DOGE] [⚡ PEPE] [⚡ AVAX] [⚡ POL] -->
+          </div>
+
+          <!-- CHART CANVAS BOX -->
+          <div class="ats-chart-box" id="ats-chart-box">
+            <canvas id="ats-realtime-canvas"></canvas>
+            <div class="ats-chart-overlay-info" id="ats-chart-overlay-info">
+              <span class="ats-overlay-tag entry">ENTRY: <strong id="ats-chart-entry-tag">$0.08733</strong></span>
+              <span class="ats-overlay-tag sl">SL: <strong id="ats-chart-sl-tag">$0.08252</strong></span>
+              <span class="ats-overlay-tag tp">TP: <strong id="ats-chart-tp-tag">$0.09694</strong></span>
+            </div>
+            <div class="ats-chart-crosshair-tooltip" id="ats-chart-crosshair-tooltip" style="display: none;"></div>
+          </div>
+
+          <!-- FOOTER: TIMEFRAME & STATS -->
+          <div class="ats-mono-foot ats-chart-foot">
+            <div class="ats-tf-selector" id="ats-tf-selector">
+              <button class="tf-btn active" data-interval="1m">1M</button>
+              <button class="tf-btn" data-interval="5m">5M</button>
+              <button class="tf-btn" data-interval="15m">15M</button>
+            </div>
+            <div class="ats-chart-meta font-mono" id="ats-chart-meta">
+              H: <span id="ats-chart-high" class="val-green">-</span> • L: <span id="ats-chart-low" class="val-red">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. PIPE INSPECTOR CLOB -->
+        <div class="ats-quad-card">
+          <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+          <div class="ats-quad-head">
+            <span>PIPE INSPECTOR // CLOB + BINANCE</span>
+            <span>REQ/S: <strong>169</strong></span>
+          </div>
+          <div class="ats-pipe-box">
+            <div class="pipe-logs-list" id="ats-pipe-logs">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+          <div class="ats-mono-foot" style="display:flex; justify-content:space-between;">
+            <span>QUEUE: 8.9 KB</span>
+            <span>ERRORS: 0</span>
+            <span>TX: 0xe3d8...c002</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER: NEURAL SHELL // 3D TORUS POINT CLOUD -->
+      <div class="ats-torus-wrapper" id="ats-torus-container">
+        <!-- Floating Header -->
+        <div class="torus-header-banner">
+          <div>
+            <strong>NEURAL SHELL // MODEL MATRIX</strong>
+            <span>• CLOB PREDICTIVE LATENT SPACE • EXP 26.07.2026</span>
+          </div>
+          <div>
+            <span>MODEL DRAW 247</span> • <strong class="val-cyan">ENGINE WAVE 1,500</strong>
+          </div>
+        </div>
+
+        <!-- Floating Left Input Nodes -->
+        <div class="torus-inputs-col" id="ats-torus-inputs">
+          <div class="torus-input-card"><span class="tag">TOTAL SPOT</span><span class="val">$10.50 USDT</span></div>
+          <div class="torus-input-card"><span class="tag">KAS FREE</span><span class="val">$0.00 USDT</span></div>
+          <div class="torus-input-card"><span class="tag">MODAL KOIN</span><span class="val">$10.50 USDT</span></div>
+          <div class="torus-input-card"><span class="tag">POS TERBUKA</span><span class="val val-green">2 KOIN AKTIF</span></div>
+          <div class="torus-input-card"><span class="tag">ALLOC CAP</span><span class="val">$1.00 / KOIN</span></div>
+          <div class="torus-input-card"><span class="tag">SAFEGUARD</span><span class="val">SL -5.5% ACT</span></div>
+        </div>
+
+        <!-- Center Floating Telemetry Callouts -->
+        <div class="torus-center-callouts" id="ats-torus-callouts">
+          <span>DOGE: <strong class="val-green">$0.08722</strong></span>
+          <span>•</span>
+          <span>PEPE: <strong class="val-purple">$0.00000423</strong></span>
+          <span>•</span>
+          <span>PNL: <strong class="val-green">+$0.0000</strong></span>
+          <span>•</span>
+          <span>AI GATE: <strong class="val-cyan">GEMINI 2.5</strong></span>
+        </div>
+
+        <!-- 3D Canvas -->
+        <canvas class="torus-canvas-layer" id="ats-torus-canvas"></canvas>
+
+        <!-- SVG Bezier Glowing Wires Layer -->
+        <svg class="torus-bezier-svg" id="ats-bezier-svg"></svg>
+
+        <!-- Floating Right Output Nodes -->
+        <div class="torus-outputs-col" id="ats-torus-outputs">
+          <div class="torus-output-pill"><span class="op-type">AVAX</span><span class="op-val">$4.96</span></div>
+          <div class="torus-output-pill"><span class="op-type">PEPE</span><span class="op-val">$1.99</span></div>
+          <div class="torus-output-pill"><span class="op-type">ZK</span><span class="op-val">$1.66</span></div>
+          <div class="torus-output-pill"><span class="op-type">DOGE</span><span class="op-val">$0.96</span></div>
+          <div class="torus-output-pill"><span class="op-type">POL</span><span class="op-val">$0.94</span></div>
+          <div class="torus-output-pill cyan-pill"><span class="op-type">PEPE SL</span><span class="op-val">0.0000039</span></div>
+          <div class="torus-output-pill cyan-pill"><span class="op-type">PEPE TP</span><span class="op-val">0.0000047</span></div>
+          <div class="torus-output-pill"><span class="op-type">DOGE SL</span><span class="op-val">0.0825</span></div>
+          <div class="torus-output-pill"><span class="op-type">DOGE TP</span><span class="op-val">0.0969</span></div>
+          <div class="torus-output-pill"><span class="op-type">MAX CAP</span><span class="op-val">$1.00</span></div>
+          <div class="torus-output-pill cyan-pill"><span class="op-type">FEED</span><span class="op-val">BINANCE</span></div>
+        </div>
+
+        <!-- Floating Footer -->
+        <div class="torus-footer-meta">
+          <span>TOROIDAL LATENT WAVE: DUAL-HARMONIC DISPLACEMENT ACTIVE</span>
+          <span>INTERACTIVE 3D: GESER KURSOR MOUSE UNTUK ROTASI PERSPEKTIF</span>
+          <span>NODE SYNC: 4,200 PHOTON PARTICLES</span>
+        </div>
+      </div>
+
+      <!-- BOTTOM GRID: EXECUTION TAPE + 3D RESOLUTION FUNNEL -->
+      <div class="ats-bottom-grid">
+        <!-- EXECUTION TAPE -->
+        <div class="ats-tape-card">
+          <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+          <div class="ats-quad-head">
+            <span>EXECUTION TAPE // BINANCE SPOT LIVE EXECUTIONS & HOLDINGS</span>
+            <span class="val-cyan" id="ats-tape-badge">2 POS TERBUKA</span>
+          </div>
+          <div style="flex: 1; overflow-y: auto; max-height: 180px;">
+            <table class="ats-tape-table">
+              <thead>
+                <tr>
+                  <th>TIME</th>
+                  <th>ASET</th>
+                  <th>TIPE</th>
+                  <th>JUMLAH</th>
+                  <th>HARGA ENTRY</th>
+                  <th>HARGA LIVE</th>
+                  <th>PNL FLOATING</th>
+                </tr>
+              </thead>
+              <tbody id="ats-tape-tbody">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="ats-card-footer-metrics" id="ats-tape-footer">
+            <span>TOTAL SPOT: <strong class="green" id="ats-tape-tot">$10.50 USDT</strong></span>
+            <span>MODAL KOIN: <strong id="ats-tape-inv">$10.50 USDT</strong></span>
+            <span>KAS FREE: <strong id="ats-tape-free">$0.00 USDT</strong></span>
+            <span>MAX CAP: <strong class="green">$1.00 STRICT</strong></span>
+          </div>
+        </div>
+
+        <!-- 3D RESOLUTION FUNNEL -->
+        <div class="ats-funnel-card">
+          <div class="card-corner-tl"></div><div class="card-corner-br"></div>
+          <div class="ats-quad-head">
+            <span>RESOLUTION FUNNEL 3D // DOGE & PEPE TRAJECTORY TO TP1 (+11%)</span>
+            <span class="val-green">SL -5.5% GUARD</span>
+          </div>
+          <div class="ats-funnel-box">
+            <canvas id="ats-funnel-canvas"></canvas>
+          </div>
+          <div class="ats-card-footer-metrics" id="ats-funnel-footer">
+            <span>TARGET TP1: <strong class="green">+11.0%</strong></span>
+            <span>GUARD SL: <strong class="green">-5.5%</strong></span>
+            <span>TP DOGE: <strong id="ats-fn-doge" class="green">$0.0969</strong></span>
+            <span>TP PEPE: <strong id="ats-fn-pepe" class="green">$0.0000047</strong></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ======================================================================
+       MODAL: BROADCAST SINYAL UJI
+       ====================================================================== -->
+  <!-- ======================================================================
+       MODAL: BUKA DI HP ANDROID & PASANG APK
+       ====================================================================== -->
+  <div id="modal-mobile-app" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 460px; text-align: center;">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span style="color: #00f3ff;">📱</span> Buka di HP Android & Pasang APK
+        </h3>
+        <button class="modal-close" id="btn-close-mobile-modal">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 16px 20px;">
+        <p style="font-size: 12px; color: var(--ats-text-dim); margin-bottom: 14px;">
+          Gunakan HP Android yang terhubung ke jaringan <strong>Wi-Fi yang sama</strong>.
+        </p>
+
+        <!-- QR Code Container -->
+        <div style="background: rgba(2, 6, 16, 0.8); border: 1px solid rgba(0, 243, 255, 0.3); border-radius: 8px; padding: 14px; display: inline-block; margin-bottom: 14px; box-shadow: 0 0 15px rgba(0, 243, 255, 0.15);">
+          <img src="/assets/wifi_qr.png" alt="Scan QR Code" style="width: 170px; height: 170px; display: block; border-radius: 4px;">
+          <span style="font-size: 10px; color: var(--ats-cyan); font-family: var(--font-mono); display: block; margin-top: 8px;">SCAN DENGAN KAMERA HP</span>
+        </div>
+
+        <!-- URL Link Bar -->
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <input type="text" id="mobile-network-url-input" class="form-input font-mono" value="http://192.168.1.4:8080" readonly style="font-size: 12px; font-weight: 700; text-align: center; color: #00ff88; background: rgba(0, 255, 136, 0.05); border-color: rgba(0, 255, 136, 0.3);">
+          <button class="btn btn-primary" id="btn-copy-mobile-url" style="white-space: nowrap; font-size: 11px; padding: 6px 12px;">Salin Link</button>
+        </div>
+
+        <!-- How to install as APK -->
+        <div style="text-align: left; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 12px 14px; font-size: 11px; line-height: 1.6; color: #cbd5e1;">
+          <strong style="color: #fff; display: block; margin-bottom: 6px;">💡 Cara Pasang Jadi APK Mandiri di HP:</strong>
+          <ol style="margin: 0; padding-left: 18px;">
+            <li>Buka link di atas pada browser <strong>Chrome</strong> di HP Android.</li>
+            <li>Tekan ikon titik tiga <strong>⋮</strong> di kanan atas Chrome.</li>
+            <li>Pilih <strong>"Tambahkan ke Layar Utama"</strong> atau <strong>"Install Aplikasi"</strong>.</li>
+            <li>Ikon <strong>Botrading</strong> otomatis muncul di menu aplikasi HP lu & bisa dibuka layaknya aplikasi native tanpa bar browser!</li>
+          </ol>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- MODAL: BROADCAST SINYAL UJI COBA -->
   <div id="modal-broadcast" class="modal-overlay hidden">
     <div class="modal-card">
       <div class="modal-header">
-        <div class="agent-title-row">
-          <div class="agent-avatar-lg">📡</div>
-          <div>
-            <h3>Simulasi Broadcast Sinyal Master</h3>
-            <span class="role-badge">Kirim Sinyal Telegram & Eksekusi ke Semua Member</span>
-          </div>
-        </div>
+        <h3>Simulasi Broadcast Sinyal MT5</h3>
         <button class="modal-close" id="btn-close-broadcast">✕</button>
       </div>
-
       <div class="modal-body">
-        <p class="modal-desc">
-          Gunakan panel ini untuk menguji bagaimana sinyal dari Master Bot (yang nantinya di VPS) 
-          diterima oleh copiers lokal & member di trading floor secara instan.
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+          Kirim sinyal uji ke trading floor dan uji eksekusi copier MT5.
         </p>
-
-        <form id="broadcast-form" class="form-grid">
+        <form id="broadcast-form">
           <div class="form-group">
             <label>Aksi Transaksi</label>
-            <div class="action-toggle">
-              <label class="toggle-opt buy">
-                <input type="radio" name="signal_action" value="BUY" checked>
-                <span>BUY (Beli)</span>
-              </label>
-              <label class="toggle-opt sell">
-                <input type="radio" name="signal_action" value="SELL">
-                <span>SELL (Jual)</span>
-              </label>
+            <div style="display: flex; gap: 12px;">
+              <label><input type="radio" name="signal_action" value="BUY" checked> BUY</label>
+              <label><input type="radio" name="signal_action" value="SELL"> SELL</label>
             </div>
           </div>
-
           <div class="form-group">
             <label>Simbol Pair</label>
-            <input type="text" id="input-symbol" value="XAUUSD" class="form-input">
+            <input type="text" class="form-input" id="input-symbol" value="XAUUSD">
           </div>
-
           <div class="form-row">
             <div class="form-group">
               <label>Harga Entry ($)</label>
-              <input type="number" step="0.01" id="input-entry" value="4175.00" class="form-input">
+              <input type="number" step="0.01" class="form-input" id="input-entry" value="4185.00">
             </div>
             <div class="form-group">
-              <label>Take Profit (TP $)</label>
-              <input type="number" step="0.01" id="input-tp" value="4180.00" class="form-input">
+              <label>Take Profit ($)</label>
+              <input type="number" step="0.01" class="form-input" id="input-tp" value="4195.00">
             </div>
             <div class="form-group">
-              <label>Stop Loss (SL $)</label>
-              <input type="number" step="0.01" id="input-sl" value="4170.00" class="form-input">
+              <label>Stop Loss ($)</label>
+              <input type="number" step="0.01" class="form-input" id="input-sl" value="4175.00">
             </div>
           </div>
-
-          <div class="form-group">
-            <label>Penerima Eksekusi</label>
-            <select id="select-recipients" class="form-input">
-              <option value="all">Semua Member di Trading Floor (7 Member)</option>
-              <option value="deden">Hanya Deden (Local MT5 Saja)</option>
-            </select>
-          </div>
-
-          <div class="form-actions">
-            <button type="button" class="action-btn outline" id="btn-cancel-broadcast">Batal</button>
-            <button type="submit" class="action-btn primary pulse">⚡ Kirim Sinyal Sekarang</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: CONFIG COPIER -->
-  <div id="modal-settings" class="modal-overlay hidden">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="agent-title-row">
-          <div class="agent-avatar-lg">⚙️</div>
-          <div>
-            <h3>Konfigurasi Client Copier</h3>
-            <span class="role-badge">Pengaturan MT5 & Parameter Risiko</span>
-          </div>
-        </div>
-        <button class="modal-close" id="btn-close-settings">✕</button>
-      </div>
-
-      <div class="modal-body">
-        <form id="config-form" class="form-grid">
-          <div class="form-row">
-            <div class="form-group">
-              <label>Master Bot Telegram</label>
-              <input type="text" id="cfg-bot-username" value="selo_saham_bot" class="form-input">
-            </div>
-            <div class="form-group">
-              <label>Simbol Emas Broker</label>
-              <input type="text" id="cfg-gold-symbol" value="XAUUSD" class="form-input">
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Default Lot (Cent)</label>
-              <input type="number" step="0.01" id="cfg-default-lot" value="0.05" class="form-input">
-            </div>
-            <div class="form-group">
-              <label>Max Posisi Cent</label>
-              <input type="number" id="cfg-max-pos-cent" value="3" class="form-input">
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Auto Break-Even (BEP)</label>
-              <select id="cfg-enable-bep" class="form-input">
-                <option value="true" selected>Aktif (+100 Pips geser ke BEP)</option>
-                <option value="false">Nonaktif</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Auto Reversal Close</label>
-              <select id="cfg-reversal-close" class="form-input">
-                <option value="true" selected>Aktif (Tutup otomatis jika sinyal balik)</option>
-                <option value="false">Nonaktif</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button type="button" class="action-btn outline" id="btn-cancel-settings">Batal</button>
-            <button type="submit" class="action-btn primary">💾 Simpan Konfigurasi</button>
+          <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-broadcast">Batal</button>
+            <button type="submit" class="btn btn-primary">⚡ Kirim Sinyal</button>
           </div>
         </form>
       </div>
@@ -450,7 +1499,8 @@
   </div>
 
   <!-- APPLICATION SCRIPTS -->
-  <script src="office3d.js"></script>
-  <script src="dashboard.js"></script>
+  <script src="office3d.js?v=3.1"></script>
+  <script src="dashboard.js?v=5.0"></script>
+  <script src="ats_matrix.js?v=3.1"></script>
 </body>
 </html>

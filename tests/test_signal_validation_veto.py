@@ -182,6 +182,7 @@ def test_mt5_bridge_rejects_vetoed_signal():
     bridge = MT5Bridge(simulation_mode=True)
     bridge.enabled = True
     bridge.trading_hours = "all"
+    bridge._simulated_positions.clear()
 
     # Sinyal Grade B dengan skor 85% lolos skor PDF tapi WAJIB kena veto Hard Rule!
     sig = SignalResult(

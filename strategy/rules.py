@@ -476,3 +476,101 @@ MASTER_CONFLUENCE_STRATEGY = Strategy(
     sell_combine="OR",
 )
 register_strategy(MASTER_CONFLUENCE_STRATEGY)
+
+# 5. Strategi Konfluensi 3 Pilar Inti XAU + EMA/RSI + Key SNR
+THREE_PILLARS_STRATEGY = Strategy(
+    name="3_Pilar_Inti_Zero_Bentrok_Plus_EMA_RSI_SNR",
+    description="Konfluensi 3 Pilar Inti (Bob Volman EMA20, Mega Profit Anti-Wick, John Murphy Volume) + EMA/RSI Momentum (Martin Pring) + Key SNR",
+    buy_rules=[
+        RuleCondition(
+            indicator="close",
+            operator=">=",
+            target="ema_20",
+            multiplier=0.998,
+            description="Arah Tren (Bob Volman) — Anti Nyungsep: Harga wajib berada di atas atau menempel EMA 20 (Close >= EMA 20 * 0.998)",
+        ),
+        RuleCondition(
+            indicator="upper_wick_ratio",
+            operator="<=",
+            value=0.38,
+            description="Anti-Jebakan Paus (Mega Profit) — Anti Jarum Suntik: Ekor atas lilin maksimal 38%",
+        ),
+        RuleCondition(
+            indicator="volume_ratio",
+            operator=">=",
+            value=0.75,
+            description="Volume Buyer (John Murphy) — Volume Riil: Volume lilin minimal 0.75x SMA 10",
+        ),
+        RuleCondition(
+            indicator="rsi",
+            operator="<=",
+            value=68.0,
+            description="EMA + RSI (Martin Pring) — Anti Beli di Pucuk: RSI belum jenuh beli (RSI <= 68.0)",
+        ),
+        RuleCondition(
+            indicator="rsi",
+            operator=">=",
+            value=42.0,
+            description="EMA + RSI (Martin Pring) — Momentum Buyer Sehat: RSI minimal 42.0",
+        ),
+        RuleCondition(
+            indicator="dist_to_resistance",
+            operator=">",
+            value=1.50,
+            description="Key SNR Horizontal — Anti Tabrak Atap: Jarak ke Resistance mayor > 15 pips ($1.50 USD)",
+        ),
+    ],
+    buy_combine="AND",
+    sell_rules=[
+        RuleCondition(
+            indicator="close",
+            operator="<=",
+            target="ema_20",
+            multiplier=1.002,
+            description="Arah Tren (Bob Volman) — Anti Terbang: Harga wajib berada di bawah atau menempel EMA 20 (Close <= EMA 20 * 1.002)",
+        ),
+        RuleCondition(
+            indicator="lower_wick_ratio",
+            operator="<=",
+            value=0.38,
+            description="Anti-Jebakan Paus (Mega Profit) — Anti Jarum Bawah: Ekor bawah lilin maksimal 38%",
+        ),
+        RuleCondition(
+            indicator="volume_ratio",
+            operator=">=",
+            value=0.75,
+            description="Volume Seller (John Murphy) — Volume Riil: Volume lilin minimal 0.75x SMA 10",
+        ),
+        RuleCondition(
+            indicator="rsi",
+            operator=">=",
+            value=32.0,
+            description="EMA + RSI (Martin Pring) — Anti Jual di Jurang: RSI belum oversold (RSI >= 32.0)",
+        ),
+        RuleCondition(
+            indicator="rsi",
+            operator="<=",
+            value=58.0,
+            description="EMA + RSI (Martin Pring) — Momentum Seller Sehat: RSI maksimal 58.0",
+        ),
+        RuleCondition(
+            indicator="dist_to_support",
+            operator=">",
+            value=1.50,
+            description="Key SNR Horizontal — Anti Tabrak Lantai: Jarak ke Support mayor > 15 pips ($1.50 USD)",
+        ),
+    ],
+    sell_combine="AND",
+)
+register_strategy(THREE_PILLARS_STRATEGY)
+# Alias untuk kompatibilitas
+register_strategy(Strategy(
+    name="3_Pilar_Inti_Zero_Bentrok",
+    description=THREE_PILLARS_STRATEGY.description,
+    buy_rules=THREE_PILLARS_STRATEGY.buy_rules,
+    buy_combine="AND",
+    sell_rules=THREE_PILLARS_STRATEGY.sell_rules,
+    sell_combine="AND",
+))
+
+
