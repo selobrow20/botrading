@@ -244,7 +244,7 @@ class AutoRepairGuardian:
             now = time.time()
             now_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
             curr_session, _ = get_trading_session(now_wib)
-            max_age = 30 if curr_session == "US" else (45 if curr_session == "LONDON" else 90)
+            max_age = 30 if curr_session == "US" else 120
             max_dist_usd = 7.0 if curr_session == "US" else 10.0
 
             for o in pending_orders:

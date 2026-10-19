@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.4.7"
+CLIENT_COPIER_VERSION = "2.4.8"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -846,18 +846,18 @@ class MT5MemberBridge:
 
     def cancel_stale_pending_orders(self, symbol: str = None, max_age_minutes: int = None) -> list:
         """
-        Membatalkan pending limit order yang sudah basi sesuai Dynamic Session Expiry & Clean Slate:
-        - Sesi US (19:00 - 24:00 WIB): Maksimal 30 menit + wajib sapu bersih sisa pending Sesi UK/Asia (Clean Slate).
-        - Sesi London/UK (14:00 - 19:00 WIB): Maksimal 45 menit.
-        - Sesi Asia: Maksimal 90 menit.
+        Membatalkan pending limit order yang sudah basi:
+        - Khusus Sesi US (19:00 - 24:00 WIB): Maksimal 30 menit + wajib sapu bersih sisa pending Sesi UK/Asia (Clean Slate).
+        - Sesi London/UK & Asia (Di luar Sesi US): Tetap menggunakan standar 120 menit (2 jam).
         """
         pending_orders = self.get_pending_orders(symbol=symbol)
         now_ts = time.time()
         tz_wib = ZoneInfo("Asia/Jakarta")
         now_wib = datetime.now(tz_wib)
         curr_session = "US" if 19 <= now_wib.hour <= 23 else ("LONDON" if 14 <= now_wib.hour < 19 else "ASIA")
+        default_cfg_mins = int((getattr(self, "cfg", None) or {}).get("limit_order_expiry_mins", 120))
         if max_age_minutes is None:
-            dynamic_limit = 30 if curr_session == "US" else (45 if curr_session == "LONDON" else 90)
+            dynamic_limit = 30 if curr_session == "US" else default_cfg_mins
         else:
             dynamic_limit = max_age_minutes
 

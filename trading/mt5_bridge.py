@@ -991,10 +991,9 @@ class MT5Bridge:
     def cancel_stale_pending_orders(self, max_age_minutes: Optional[int] = None) -> List[int]:
         """
         Membatalkan pending order yang sudah terlalu lama tidak terisi (stale/expired)
-        serta membersihkan order lintas sesi (Clean Slate Protocol):
-        - Sesi US: Maksimal 30 menit (volatilitas cepat). Order dari Sesi London/Asia otomatis dibatalkan!
-        - Sesi London: Maksimal 45 menit, hard cap jam 19:00 WIB (dilarang menyeberang ke Sesi US).
-        - Sesi Asia: Maksimal 90 menit.
+        serta membersihkan order lintas sesi khusus saat memasuki Sesi US (Clean Slate Protocol):
+        - Sesi US (19:00 - 24:00 WIB): Maksimal 30 menit + wajib sapu bersih sisa order Sesi London/Asia!
+        - Sesi London & Asia (Di luar Sesi US): Tetap menggunakan standar 120 menit (2 jam).
         """
         now_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
         from strategy.signal_engine import get_trading_session
@@ -1004,10 +1003,8 @@ class MT5Bridge:
             max_age = int(max_age_minutes)
         elif curr_session == "US":
             max_age = 30
-        elif curr_session == "LONDON":
-            max_age = 45
         else:
-            max_age = 90
+            max_age = int(getattr(self, "limit_order_expiry_mins", 120))
 
         cancelled_tickets = []
         pending_orders = self.get_pending_orders()

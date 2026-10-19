@@ -1,12 +1,12 @@
 {
-  "version": "2.4.7",
-  "name": "MT5 VIP Auto-Copier (Clean Slate 19:00 WIB, Anti-Waterfall Guard & Dynamic Session Expiry)",
+  "version": "2.4.8",
+  "name": "MT5 VIP Auto-Copier (US Session Clean Slate 19:00 WIB & US Anti-Waterfall Guard)",
   "released_at": "2026-10-19",
   "min_python": "3.10",
-  "changelog": "Pembaruan v2.4.7: Clean Slate Protocol 19:00 WIB (Sapu bersih pending order Sesi UK sebelum Sesi US buka), Dynamic Session Expiry (US 30m, UK 45m, Asia 90m), dan Anti-Waterfall Crash Guard.",
+  "changelog": "Pembaruan v2.4.8: Proteksi Khusus Sesi US (19:00-24:00 WIB) — Clean Slate 19:00 WIB, Expiry 30m khusus Sesi US, dan US Anti-Waterfall Guard (Sesi Asia & UK tetap standar 120m).",
   "features": [
     "Clean Slate Protocol 19:00 WIB: Otomatis batalkan sisa pending limit order Sesi UK/Asia saat memasuki Sesi US",
-    "Dynamic Session Expiry: Batas kadaluarsa pending order adaptif (US 30m, London 45m, Asia 90m)",
+    "US Session Expiry 30m: Khusus Sesi US kadaluarsa pending order 30 menit (Sesi UK & Asia tetap normal 120 menit)",
     "SMC Institutional Reversal Guard: Veto BUY saat Bearish CHoCH dan Veto SELL saat Bullish CHoCH",
     "Auto Cut-Loss Dini: Otomatis potong kerugian saat market berbalik arah tanpa menunggu SL penuh",
     "Hermes Auto-Repair & Self-Healing: Proteksi posisi tanpa SL, pembatalan pending order kadaluarsa, dan anti-freeze",
