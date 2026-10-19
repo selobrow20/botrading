@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.4.6"
+CLIENT_COPIER_VERSION = "2.4.7"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -844,22 +844,36 @@ class MT5MemberBridge:
         err = res.comment if res else "No response"
         return {"success": False, "ticket": ticket, "message": f"Gagal batalkan pending order #{ticket}: {err}"}
 
-    def cancel_stale_pending_orders(self, symbol: str = None, max_age_minutes: int = 120) -> list:
+    def cancel_stale_pending_orders(self, symbol: str = None, max_age_minutes: int = None) -> list:
         """
-        Membatalkan pending limit order yang sudah basi (melebihi batas usia, default 120 menit).
-        Kaidah Bob Volman: Jika pasar tidak pullback menjemput limit dalam rentang waktu terukur,
-        setup teknikal sudah kedaluwarsa.
+        Membatalkan pending limit order yang sudah basi sesuai Dynamic Session Expiry & Clean Slate:
+        - Sesi US (19:00 - 24:00 WIB): Maksimal 30 menit + wajib sapu bersih sisa pending Sesi UK/Asia (Clean Slate).
+        - Sesi London/UK (14:00 - 19:00 WIB): Maksimal 45 menit.
+        - Sesi Asia: Maksimal 90 menit.
         """
         pending_orders = self.get_pending_orders(symbol=symbol)
         now_ts = time.time()
+        tz_wib = ZoneInfo("Asia/Jakarta")
+        now_wib = datetime.now(tz_wib)
+        curr_session = "US" if 19 <= now_wib.hour <= 23 else ("LONDON" if 14 <= now_wib.hour < 19 else "ASIA")
+        if max_age_minutes is None:
+            dynamic_limit = 30 if curr_session == "US" else (45 if curr_session == "LONDON" else 90)
+        else:
+            dynamic_limit = max_age_minutes
+
         cancelled = []
         for po in pending_orders:
             setup_time = po.get("time_setup", 0)
             if setup_time > 0:
                 age_min = (now_ts - setup_time) / 60.0
-                if age_min >= max_age_minutes:
+                setup_wib = datetime.fromtimestamp(setup_time, tz=tz_wib)
+                order_session = "US" if 19 <= setup_wib.hour <= 23 else ("LONDON" if 14 <= setup_wib.hour < 19 else "ASIA")
+                is_session_drift = (max_age_minutes is None) and (curr_session == "US" and order_session in ["LONDON", "ASIA"])
+
+                if is_session_drift or age_min >= dynamic_limit:
                     t_id = po.get("ticket")
-                    print(f"⏳ [STALE PENDING] Membatalkan pending order #{t_id} ({po.get('type')} @ {po.get('price')}) karena sudah {age_min:.0f} menit (> {max_age_minutes}m)!")
+                    reason_str = f"Lintas Sesi {order_session}->US (Clean Slate)" if is_session_drift else f"Usia {age_min:.0f}m > {dynamic_limit}m ({curr_session})"
+                    print(f"⏳ [CLEAN SLATE / STALE PENDING] Membatalkan pending order #{t_id} ({po.get('type')} @ {po.get('price')}) [{reason_str}]!")
                     res = self.cancel_pending_order(t_id)
                     if res.get("success"):
                         cancelled.append(t_id)
@@ -931,7 +945,7 @@ class MT5MemberBridge:
 
         sym = self.find_broker_symbol()
         # Bersihkan order basi terlebih dahulu
-        self.cancel_stale_pending_orders(symbol=sym, max_age_minutes=int(self.cfg.get("limit_order_expiry_mins", 120)))
+        self.cancel_stale_pending_orders(symbol=sym)
 
         is_cent = self.is_cent_account()
         is_us = False
@@ -1168,7 +1182,7 @@ class MT5MemberBridge:
         sym = self.find_broker_symbol()
 
         # Bersihkan order limit basi sebelum eksekusi order
-        self.cancel_stale_pending_orders(symbol=sym, max_age_minutes=int(self.cfg.get("limit_order_expiry_mins", 120)))
+        self.cancel_stale_pending_orders(symbol=sym)
 
         # Delegasikan ke Pending Limit jika tipe aksi BUY_LIMIT / SELL_LIMIT
         if action in ["BUY_LIMIT", "SELL_LIMIT"] or sig.get("is_limit_order"):
@@ -2044,6 +2058,7 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
                     continue
 
                 sym = bridge.find_broker_symbol()
+                bridge.cancel_stale_pending_orders(symbol=sym)
                 open_pos = bridge.mt5.positions_get(symbol=sym) or []
                 for p in open_pos:
                     ticket = p.ticket

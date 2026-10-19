@@ -1,10 +1,12 @@
 {
-  "version": "2.4.6",
-  "name": "MT5 VIP Auto-Copier (SMC Reversal Guard, Auto Cut-Loss & Auto-Repair Guardian)",
-  "released_at": "2026-10-17",
+  "version": "2.4.7",
+  "name": "MT5 VIP Auto-Copier (Clean Slate 19:00 WIB, Anti-Waterfall Guard & Dynamic Session Expiry)",
+  "released_at": "2026-10-19",
   "min_python": "3.10",
-  "changelog": "Pembaruan v2.4.6: Integrasi Smart Money Concepts (SMC) CHoCH & BOS Reversal Protection, Auto Cut-Loss Dini, Hermes Auto-Repair Watchdog, serta Sinkronisasi Mutlak Sinyal Master.",
+  "changelog": "Pembaruan v2.4.7: Clean Slate Protocol 19:00 WIB (Sapu bersih pending order Sesi UK sebelum Sesi US buka), Dynamic Session Expiry (US 30m, UK 45m, Asia 90m), dan Anti-Waterfall Crash Guard.",
   "features": [
+    "Clean Slate Protocol 19:00 WIB: Otomatis batalkan sisa pending limit order Sesi UK/Asia saat memasuki Sesi US",
+    "Dynamic Session Expiry: Batas kadaluarsa pending order adaptif (US 30m, London 45m, Asia 90m)",
     "SMC Institutional Reversal Guard: Veto BUY saat Bearish CHoCH dan Veto SELL saat Bullish CHoCH",
     "Auto Cut-Loss Dini: Otomatis potong kerugian saat market berbalik arah tanpa menunggu SL penuh",
     "Hermes Auto-Repair & Self-Healing: Proteksi posisi tanpa SL, pembatalan pending order kadaluarsa, dan anti-freeze",

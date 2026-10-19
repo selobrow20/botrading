@@ -225,14 +225,16 @@ class AutoRepairGuardian:
     def audit_and_repair_pending_orders(self) -> List[str]:
         """
         Audit seluruh pending order limit:
-        Batalkan otomatis pending order yang sudah usang (> 2 jam) atau
-        tertinggal terlalu jauh (> 70 pips / $7.00 USD dari harga pasar saat ini).
+        1. Clean Slate Protocol: Batalkan otomatis pending order Sesi London/Asia saat masuk Sesi US (19:00 WIB).
+        2. Dynamic Session Expiry: Batalkan order usang (US > 30m, London > 45m, Asia > 90m).
+        3. Distance Guard: Batalkan order yang tertinggal terlalu jauh (> $7.00 di US, > $10.00 di London/Asia).
         """
         repairs = []
         try:
             from trading.mt5_bridge import MT5Bridge
+            from strategy.signal_engine import get_trading_session
             bridge = MT5Bridge()
-            if not bridge.enabled:
+            if not bridge.enabled and not bridge.simulation_mode:
                 return repairs
 
             pending_orders = bridge.get_pending_orders()
@@ -240,18 +242,60 @@ class AutoRepairGuardian:
                 return repairs
 
             now = time.time()
+            now_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
+            curr_session, _ = get_trading_session(now_wib)
+            max_age = 30 if curr_session == "US" else (45 if curr_session == "LONDON" else 90)
+            max_dist_usd = 7.0 if curr_session == "US" else 10.0
+
             for o in pending_orders:
                 ticket = int(o.get("ticket", 0))
                 sym = str(o.get("symbol", "")).upper()
                 o_type = str(o.get("type", "")).upper()
-                limit_p = float(o.get("price_open", 0.0))
+                limit_p = float(o.get("price_open", o.get("price", 0.0)))
                 curr_p = float(o.get("price_current", limit_p))
+                t_setup = o.get("time_setup")
 
-                # Periksa jarak selisih
+                # 1. Periksa Transisi Sesi (Clean Slate) & Expiry Dinamis
+                if t_setup:
+                    if hasattr(t_setup, "tzinfo") and t_setup.tzinfo is None:
+                        t_setup = t_setup.replace(tzinfo=ZoneInfo("Asia/Jakarta"))
+                    age_mins = (now_wib - t_setup).total_seconds() / 60.0
+                    order_session, _ = get_trading_session(t_setup)
+
+                    if curr_session == "US" and order_session in ["LONDON", "ASIA"]:
+                        repair_key = f"cancel_session_drift_{ticket}"
+                        if (now - self.last_repair_time.get(repair_key, 0.0)) > 30.0:
+                            self.last_repair_time[repair_key] = now
+                            c_res = bridge.cancel_pending_order(ticket)
+                            if c_res.get("success"):
+                                act_txt = (
+                                    f"Pending order #{ticket} {sym} ({o_type} @ ${limit_p:,.2f}) dibatalkan otomatis "
+                                    f"(Clean Slate Protocol: Order sisa Sesi {order_session} dilarang menyeberang ke Sesi US)."
+                                )
+                                logger.info(f"🛡️ [AUTO-REPAIR] {act_txt}")
+                                repairs.append(act_txt)
+                                self.healed_count += 1
+                                continue
+
+                    if age_mins >= max_age:
+                        repair_key = f"cancel_expired_limit_{ticket}"
+                        if (now - self.last_repair_time.get(repair_key, 0.0)) > 30.0:
+                            self.last_repair_time[repair_key] = now
+                            c_res = bridge.cancel_pending_order(ticket)
+                            if c_res.get("success"):
+                                act_txt = (
+                                    f"Pending order #{ticket} {sym} ({o_type} @ ${limit_p:,.2f}) dibatalkan otomatis "
+                                    f"karena kadaluarsa ({age_mins:.0f}m >= batas {max_age}m Sesi {curr_session})."
+                                )
+                                logger.info(f"🛡️ [AUTO-REPAIR] {act_txt}")
+                                repairs.append(act_txt)
+                                self.healed_count += 1
+                                continue
+
+                # 2. Periksa jarak selisih
                 if any(k in sym for k in ["XAU", "GOLD"]) and limit_p > 0.0 and curr_p > 0.0:
                     dist_usd = abs(curr_p - limit_p)
-                    # Jika selisih > $10.0 (100 pips), order dianggap ditinggalkan pasar
-                    if dist_usd >= 10.0:
+                    if dist_usd >= max_dist_usd:
                         repair_key = f"cancel_far_limit_{ticket}"
                         if (now - self.last_repair_time.get(repair_key, 0.0)) > 60.0:
                             self.last_repair_time[repair_key] = now
@@ -259,7 +303,7 @@ class AutoRepairGuardian:
                             if c_res.get("success"):
                                 act_txt = (
                                     f"Pending order #{ticket} {sym} ({o_type} @ ${limit_p:,.2f}) dibatalkan otomatis "
-                                    f"karena tertinggal terlalu jauh (${dist_usd:.2f} USD) dari harga pasar (${curr_p:,.2f})."
+                                    f"karena tertinggal terlalu jauh (${dist_usd:.2f} USD >= ${max_dist_usd:.1f}) dari harga pasar (${curr_p:,.2f})."
                                 )
                                 logger.info(f"🛡️ [AUTO-REPAIR] {act_txt}")
                                 repairs.append(act_txt)

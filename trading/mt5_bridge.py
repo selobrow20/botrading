@@ -990,13 +990,26 @@ class MT5Bridge:
 
     def cancel_stale_pending_orders(self, max_age_minutes: Optional[int] = None) -> List[int]:
         """
-        Membatalkan pending order yang sudah terlalu lama tidak terisi (stale/expired).
-        Default: 120 menit (2 jam / 8 candle M15).
+        Membatalkan pending order yang sudah terlalu lama tidak terisi (stale/expired)
+        serta membersihkan order lintas sesi (Clean Slate Protocol):
+        - Sesi US: Maksimal 30 menit (volatilitas cepat). Order dari Sesi London/Asia otomatis dibatalkan!
+        - Sesi London: Maksimal 45 menit, hard cap jam 19:00 WIB (dilarang menyeberang ke Sesi US).
+        - Sesi Asia: Maksimal 90 menit.
         """
-        max_age = int(max_age_minutes if max_age_minutes is not None else getattr(self, "limit_order_expiry_mins", 120))
-        cancelled_tickets = []
         now_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
+        from strategy.signal_engine import get_trading_session
+        curr_session, _ = get_trading_session(now_wib)
 
+        if max_age_minutes is not None:
+            max_age = int(max_age_minutes)
+        elif curr_session == "US":
+            max_age = 30
+        elif curr_session == "LONDON":
+            max_age = 45
+        else:
+            max_age = 90
+
+        cancelled_tickets = []
         pending_orders = self.get_pending_orders()
         for po in pending_orders:
             t_setup = po.get("time_setup")
@@ -1006,11 +1019,22 @@ class MT5Bridge:
                 t_setup = t_setup.replace(tzinfo=ZoneInfo("Asia/Jakarta"))
 
             age_mins = (now_wib - t_setup).total_seconds() / 60.0
-            if age_mins >= max_age:
+            order_session, _ = get_trading_session(t_setup)
+
+            is_expired = age_mins >= max_age
+            # Clean Slate Protocol: Jika saat ini Sesi US, order dari Sesi London/Asia wajib dibersihkan
+            is_session_drift = (max_age_minutes is None) and (curr_session == "US" and order_session in ["LONDON", "ASIA"])
+
+            if is_expired or is_session_drift:
                 t_id = po.get("ticket")
+                reason_str = (
+                    f"kadaluarsa ({age_mins:.0f} menit >= batas {max_age} menit)"
+                    if is_expired
+                    else f"transisi sesi {order_session} -> {curr_session} (Clean Slate Protocol)"
+                )
                 logger.info(
-                    f"⏰ [EXPIRED PENDING ORDER] Pending order #{t_id} ({po.get('type')} @ {po.get('price')}) "
-                    f"kadaluarsa ({age_mins:.0f} menit >= batas {max_age} menit). Dibatalkan otomatis demi keamanan modal!"
+                    f"⏰ [EXPIRED / CLEAN SLATE] Pending order #{t_id} ({po.get('type')} @ {po.get('price')}) "
+                    f"dibatalkan otomatis ({reason_str}) demi keamanan modal!"
                 )
                 res = self.cancel_pending_order(t_id)
                 if res.get("success"):
@@ -1353,7 +1377,37 @@ class MT5Bridge:
                     }
 
 
-        # 1c-bis. Validasi level TP & SL sebelum memproses limit maupun market order
+        # 1c-bis. HARD RULES VALIDATION (Hard Rules Veto 9 Buku PDF)
+        try:
+            from strategy.signal_engine import filter_and_validate_signal
+            val_ok, val_reason = filter_and_validate_signal(sig, notifier=getattr(self, "notifier", None))
+            if not val_ok:
+                logger.warning(f"🛑 [HARD RULES VETO] Eksekusi {sig_type} MT5 dibatalkan: {val_reason}")
+                return {
+                    "success": False,
+                    "status": "veto_rejected",
+                    "message": val_reason,
+                }
+        except Exception as ex_val:
+            logger.debug(f"Pengecekan filter_and_validate_signal: {ex_val}")
+
+        # 1c-ter. HARD GATEKEEPER VALIDATION (Hard Rules Veto 9 Buku PDF & Grade A+)
+        allowed, gate_reason = self.can_place_order(
+            sig=sig,
+            order_type=sig_type,
+            active_pending_orders=self.get_pending_orders(symbol=ticker),
+            symbol=ticker,
+        )
+        if not allowed:
+            logger.warning(f"🛑 [HARD GATEKEEPER VETO] Eksekusi {sig_type} MT5 dibatalkan: {gate_reason}")
+            status_tag = "veto_rejected" if any(k in gate_reason for k in ["Veto", "Grade", "Kontradiksi", "Risk-to-Reward", "Konfluensi"]) else "veto_gatekeeper"
+            return {
+                "success": False,
+                "status": status_tag,
+                "message": gate_reason,
+            }
+
+        # 1c-quater. Validasi level TP & SL sebelum memproses limit maupun market order
         if sl > 0 or tp > 0:
             sltp_ok, sltp_msg = self.validate_sl_tp(sig_type, price, sl, tp)
             if not sltp_ok:

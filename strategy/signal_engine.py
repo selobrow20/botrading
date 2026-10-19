@@ -1682,17 +1682,45 @@ class SignalEngine:
         allow_buy = True
         allow_sell = True
 
+        # Evaluasi Tren Intraday M15 & Struktur SMC M15 (Anti-Pisau Jatuh)
+        is_m15_bearish = False
+        is_m15_bullish = False
+        if len(df) >= 5:
+            m15_close = curr_price
+            m15_ema20 = float(curr_row.get("EMA_20", curr_row.get("ema_20", ema20_raw)))
+            m15_ema50 = float(curr_row.get("EMA_50", curr_row.get("ema_50", ema50_raw)))
+            smc_m15 = SMCLiquidityEngine.analyze_market_structure(df) if len(df) >= 10 else None
+            smc_status = getattr(smc_m15, "structure", "") or ""
+
+            if (m15_close < m15_ema20 and m15_close < m15_ema50) or smc_status in ["BEARISH_BOS", "BEARISH_CHOCH"]:
+                is_m15_bearish = True
+            elif (m15_close > m15_ema20 and m15_close > m15_ema50) or smc_status in ["BULLISH_BOS", "BULLISH_CHOCH"]:
+                is_m15_bullish = True
+
         enable_dual = bool(cfg_mt5.get("enable_dual_sided_limits", False))
         force_dual = bool(cfg_mt5.get("force_dual_bracket_test", False))
         if not force_dual and not enable_dual:
-            if macro_bias == "BEARISH":
+            if is_m15_bearish:
+                allow_buy = False
+                allow_sell = True
+                logger.info("🔒 [INTRADAY STRUCTURE GUARD] M15 Terkonfirmasi Bearish / Breakdown: BUY LIMIT dinonaktifkan mutlak (Anti-Pisau Jatuh). Hanya SELL LIMIT diizinkan.")
+            elif is_m15_bullish and macro_bias != "BEARISH":
+                allow_buy = True
+                allow_sell = False
+                logger.info("🔒 [INTRADAY STRUCTURE GUARD] M15 Terkonfirmasi Bullish: SELL LIMIT dinonaktifkan (Anti-Hadang Kereta). Hanya BUY LIMIT diizinkan.")
+            elif macro_bias == "BEARISH":
                 allow_buy = False
                 allow_sell = True
                 logger.info("🔒 [TREND LOCK] Tren BEARISH: BUY LIMIT dinonaktifkan (Anti-Pisau Jatuh). Hanya SELL LIMIT diizinkan.")
             elif macro_bias == "BULLISH":
-                allow_buy = True
-                allow_sell = False
-                logger.info("🔒 [TREND LOCK] Tren BULLISH: SELL LIMIT dinonaktifkan (Anti-Hadang Kereta). Hanya BUY LIMIT diizinkan.")
+                if curr_price < ema20_raw:
+                    allow_buy = False
+                    allow_sell = False
+                    logger.info("⏸️ [PULLBACK CAUTION] H4 Bullish tapi M15 di bawah EMA 20: Tahan pasang BUY LIMIT sampai ada konfirmasi pantulan.")
+                else:
+                    allow_buy = True
+                    allow_sell = False
+                    logger.info("🔒 [TREND LOCK] Tren BULLISH: SELL LIMIT dinonaktifkan (Anti-Hadang Kereta). Hanya BUY LIMIT diizinkan.")
             else:
                 if curr_price >= ema50_raw:
                     allow_buy = True

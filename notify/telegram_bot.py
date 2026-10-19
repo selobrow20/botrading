@@ -610,17 +610,17 @@ class TelegramNotifier:
             return {"success": False, "sent_count": 0, "recipients": [], "error": f"File {p} tidak ditemukan."}
 
         caption = custom_caption or (
-            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.4.5 (SETUP MASTER 1:1 & NOTIFIKASI PERSONAL)</b> 🚀\n"
+            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.4.7 (CLEAN SLATE 19:00 WIB & ANTI-WATERFALL GUARD)</b> 🚀\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5 v2.4.5.\n\n"
-            "✨ <b>FITUR & LOGIKA TERBARU (v2.4.5):</b>\n"
-            "1. 🎯 <b>Sinkronisasi Setup 1:1 Ikut Master:</b> Single-sided order, anti-bentrok, dan anti-layer bertumpuk. Member membuka posisi persis sesuai setup Master!\n"
-            "2. ⚡ <b>Eksekusi 0-Delay Saat Order Terjemput:</b> Begitu limit Master terisi di pasar, copier member langsung mengeksekusi secara instan.\n"
-            "3. 🔔 <b>Notifikasi Hasil Deal MT5 Mandiri:</b> Notifikasi TP/SL pribadi dikirim langsung ke Pesan Tersimpan (Saved Messages) Telegram Anda sendiri.\n"
-            "4. 🛡️ <b>Maksimal 1 Posisi (Disiplin Modal):</b> Proteksi ketat anti-hedging & anti-layer.\n"
-            "5. 🔄 <b>OTA Auto-Reload:</b> Copier langsung memperbarui dirinya sendiri secara otomatis saat dijalankan.\n\n"
+            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5 v2.4.7.\n\n"
+            "✨ <b>FITUR & LOGIKA TERBARU (v2.4.7):</b>\n"
+            "1. 🧹 <b>Clean Slate Protocol 19:00 WIB:</b> Sapu bersih otomatis seluruh sisa pending limit order Sesi UK/London saat memasuki Sesi US agar tidak terseret pergerakan awal pasar Amerika.\n"
+            "2. ⏱️ <b>Dynamic Session Expiry:</b> Batas kadaluarsa pending order kini adaptif sesuai volatilitas sesi (Sesi US: 30m, Sesi UK: 45m, Sesi Asia: 90m).\n"
+            "3. 🚨 <b>Anti-Waterfall Crash Guard & M15 Structure Lock:</b> Kunci otomatis BUY LIMIT saat harga M15 jebol di bawah EMA 20/50 atau terjadi Bearish CHoCH/BOS.\n"
+            "4. 🛠️ <b>Hermes Auto-Repair Guardian:</b> Pemantauan real-time anti-naked SL & pembersihan order basi otomatis.\n"
+            "5. 🔄 <b>OTA Auto-Reload:</b> Copier langsung memperbarui dirinya sendiri secara otomatis tanpa perlu timpa ZIP manual!\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "<i>Aplikasi dapat langsung di-ekstrak atau biarkan copier mengupdate otomatis via OTA.</i>"
+            "<i>Copier yang sedang aktif akan otomatis reload ke v2.4.7 dalam 30 detik!</i>"
         )
 
         approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)

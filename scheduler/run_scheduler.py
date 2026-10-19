@@ -912,11 +912,10 @@ class PipelineRunner:
         if not b.enabled and not b.simulation_mode:
             return
 
-        # 2. Batalkan order kadaluarsa (> 120 menit / 2 jam)
-        expiry_mins = int(cfg_mt5.get("limit_order_expiry_mins", 120))
-        cancelled = b.cancel_stale_pending_orders(max_age_minutes=expiry_mins)
+        # 2. Batalkan order kadaluarsa sesuai Dynamic Session Expiry (US: 30m, UK: 45m, Asia: 90m) & Clean Slate 19:00 WIB
+        cancelled = b.cancel_stale_pending_orders()
         if cancelled:
-            logger.info(f"⏰ [2-HOUR REFRESH] {len(cancelled)} Pending order kadaluarsa ({cancelled}) berhasil dibatalkan. Menyiapkan jaring baru!")
+            logger.info(f"⏰ [DYNAMIC SESSION REFRESH] {len(cancelled)} Pending order kadaluarsa / lintas sesi ({cancelled}) berhasil dibatalkan. Menyiapkan jaring baru!")
 
         # 3. Periksa pending order yang masih aktif di MT5
         is_cent = b.is_cent_account()
@@ -926,6 +925,25 @@ class PipelineRunner:
         buy_limits = [o for o in active_pending if "BUY" in str(o.get("type", "")).upper()]
         sell_limits = [o for o in active_pending if "SELL" in str(o.get("type", "")).upper()]
 
+        # ANTI-WATERFALL CRASH GUARD (Pelajaran Sesi US Jumat):
+        # Jika M15 sedang longsor tajam di bawah EMA 20 (Close < EMA 20 dan body candle merah besar),
+        # segera batalkan seluruh BUY_LIMIT yang menggantung dan kunci penempatan BUY_LIMIT baru!
+        is_waterfall_dump = False
+        try:
+            last_c = float(df_ind["Close"].iloc[-1])
+            last_o = float(df_ind["Open"].iloc[-1])
+            last_e20 = float(df_ind["EMA_20"].iloc[-1]) if "EMA_20" in df_ind.columns else last_c
+            last_atr = float(df_ind["ATR"].iloc[-1]) if "ATR" in df_ind.columns else 2.5
+            if last_c < last_e20 and (last_o - last_c) >= max(1.50, last_atr * 0.8):
+                is_waterfall_dump = True
+                if buy_limits:
+                    for bo in buy_limits:
+                        b.cancel_pending_order(bo["ticket"])
+                        logger.warning(f"🚨 [ANTI-WATERFALL GUARD] Membatalkan BUY LIMIT #{bo['ticket']} karena M15 sedang terjun bebas di bawah EMA 20!")
+                    buy_limits = []
+        except Exception:
+            pass
+
         # CEGAH SPAMMING ORDER BERULANG & DOUBLE EXPOSURE (PDF Section 20 - Strict 1 Layer):
         # 1. Periksa posisi MARKET aktif di MT5 untuk mencegah staking / penumpukan lot di titik yang sama
         open_positions = b.get_open_positions(symbol=ticker)
@@ -934,7 +952,7 @@ class PipelineRunner:
 
         # Jika sudah ada posisi MARKET aktif atau pending order aktif, DILARANG pasang order baru searah
         # ANTI-HEDGING: Jika ada posisi market berlawanan yang sedang aktif, DILARANG pasang limit order yang memicu tabrakan
-        needs_buy = (len(buy_limits) == 0 and len(active_buys) == 0 and len(active_sells) == 0)
+        needs_buy = (not is_waterfall_dump) and (len(buy_limits) == 0 and len(active_buys) == 0 and len(active_sells) == 0)
         needs_sell = (len(sell_limits) == 0 and len(active_sells) == 0 and len(active_buys) == 0)
 
         curr_p = float(sig_result.price) if sig_result and getattr(sig_result, "price", 0.0) else float(df_ind["Close"].iloc[-1])
@@ -949,13 +967,16 @@ class PipelineRunner:
         enable_dual = bool(cfg_mt5.get("enable_dual_sided_limits", False))
         if enable_dual:
             # Mode Jaring Dua Sisi (Khusus Pengujian Bracket Dua Sisi)
-            needs_buy = (len(buy_limits) == 0 and len(active_buys) == 0 and len(active_sells) == 0)
+            needs_buy = (not is_waterfall_dump) and (len(buy_limits) == 0 and len(active_buys) == 0 and len(active_sells) == 0)
             needs_sell = (len(sell_limits) == 0 and len(active_sells) == 0 and len(active_buys) == 0)
         elif not is_good_moment:
             # Tidak ada momen bagus terkonfirmasi (Status HOLD / Netral) -> DILARANG pasang order baru!
             logger.debug(f"[LIMIT SNIPER] Menunggu momen bagus (Skor {sig_score:.0f}%, Grade {sig_grade}, Aksi: {sig_action}). Tidak ada order dipasang.")
             return
         elif "BUY" in sig_action:
+            if is_waterfall_dump:
+                logger.warning("🚨 [ANTI-WATERFALL GUARD] Menahan pemasangan BUY LIMIT baru karena M15 sedang crash tajam di bawah EMA 20!")
+                return
             # Sinyal Momen Bagus BUY -> Hanya pasang BUY LIMIT di salah satu sisi (Retest Diskon Support / EMA 20)
             for so in sell_limits:
                 b.cancel_pending_order(so["ticket"])

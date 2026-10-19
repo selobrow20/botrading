@@ -486,8 +486,8 @@ THREE_PILLARS_STRATEGY = Strategy(
             indicator="close",
             operator=">=",
             target="ema_20",
-            multiplier=0.998,
-            description="Arah Tren (Bob Volman) — Anti Nyungsep: Harga wajib berada di atas atau menempel EMA 20 (Close >= EMA 20 * 0.998)",
+            multiplier=1.0,
+            description="Arah Tren (Bob Volman) — Anti Nyungsep: Harga wajib berada di atas atau menempel EMA 20 (Close >= EMA 20)",
         ),
         RuleCondition(
             indicator="upper_wick_ratio",
@@ -526,8 +526,8 @@ THREE_PILLARS_STRATEGY = Strategy(
             indicator="close",
             operator="<=",
             target="ema_20",
-            multiplier=1.002,
-            description="Arah Tren (Bob Volman) — Anti Terbang: Harga wajib berada di bawah atau menempel EMA 20 (Close <= EMA 20 * 1.002)",
+            multiplier=1.0,
+            description="Arah Tren (Bob Volman) — Anti Terbang: Harga wajib berada di bawah atau menempel EMA 20 (Close <= EMA 20)",
         ),
         RuleCondition(
             indicator="lower_wick_ratio",
