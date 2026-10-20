@@ -1,4 +1,4 @@
 {
-  "version": "2.5.1",
-  "changelog": "Sinkronisasi Penuh Sinyal Master-Member (BUY/SELL LIMIT & Market) + Filter Elit Grade A+ Khusus Akun Standard USD (0.01 Lot, H1 Trend Guard, M15 Anti-Waterfall, Max 1 Posisi)"
+  "version": "2.5.2",
+  "changelog": "Fix Permanen Windows Timezone (Tanpa Perlu Modul tzdata) + Auto-Catchup Sinyal Terbaru Saat Startup/Reload"
 }

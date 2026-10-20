@@ -19,7 +19,7 @@ echo    di latar belakang tanpa member perlu buka-tutup jendela console!
 echo ======================================================================
 echo.
 
-python -m pip install telethon MetaTrader5 >nul 2>&1
+python -m pip install telethon MetaTrader5 tzdata >nul 2>&1
 
 :run_loop
 python client_copier.py

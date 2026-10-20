@@ -18,7 +18,9 @@ import time
 import asyncio
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from zoneinfo import ZoneInfo
+TZ_WIB = timezone(timedelta(hours=7))
+def ZoneInfo(key: str = "Asia/Jakarta"):
+    return TZ_WIB
 
 # Pastikan UTF-8 di Windows Console
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -27,7 +29,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.5.1"
+CLIENT_COPIER_VERSION = "2.5.2"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -546,7 +548,6 @@ class MT5MemberBridge:
         # Cek Sesi US untuk Akun Cent
         is_us = False
         try:
-            from zoneinfo import ZoneInfo
             from datetime import datetime, time
             now_wib = datetime.now(ZoneInfo("Asia/Jakarta")).time()
             is_us = time(19, 0) <= now_wib <= time(23, 59, 59)
@@ -1052,7 +1053,6 @@ class MT5MemberBridge:
         is_cent = self.is_cent_account()
         is_us = False
         try:
-            from zoneinfo import ZoneInfo
             from datetime import datetime, time
             now_wib = datetime.now(ZoneInfo("Asia/Jakarta")).time()
             is_us = time(19, 0) <= now_wib <= time(23, 59, 59)
@@ -1352,7 +1352,6 @@ class MT5MemberBridge:
         is_cent = self.is_cent_account()
         is_us = False
         try:
-            from zoneinfo import ZoneInfo
             from datetime import datetime, time
             now_wib = datetime.now(ZoneInfo("Asia/Jakarta")).time()
             is_us = time(19, 0) <= now_wib <= time(23, 59, 59)
@@ -2345,6 +2344,38 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
                 pass
 
     asyncio.create_task(periodic_ota_checker())
+
+    async def recent_signal_catchup():
+        """Memeriksa 3 pesan terakhir dari Master Bot (< 15 menit) saat startup/reload agar sinyal terbaru langsung dieksekusi."""
+        await asyncio.sleep(1.5)
+        try:
+            msgs = await client.get_messages(bot_username, limit=4)
+            now_utc = datetime.now(timezone.utc)
+            for m in reversed(list(msgs or [])):
+                if not m or not getattr(m, "message", None):
+                    continue
+                msg_dt = getattr(m, "date", None)
+                if msg_dt:
+                    if msg_dt.tzinfo is None:
+                        msg_dt = msg_dt.replace(tzinfo=timezone.utc)
+                    age_s = (now_utc - msg_dt).total_seconds()
+                    if age_s > 900:
+                        continue
+                sig_Test = parse_signal(m.message)
+                if sig_Test and sig_Test.get("action") in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]:
+                    class _CatchupEvent:
+                        def __init__(self, msg_obj):
+                            self.message = msg_obj
+                            self.raw_text = msg_obj.message
+                        async def get_sender(self):
+                            class _S:
+                                username = bot_username
+                            return _S()
+                    await message_handler(_CatchupEvent(m))
+        except Exception as e_catch:
+            print(f"   ℹ️ Info sinkronisasi sinyal awal: {e_catch}")
+
+    asyncio.create_task(recent_signal_catchup())
 
     # Loop pemulihan koneksi Telegram (Anti-Crash & Auto-Reconnect)
     while True:

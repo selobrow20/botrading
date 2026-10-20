@@ -610,16 +610,16 @@ class TelegramNotifier:
             return {"success": False, "sent_count": 0, "recipients": [], "error": f"File {p} tidak ditemukan."}
 
         caption = custom_caption or (
-            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.5.1 (ZERO-DELAY LIVE POSITION SYNC & US SESSION GUARD)</b> 🚀\n"
+            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.5.2 (ZERO-DELAY LIVE POSITION SYNC & US SESSION GUARD)</b> 🚀\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5 v2.5.1.\n\n"
-            "✨ <b>FITUR & LOGIKA TERBARU (v2.5.1):</b>\n"
+            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5 v2.5.2.\n\n"
+            "✨ <b>FITUR & LOGIKA TERBARU (v2.5.2):</b>\n"
             "1. ⚡ <b>Zero-Delay Live Position Sync:</b> Deteksi instan sinyal [ORDER LIMIT TERJEMPUT] & penutupan TP/SL langsung dari posisi live Master MT5 (0 delay).\n"
             "2. 🕒 <b>Windows Clock-Skew Immunity:</b> Toleransi otomatis selisih jam PC Windows member agar sinyal live tidak pernah terlewat.\n"
             "3. 🧹 <b>US Session Protection (19:00-24:00 WIB):</b> Clean Slate 19:00 WIB, Expiry 30m khusus Sesi US, & Anti-Waterfall Guard (Sesi Asia & UK tetap normal 120m).\n"
             "4. 🔄 <b>OTA Auto-Reload:</b> Copier langsung memperbarui dirinya sendiri secara otomatis tanpa perlu timpa ZIP manual!\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "<i>Copier yang sedang aktif akan otomatis reload ke v2.5.1 dalam 30 detik!</i>"
+            "<i>Copier yang sedang aktif akan otomatis reload ke v2.5.2 dalam 30 detik!</i>"
         )
 
         approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
