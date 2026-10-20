@@ -2582,6 +2582,15 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
+    # Jadwalkan Pemulihan Mandiri Proaktif (Auto-Repair & Self-Healing Watchdog) tiap 30 detik
+    scheduler.add_job(
+        runner.run_auto_repair_job,
+        trigger=IntervalTrigger(seconds=30),
+        id="auto_repair_watchdog_job",
+        name="Pemulihan Mandiri & Audit Posisi MT5 (30 Detik)",
+        replace_existing=True,
+    )
+
     # Jadwalkan laporan penutupan pasar saham IDX simpel (16:05 WIB, Senin-Jumat)
     scheduler.add_job(
         runner.run_market_close_job,

@@ -45,4 +45,9 @@ if "%COPIER_EXIT_CODE%"=="100" (
 if "%COPIER_EXIT_CODE%"=="0" exit /b 0
 
 echo.
-pause
+echo ======================================================================
+echo 🛠️ [SELF-HEALING AUTO-RECOVERY] Terdeteksi anomali/exit code: %COPIER_EXIT_CODE%
+echo 🔄 Sistem Auto-Repair sedang memulihkan dan merestart Copier dalam 3 detik...
+echo ======================================================================
+timeout /t 3 /nobreak >nul
+goto run_loop

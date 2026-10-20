@@ -29,7 +29,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.5.4"
+CLIENT_COPIER_VERSION = "2.5.5"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -2337,6 +2337,19 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
     # Jalankan background watcher notifikasi TP/SL akun sendiri untuk Member
     asyncio.create_task(local_deal_watcher())
 
+    # Watchdog Mandiri MT5 (Self-Healing Watchdog 5 Detik): Memulihkan koneksi IPC MT5 seketika jika drop
+    async def self_healing_mt5_watchdog():
+        while True:
+            await asyncio.sleep(5)
+            try:
+                if not bridge.ensure_connected():
+                    print("\n🛠️ [SELF-HEALING MT5] Koneksi MT5 terputus/freeze. Menyambungkan kembali secara otomatis...")
+                    bridge.connect()
+            except Exception as e_sh:
+                pass
+
+    asyncio.create_task(self_healing_mt5_watchdog())
+
     # Jalankan background task pemeriksaan pembaruan OTA Cloud berkala (tiap 30 menit)
     async def periodic_ota_checker():
         while True:
@@ -2436,6 +2449,18 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
 
 
 def main():
+    while True:
+        try:
+            _run_main_protected()
+            break
+        except (KeyboardInterrupt, SystemExit):
+            break
+        except Exception as ex_fatal:
+            print(f"\n🛠️ [SELF-HEALING FATAL ERROR] Terdeteksi anomali: {ex_fatal}")
+            print("🔄 Sistem Auto-Repair memulihkan dan merestart aplikasi dalam 3 detik...")
+            time.sleep(3.0)
+
+def _run_main_protected():
     print("=" * 65)
     print("    AUTO-COPIER MT5 MEMBER (VIP 9 BUKU PDF CONFLUENCE)")
     print("=" * 65)
