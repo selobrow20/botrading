@@ -29,7 +29,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.5.5"
+CLIENT_COPIER_VERSION = "2.5.6"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -1066,11 +1066,14 @@ class MT5MemberBridge:
         # 1. CEK BATAS MAKSIMAL POSISI TERBUKA (OPEN POSITIONS) DI MT5 MEMBER
         # Sesuai arahan pengguna: "semua ikut setup gw aja bor" (Disiplin ketat, member tidak boleh buka 10 posisi!)
         open_pos = self.mt5.positions_get(symbol=sym) or []
-        if not is_cent:
+        if is_us:
+            # Sesi US (19:00 - 24:00 WIB): Hard Cap Mutlak 1 Layer (Anti-10 Layer / Anti-MC saat US anjlok)
+            max_pos = 1
+        elif not is_cent:
             max_pos = int(self.cfg.get("max_positions_standard", 1))
         else:
             cent_base = int(self.cfg.get("max_positions_cent", 1))
-            max_pos = max(cent_base, int(self.cfg.get("us_session_max_positions", 3))) if is_us else cent_base
+            max_pos = cent_base
 
         if len(open_pos) >= max_pos:
             mode_lbl = f"Sesi US (Maks {max_pos} Posisi)" if (is_cent and is_us) else (f"CENT USC (Maks {max_pos} Posisi)" if is_cent else f"USD Standard (Maks {max_pos} Posisi)")
@@ -1091,7 +1094,11 @@ class MT5MemberBridge:
 
         # 3. CEK TOTAL KUOTA PENDING ORDERS & POSISI AKTIF (Khusus USD mutlak maks 1 pending order sniper)
         active_pending = self.get_pending_orders(symbol=sym)
-        max_pending = 1 if not is_cent else int(self.cfg.get("max_pending_orders_per_symbol", 1))
+        max_pending = 1 if (is_us or not is_cent) else int(self.cfg.get("max_pending_orders_per_symbol", 1))
+        if is_us and (len(open_pos) + len(active_pending) >= 1):
+            msg_us_cap = f"Pending limit {action} dilewati: Sesi US dibatasi MUTLAK 1 LAYER ({len(open_pos)} posisi + {len(active_pending)} pending aktif). Mencegah penumpukan layer saat market US anjlok!"
+            print(f"   🛑 {msg_us_cap}")
+            return {"success": False, "message": msg_us_cap}
         if len(open_pos) + len(active_pending) >= max_pending:
             same_pending = [po for po in active_pending if ("BUY" in action and "BUY" in str(po.get("type", "")).upper()) or ("SELL" in action and "SELL" in str(po.get("type", "")).upper())]
             if same_pending:

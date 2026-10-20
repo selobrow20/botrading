@@ -950,6 +950,18 @@ class PipelineRunner:
         active_buys = [p for p in open_positions if "BUY" in str(p.get("type", "")).upper()]
         active_sells = [p for p in open_positions if "SELL" in str(p.get("type", "")).upper()]
 
+        # PROTOKOL PATEN SESI US (19:00 - 24:00 WIB): HARD CAP MUTLAK 1 LAYER (ANTI-MARTINGALE / ANTI-10 LAYER)
+        # Sesuai arahan mutlak pengguna: "zona us buy & sell limit jgn banyak, semalem smp 10 layer klo ga close bsa mc krn us anjlok"
+        now_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
+        is_us_time = (19 <= now_wib.hour <= 23)
+        if is_us_time and (len(open_positions) + len(active_pending) >= 1):
+            logger.info(
+                f"🛑 [US SESSION 1-LAYER CAP] Sesi US dibatasi MUTLAK MAKSIMAL 1 ORDER aktif/pending "
+                f"({len(open_positions)} posisi + {len(active_pending)} pending di MT5). "
+                f"Menolak penambahan layer baru demi mencegah MC saat market US anjlok!"
+            )
+            return
+
         # Jika sudah ada posisi MARKET aktif atau pending order aktif, DILARANG pasang order baru searah
         # ANTI-HEDGING: Jika ada posisi market berlawanan yang sedang aktif, DILARANG pasang limit order yang memicu tabrakan
         needs_buy = (not is_waterfall_dump) and (len(buy_limits) == 0 and len(active_buys) == 0 and len(active_sells) == 0)
