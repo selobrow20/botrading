@@ -49,9 +49,9 @@ trading:
     trailing_stop_pct: 2.0
 mt5:
   enabled: true
-  login: 198638506
+  login: 114202389
   password: ''
-  server: HFMarketsGlobal-Live16
+  server: HFMarketsGlobal-Live7
   path: ''
   magic_number: 777777
   default_lot: 0.01
@@ -78,7 +78,7 @@ mt5:
   news_limit_guard_minutes_after: 15  # Batas menit setelah rilis berita untuk membekukan pasang limit order baru (15 menit)
   risk_percent: 1.0
   max_slippage: 20
-  gold_symbol: XAUUSD
+  gold_symbol: XAUUSDc
   trading_hours: all
   max_positions_usd: 1              # Akun USD Standard: Maksimal 1 posisi (disiplin margin)
   max_positions_cent: 1             # Akun Cent (USC): Maksimal 1 posisi (MAX 1 LAYER - PDF Section 20)
