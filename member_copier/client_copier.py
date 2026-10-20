@@ -29,7 +29,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.5.2"
+CLIENT_COPIER_VERSION = "2.5.3"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -158,7 +158,7 @@ def check_and_apply_ota_update(silent: bool = False) -> bool:
             with urllib.request.urlopen(req_script, timeout=20) as s_resp:
                 new_code = s_resp.read().decode("utf-8")
 
-            if len(new_code) > 1000 and "CLIENT MT5 AUTO-COPIER" in new_code:
+            if len(new_code) > 1000 and "CLIENT MT5 AUTO-COPIER" in new_code and f'CLIENT_COPIER_VERSION = "{remote_ver}"' in new_code:
                 cur_file = Path(__file__).resolve()
                 backup_file = cur_file.with_suffix(".py.bak")
                 try:
