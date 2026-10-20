@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.4.8"
+CLIENT_COPIER_VERSION = "2.4.9"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -470,7 +470,7 @@ def parse_signal(text: str) -> dict:
         is_high_grade = True
     elif master_lot >= 0.05:
         is_high_grade = True
-    elif is_limit_order:
+    elif is_limit_order or is_filled_limit:
         is_high_grade = True
 
     # Ekstrak Trade Type: SHORT (Scalping) vs LONG (Intraday Swing)
@@ -1835,19 +1835,7 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
         now_utc = datetime.now(timezone.utc)
         age_sec = (now_utc - msg_date).total_seconds() if msg_date else 0.0
 
-        # Proteksi Pesan Lampau / Riwayat Chat (Backlog saat baru buka copier):
-        # Jika pesan dikirim sebelum copier dijalankan atau usia pesan > 120 detik (2 menit),
-        # lewati pesan ini agar tidak mengeksekusi sinyal lama & tidak memicu false alarm price drift!
-        if msg_date and (msg_date < copier_start_time - timedelta(seconds=15) or age_sec > 120.0):
-            mins_ago = int(age_sec // 60)
-            sec_rem = int(age_sec % 60)
-            time_lbl = f"{mins_ago}m {sec_rem}s" if mins_ago > 0 else f"{sec_rem}s"
-            if any(k in msg_text.upper() for k in ["BUY", "SELL", "XAUUSD", "GOLD", "ENTRY"]):
-                print(f"\nℹ️ [{datetime.now().strftime('%H:%M:%S')}] [SINYAL LAMPAU DILEWATI] Sinyal dari riwayat chat "
-                      f"(diterbitkan {time_lbl} yang lalu saat copier belum aktif / offline). Dilewati demi menjaga keamanan modal member.")
-            return
-
-        # Deteksi respons lisensi real-time
+        # Deteksi respons lisensi real-time (proses langsung tanpa terpengaruh selisih jam PC member)
         if "LIC_INFO|" in msg_text:
             parts = msg_text.strip().split("|")
             if len(parts) >= 5 and parts[1] == user_id:
@@ -1859,6 +1847,19 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
                     print("=" * 65 + "\n")
                     await client.disconnect()
                     os._exit(0)
+            return
+
+        # Proteksi Pesan Lampau / Riwayat Chat (Backlog saat baru buka copier):
+        # Toleransi selisih jam PC Windows member s/d 15 menit (900 detik) agar sinyal live
+        # TIDAK PERNAH terbuang gara-gara jam Windows member kecepatan/kelambatan beberapa menit!
+        # (Keamanan harga tetap dijaga penuh oleh Price Drift Guard secara real-time di MT5).
+        if msg_date and (msg_date < copier_start_time - timedelta(minutes=15) or age_sec > 900.0):
+            mins_ago = int(age_sec // 60)
+            sec_rem = int(age_sec % 60)
+            time_lbl = f"{mins_ago}m {sec_rem}s" if mins_ago > 0 else f"{sec_rem}s"
+            if any(k in msg_text.upper() for k in ["BUY", "SELL", "XAUUSD", "GOLD", "ENTRY"]):
+                print(f"\nℹ️ [{datetime.now().strftime('%H:%M:%S')}] [SINYAL LAMPAU DILEWATI] Sinyal dari riwayat chat "
+                      f"(diterbitkan {time_lbl} yang lalu saat copier belum aktif / offline). Dilewati demi menjaga keamanan modal member.")
             return
 
         # Deteksi notifikasi pencabutan akses langsung dari Admin

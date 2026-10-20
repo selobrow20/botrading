@@ -14,11 +14,12 @@ from member_copier.client_copier import (
 
 
 def test_copier_version_exists():
-    assert CLIENT_COPIER_VERSION == "2.4.8"
+    assert CLIENT_COPIER_VERSION == "2.4.9"
     v_file = Path("member_copier/version.json")
     assert v_file.exists()
     data = json.loads(v_file.read_text(encoding="utf-8"))
-    assert data["version"] == "2.4.8"
+    assert data["version"] == "2.4.9"
+    assert parse_version("2.4.9") > parse_version("2.4.8")
     assert parse_version("2.4.8") > parse_version("2.4.7")
     assert parse_version("2.4.7") > parse_version("2.4.6")
     assert parse_version("2.4.6") > parse_version("2.4.5")
@@ -234,8 +235,63 @@ def test_parse_signal_handles_official_filled_limit_order():
     res = parse_signal(msg)
     assert res["action"] == "BUY"
     assert res["is_limit_order"] is False
+    assert res["is_high_grade"] is True
     assert res["entry_price"] == 4175.0
     assert res["tp_price"] == 4181.0
     assert res["sl_price"] == 4169.0
+
+
+def test_mt5_bridge_live_position_fill_and_close_fallback(monkeypatch):
+    from types import SimpleNamespace
+    import trading.mt5_bridge as mb
+
+    bridge = mb.MT5Bridge()
+    bridge.simulation_mode = False
+    bridge.is_connected = True
+    monkeypatch.setattr(bridge, "is_available", lambda: True)
+    monkeypatch.setattr(bridge, "ensure_connected", lambda: True)
+    monkeypatch.setattr(bridge, "get_broker_time_offset", lambda: 10800)
+
+    mb.MT5Bridge._live_tracked_positions.clear()
+    mb.MT5Bridge._synthetic_closed_deals.clear()
+
+    fake_pos = SimpleNamespace(
+        ticket=15297720999,
+        identifier=15297720999,
+        symbol="XAUUSDc",
+        type=0,
+        magic=bridge.magic_number,
+        volume=0.05,
+        price_open=4135.32,
+        price_current=4142.40,
+        sl=4128.17,
+        tp=4142.47,
+        profit=35.40,
+        time=1792466177,
+        comment="9PDF-BUY_L",
+    )
+
+    monkeypatch.setattr(mb.mt5, "history_orders_get", lambda *a, **kw: ())
+    monkeypatch.setattr(mb.mt5, "history_deals_get", lambda *a, **kw: ())
+    monkeypatch.setattr(mb.mt5, "positions_get", lambda *a, **kw: (fake_pos,))
+
+    fills = bridge.get_filled_limit_orders(hours=24)
+    assert len(fills) == 1
+    assert fills[0]["ticket"] == 15297720999
+    assert fills[0]["action"] == "BUY"
+    assert fills[0]["price"] == 4135.32
+    assert fills[0]["is_live_open"] is True
+
+    # Simulate position closing (hitting TP) while history_deals_get is still empty
+    monkeypatch.setattr(mb.mt5, "positions_get", lambda *a, **kw: ())
+    deals = bridge.get_closed_deals(hours=24)
+    assert len(deals) == 1
+    assert deals[0]["position_id"] == 15297720999
+    assert deals[0]["reason"] == "TP"
+    assert deals[0]["outcome"] == "WIN"
+    assert deals[0]["price"] == 4142.47
+    mb.MT5Bridge._live_tracked_positions.clear()
+    mb.MT5Bridge._synthetic_closed_deals.clear()
+
 
 

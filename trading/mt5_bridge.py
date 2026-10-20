@@ -2863,6 +2863,10 @@ class MT5Bridge:
             logger.error(f"Error memodifikasi posisi #{ticket}: {e}")
             return {"success": False, "message": f"Error saat modifikasi posisi: {e}"}
 
+    # Pelacak posisi terbuka live & deal tertutup sintetis (kebal terhadap filter tab History GUI MT5)
+    _live_tracked_positions: Dict[int, Dict[str, Any]] = {}
+    _synthetic_closed_deals: Dict[int, Dict[str, Any]] = {}
+
     def get_broker_time_offset(self) -> int:
         """
         Menghitung selisih detik antara jam server broker MT5 dengan waktu UTC nyata.
@@ -2872,13 +2876,169 @@ class MT5Bridge:
             return 0
         try:
             import time
+            now_utc = int(time.time())
             sym = self.gold_symbol or "XAUUSD"
-            tick = mt5.symbol_info_tick(sym) or mt5.symbol_info_tick("XAUUSD")
-            if tick and tick.time:
-                return int(tick.time - int(time.time()))
+            tick = mt5.symbol_info_tick(sym) or mt5.symbol_info_tick("XAUUSDc") or mt5.symbol_info_tick("XAUUSD")
+            if tick and getattr(tick, "time", 0) and type(getattr(tick, "time", None)) is int:
+                raw_offset = int(tick.time - now_utc)
+                if abs(raw_offset) <= 50400:
+                    return raw_offset
+                # Jika tick.time stale (> 14 jam selisih dengan jam sekarang), gunakan offset standar HFM UTC+3 (+10800s)
+                return 10800
         except Exception:
             pass
         return 0
+
+    def _sync_live_positions_state(self, offset: int = 10800) -> List[Dict[str, Any]]:
+        """
+        Mensinkronkan posisi terbuka secara langsung dari mt5.positions_get().
+        1. Mendeteksi order limit yang sudah terjemput (FILLED) menjadi posisi aktif meskipun
+           mt5.history_orders_get() terblokir oleh filter tanggal pada tab History GUI MT5.
+        2. Mendeteksi penutupan posisi (TP / SL / Trailing / Manual) secara real-time ketika posisi
+           yang sebelumnya aktif menghilang dari mt5.positions_get().
+        """
+        if self.simulation_mode or not self.is_available():
+            return []
+        try:
+            import time as _time
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+
+            raw_positions = mt5.positions_get()
+            if not isinstance(raw_positions, (list, tuple)):
+                return []
+
+            now_utc = int(_time.time())
+            tz_wib = ZoneInfo("Asia/Jakarta")
+            current_tickets = set()
+            live_list: List[Dict[str, Any]] = []
+
+            for p in raw_positions:
+                p_ticket = getattr(p, "ticket", None)
+                if type(p_ticket) is not int or p_ticket <= 0:
+                    continue
+
+                comment_str = str(getattr(p, "comment", "") or "").upper()
+                is_bot_comment = "9PDF" in comment_str or "LIMIT" in comment_str
+                is_bot_magic = (getattr(p, "magic", 0) == self.magic_number)
+                sym_str = str(getattr(p, "symbol", "") or "")
+                is_gold = any(g in sym_str.upper() for g in ["XAU", "GOLD"])
+
+                if not (is_bot_magic or is_bot_comment or is_gold):
+                    continue
+
+                current_tickets.add(p_ticket)
+                raw_t = getattr(p, "type", 0)
+                if raw_t == 0 or "BUY" in comment_str:
+                    action_type = "BUY"
+                    limit_type = "BUY_LIMIT"
+                else:
+                    action_type = "SELL"
+                    limit_type = "SELL_LIMIT"
+
+                t_open = int(getattr(p, "time", 0) or now_utc)
+                true_utc_epoch = t_open - offset
+                if abs(now_utc - true_utc_epoch) > 86400:
+                    true_utc_epoch = now_utc
+                filled_time_wib = datetime.fromtimestamp(true_utc_epoch, tz=tz_wib).strftime("%Y-%m-%d %H:%M:%S WIB")
+
+                price_open = float(getattr(p, "price_open", 0.0) or 0.0)
+                price_curr = float(getattr(p, "price_current", 0.0) or price_open)
+                sl_val = float(getattr(p, "sl", 0.0) or 0.0)
+                tp_val = float(getattr(p, "tp", 0.0) or 0.0)
+                vol_val = float(getattr(p, "volume", 0.0) or 0.0)
+                profit_val = float(getattr(p, "profit", 0.0) or 0.0)
+                pos_id = int(getattr(p, "identifier", 0) or p_ticket)
+
+                snap = {
+                    "ticket": p_ticket,
+                    "order_ticket": p_ticket,
+                    "position_id": pos_id,
+                    "symbol": sym_str,
+                    "action": action_type,
+                    "type": limit_type,
+                    "volume": vol_val,
+                    "price": price_open,
+                    "price_open": price_open,
+                    "price_current": price_curr,
+                    "profit": profit_val,
+                    "sl": sl_val,
+                    "tp": tp_val,
+                    "time": t_open,
+                    "time_wib": filled_time_wib,
+                    "true_utc_epoch": true_utc_epoch,
+                    "comment": str(getattr(p, "comment", "") or ""),
+                    "is_live_open": True,
+                }
+                MT5Bridge._live_tracked_positions[p_ticket] = snap
+                live_list.append(snap)
+
+            # Deteksi posisi yang baru saja ditutup (menghilang dari positions_get)
+            for old_ticket in list(MT5Bridge._live_tracked_positions.keys()):
+                if old_ticket not in current_tickets:
+                    old_pos = MT5Bridge._live_tracked_positions.pop(old_ticket)
+                    act = old_pos["action"]
+                    entry_p = float(old_pos["price_open"] or 0.0)
+                    last_p = float(old_pos.get("price_current") or entry_p)
+                    tp_p = float(old_pos.get("tp") or 0.0)
+                    sl_p = float(old_pos.get("sl") or 0.0)
+                    vol = float(old_pos.get("volume") or 0.05)
+                    sym_closed = old_pos.get("symbol", "XAUUSDc")
+
+                    for lp in live_list:
+                        if lp.get("symbol") == sym_closed and lp.get("price_current", 0) > 0:
+                            last_p = float(lp["price_current"])
+                            break
+
+                    reason_str = "MANUAL"
+                    exit_p = last_p
+                    if tp_p > 0 and ((act == "BUY" and last_p >= tp_p - 1.2) or (act == "SELL" and last_p <= tp_p + 1.2)):
+                        exit_p = tp_p
+                        reason_str = "TP"
+                        outcome = "WIN"
+                    elif sl_p > 0 and ((act == "BUY" and last_p <= sl_p + 1.2) or (act == "SELL" and last_p >= sl_p - 1.2)):
+                        exit_p = sl_p
+                        is_trailing_profit = (act == "BUY" and sl_p >= entry_p) or (act == "SELL" and sl_p <= entry_p)
+                        if is_trailing_profit:
+                            reason_str = "TRAILING_SL"
+                            outcome = "WIN"
+                        else:
+                            reason_str = "SL"
+                            outcome = "LOSE"
+                    else:
+                        is_win = (exit_p >= entry_p) if act == "BUY" else (exit_p <= entry_p)
+                        outcome = "WIN" if is_win else "LOSE"
+
+                    price_diff = (exit_p - entry_p) if act == "BUY" else (entry_p - exit_p)
+                    calc_profit = round(price_diff * vol * 100.0, 2)
+                    if outcome == "LOSE" and calc_profit > 0:
+                        calc_profit = -abs(calc_profit)
+                    elif outcome == "WIN" and calc_profit < 0:
+                        calc_profit = abs(calc_profit)
+
+                    close_wib = datetime.fromtimestamp(now_utc, tz=tz_wib).strftime("%Y-%m-%d %H:%M WIB")
+                    MT5Bridge._synthetic_closed_deals[old_ticket] = {
+                        "deal_ticket": old_ticket,
+                        "order_ticket": old_ticket,
+                        "position_id": old_pos.get("position_id", old_ticket),
+                        "symbol": sym_closed,
+                        "type": act,
+                        "volume": vol,
+                        "price": round(exit_p, 2),
+                        "entry_price": round(entry_p, 2),
+                        "profit": calc_profit,
+                        "reason": reason_str,
+                        "outcome": outcome,
+                        "time": now_utc + offset,
+                        "time_wib": close_wib,
+                        "true_utc_epoch": now_utc,
+                        "comment": f"AUTO-SYNC-{reason_str}",
+                    }
+
+            return live_list
+        except Exception as e:
+            logger.debug(f"Gagal sinkronisasi posisi live MT5: {e}")
+            return []
 
     def get_closed_deals(self, hours: int = 24) -> List[Dict[str, Any]]:
         """
@@ -2903,16 +3063,19 @@ class MT5Bridge:
             offset = self.get_broker_time_offset()
             tz_wib = ZoneInfo("Asia/Jakarta")
 
+            # Sinkronkan posisi live terlebih dahulu agar posisi yang baru saja tutup langsung terdeteksi
+            self._sync_live_positions_state(offset)
+
             # Ambil seluruh riwayat deals dengan rentang waktu aman (hours s/d +1 hari).
             # Menggunakan datetime lokal langsung tanpa penambahan offset yang mendistorsi query datetime.
             from_server = datetime.now() - timedelta(hours=max(hours, 24))
             to_server = datetime.now() + timedelta(days=1)
 
-            deals = mt5.history_deals_get(from_server, to_server)
-            if not deals:
-                return []
+            deals = mt5.history_deals_get(from_server, to_server) or []
 
             closed_deals = []
+            seen_pos_ids = set()
+            seen_deal_tickets = set()
             for d in deals:
                 if d.entry != mt5.DEAL_ENTRY_OUT:
                     continue
@@ -2959,6 +3122,8 @@ class MT5Bridge:
                 entry_price = float(in_deal.price) if in_deal else float(d.price)
                 entry_type = ("BUY" if in_deal.type == mt5.DEAL_TYPE_BUY else "SELL") if in_deal else ("BUY" if d.type == mt5.DEAL_TYPE_SELL else "SELL")
 
+                seen_pos_ids.add(int(d.position_id))
+                seen_deal_tickets.add(int(d.ticket))
                 closed_deals.append({
                     "deal_ticket": d.ticket,
                     "order_ticket": d.order,
@@ -2976,6 +3141,11 @@ class MT5Bridge:
                     "true_utc_epoch": true_utc_epoch,
                     "comment": d.comment,
                 })
+
+            for syn_ticket, syn_deal in list(MT5Bridge._synthetic_closed_deals.items()):
+                if syn_deal["position_id"] not in seen_pos_ids and syn_deal["deal_ticket"] not in seen_deal_tickets:
+                    closed_deals.append(syn_deal)
+
             return closed_deals
         except Exception as e:
             logger.warning(f"Error mengambil riwayat closed deals MT5: {e}")
@@ -3007,11 +3177,10 @@ class MT5Bridge:
             from_server = datetime.now() - timedelta(hours=max(hours, 24))
             to_server = datetime.now() + timedelta(days=1)
 
-            orders = mt5.history_orders_get(from_server, to_server)
-            if not orders:
-                return []
+            orders = mt5.history_orders_get(from_server, to_server) or []
 
             filled_limits = []
+            seen_tickets = set()
             for o in orders:
                 # 1. Wajib state FILLED (state == 4)
                 if getattr(o, "state", -1) != mt5.ORDER_STATE_FILLED:
@@ -3046,10 +3215,13 @@ class MT5Bridge:
                 price_curr = float(getattr(o, "price_current", 0.0) or 0.0)
                 fill_price = price_curr if price_curr > 0 else price_open
                 pos_id = int(getattr(o, "position_id", 0) or getattr(o, "ticket", 0))
+                o_ticket = int(o.ticket)
 
+                seen_tickets.add(o_ticket)
+                seen_tickets.add(pos_id)
                 filled_limits.append({
-                    "ticket": int(o.ticket),
-                    "order_ticket": int(o.ticket),
+                    "ticket": o_ticket,
+                    "order_ticket": o_ticket,
                     "position_id": pos_id,
                     "symbol": o.symbol,
                     "action": action_type,
@@ -3064,6 +3236,15 @@ class MT5Bridge:
                     "true_utc_epoch": true_utc_epoch,
                     "comment": getattr(o, "comment", ""),
                 })
+
+            # Fallback & Real-Time Direct Inspection dari mt5.positions_get():
+            # Memastikan posisi terbuka live langsung terdeteksi 0 delay meskipun tab History GUI MT5 difilter!
+            live_positions = self._sync_live_positions_state(offset)
+            for lp in live_positions:
+                if lp["ticket"] not in seen_tickets and lp["position_id"] not in seen_tickets:
+                    seen_tickets.add(lp["ticket"])
+                    seen_tickets.add(lp["position_id"])
+                    filled_limits.append(lp)
 
             return filled_limits
         except Exception as e:

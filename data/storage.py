@@ -79,6 +79,7 @@ class StockStorage:
         self._init_tables()
         if is_prod:
             self._ensure_initial_gold_history()
+            self._ensure_default_vip_members()
 
     @contextmanager
     def _get_connection(self):
@@ -272,6 +273,38 @@ class StockStorage:
                     logger.info("Rekam jejak sinyal Gold hari ini berhasil disimpan.")
         except Exception as e:
             logger.debug(f"Gagal seeding rekam jejak Gold: {e}")
+
+    def _ensure_default_vip_members(self) -> None:
+        """
+        Memastikan daftar akun Master Admin & Member VIP aktif tersinkronisasi otomatis
+        di database produksi (termasuk di VPS yang memiliki file DB terpisah).
+        """
+        default_vips = [
+            ("8754997836", "selobrow", "Master Admin", "approved", "2026-10-01 00:00:00", "2026-10-01 00:00:00", None),
+            ("7170889507", "", "Cctv", "approved", "2026-10-17 20:40:06", "2026-10-17 20:40:13", "2026-11-17 20:40:13"),
+            ("8301678027", "", ". ,", "approved", "2026-10-18 09:24:00", "2026-10-18 09:24:43", "2026-11-18 09:24:43"),
+        ]
+        try:
+            with self._get_connection() as conn:
+                cur = conn.cursor()
+                for cid, uname, fname, st, req_at, app_at, exp_at in default_vips:
+                    cur.execute("SELECT status, expires_at FROM authorized_users WHERE chat_id = ?", (cid,))
+                    row = cur.fetchone()
+                    if not row:
+                        cur.execute("""
+                            INSERT INTO authorized_users
+                            (chat_id, username, full_name, status, requested_at, approved_at, expires_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (cid, uname, fname, st, req_at, app_at, exp_at))
+                    elif row["status"] == "pending":
+                        cur.execute("""
+                            UPDATE authorized_users
+                            SET status = 'approved', approved_at = ?, expires_at = ?
+                            WHERE chat_id = ?
+                        """, (app_at, exp_at, cid))
+                conn.commit()
+        except Exception as e:
+            logger.debug(f"Gagal sinkronisasi default VIP members: {e}")
 
     def save_ohlcv(self, ticker: str, interval: str, df: pd.DataFrame) -> int:
         """

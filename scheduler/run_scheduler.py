@@ -1397,8 +1397,11 @@ class PipelineRunner:
                 true_epoch = fl.get("true_utc_epoch") or fl.get("time") or int(now_ts)
                 age_seconds = max(0, int(now_ts) - true_epoch)
 
-                # Saring notifikasi Telegram jika limit fill sudah lewat (> 1800s / 30 menit)
-                if age_seconds > 1800:
+                # Saring notifikasi Telegram jika limit fill sudah lewat (> 1800s / 30 menit),
+                # KECUALI posisi tersebut masih terbuka LIVE di MT5 saat ini (toleransi s/d 4 jam = 14400s)
+                is_live_open = bool(fl.get("is_live_open", False))
+                max_fill_age = 14400 if is_live_open else 1800
+                if age_seconds > max_fill_age:
                     self.storage.mark_mt5_limit_fill_reported(
                         order_ticket=ticket,
                         position_id=pos_id,
