@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.5.0"
+CLIENT_COPIER_VERSION = "2.5.1"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -453,7 +453,11 @@ def parse_signal(text: str) -> dict:
     m_ticket = re.search(r"(?:Ticket ID|Ticket|Order ID)\s*[:=]?\s*#?(\d+)", clean_text, re.IGNORECASE)
     ticket_id = m_ticket.group(1) if m_ticket else None
 
-    m_score = re.search(r"Konfluensi 9 PDF.*?(\d+)%", clean_text, re.IGNORECASE)
+    m_score = re.search(
+        r"(?:Konfluensi 9 PDF|TELAAH 9 BUKU PDF|KONFLUANSI 3 PILAR|Tingkat Akurasi|Skor)[^\d\n]{0,40}(\d+(?:\.\d+)?)\s*%",
+        clean_text,
+        re.IGNORECASE,
+    )
     pdf_score = float(m_score.group(1)) if m_score else 0.0
 
     # Ekstrak Volume / Lot Master
@@ -462,16 +466,29 @@ def parse_signal(text: str) -> dict:
     if m_lot:
         master_lot = _clean_num(m_lot.group(1))
 
-    # Deteksi Sinyal Grade A+ (0.05 lot bagus) vs Standar (0.01 lot)
+    has_low_grade_tag = any(k in text_upper for k in ["GRADE B", "GRADE C", "GRADE: B", "GRADE: C"])
+    has_plain_a_only = ("GRADE A" in text_upper and "GRADE A+" not in text_upper and "GRADE: A+" not in text_upper)
+
+    # Deteksi Sinyal Grade A+ (Cent USC: >= 80%) vs Standar
     is_high_grade = False
-    if any(k in text_upper for k in ["MOMEN BAGUS BANGET", "0.05 LOT", "0,05 LOT", "GRADE A+", "GRADE: A+", "PENDING ORDER SNIPER", "DUAL-LEVEL"]):
+    if has_low_grade_tag or (0 < pdf_score < 80.0):
+        is_high_grade = False
+    elif any(k in text_upper for k in ["MOMEN BAGUS BANGET", "0.05 LOT", "0,05 LOT", "GRADE A+", "GRADE: A+"]):
         is_high_grade = True
-    elif pdf_score >= 80.0:
+    elif pdf_score >= 80.0 or master_lot >= 0.05:
         is_high_grade = True
-    elif master_lot >= 0.05:
+    elif (is_limit_order or is_filled_limit) and not has_plain_a_only:
         is_high_grade = True
-    elif is_limit_order or is_filled_limit:
-        is_high_grade = True
+
+    # Khusus Akun Standard USD: Wajib Sinyal Elit Grade A+ Terbaik (>= 85% / Grade A+ Murni tanpa keraguan)
+    is_ultra_usd_grade = False
+    if not has_low_grade_tag and not has_plain_a_only:
+        if pdf_score >= 85.0:
+            is_ultra_usd_grade = True
+        elif pdf_score == 0.0 and ("GRADE A+" in text_upper or "GRADE: A+" in text_upper or is_filled_limit):
+            is_ultra_usd_grade = True
+        elif pdf_score >= 80.0 and ("GRADE A+" in text_upper or "GRADE: A+" in text_upper):
+            is_ultra_usd_grade = True
 
     # Ekstrak Trade Type: SHORT (Scalping) vs LONG (Intraday Swing)
     m_tt = re.search(r"Trade Type\s*[:=]?\s*(SHORT|LONG)", clean_text, re.IGNORECASE)
@@ -488,6 +505,8 @@ def parse_signal(text: str) -> dict:
         "pdf_confluence_score": pdf_score,
         "master_lot": master_lot,
         "is_high_grade": is_high_grade,
+        "is_ultra_usd_grade": is_ultra_usd_grade,
+        "is_filled_limit": is_filled_limit,
         "is_limit_order": is_limit_order,
         "ladder_limit_orders": ladder_limit_orders,
         "raw_text": text,
@@ -879,6 +898,89 @@ class MT5MemberBridge:
                         cancelled.append(t_id)
         return cancelled
 
+    def cancel_same_side_pending_orders(self, symbol: str, action: str) -> list:
+        """Membatalkan pending limit order searah saat sinyal [ORDER LIMIT TERJEMPUT] dieksekusi agar tidak dobel order."""
+        if not self.ensure_connected():
+            return []
+        sym = symbol or self.find_broker_symbol()
+        pending = self.get_pending_orders(symbol=sym)
+        cancelled = []
+        is_buy_act = "BUY" in action.upper()
+        for po in pending:
+            po_type = str(po.get("type", "")).upper()
+            if (is_buy_act and "BUY" in po_type) or (not is_buy_act and "SELL" in po_type):
+                res = self.cancel_pending_order(po["ticket"])
+                if res.get("success"):
+                    cancelled.append(po["ticket"])
+        return cancelled
+
+    def verify_usd_elite_setup(self, symbol: str, action: str, pdf_score: float = 0.0) -> tuple[bool, str]:
+        """
+        Filter Kualitas Elit Khusus Akun Standard USD ("bener-bener sinyal yang bagus banget"):
+        Memeriksa kondisi live MT5 (Spread, Tren Makro H1 EMA20/50, Anti-Waterfall M15, & Anti-Pucuk RSI)
+        sebelum mengizinkan order 0.01 Lot pada akun Standard USD.
+        """
+        if not self.ensure_connected():
+            return True, "OK"
+        try:
+            sym = symbol or self.find_broker_symbol()
+            tick = self.mt5.symbol_info_tick(sym)
+            if tick and getattr(tick, "ask", 0) and getattr(tick, "bid", 0):
+                spread_usd = float(tick.ask - tick.bid)
+                if spread_usd > 0.65:
+                    return False, f"Spread {sym} sedang melebar (${spread_usd:.2f} > $0.65 USD). Menahan order USD demi keamanan modal."
+
+            is_buy = "BUY" in action.upper()
+            is_limit = "LIMIT" in action.upper()
+
+            rates_h1 = self.mt5.copy_rates_from_pos(sym, self.mt5.TIMEFRAME_H1, 0, 55)
+            if rates_h1 is not None and len(rates_h1) >= 50 and pdf_score < 90.0:
+                closes_h1 = [float(r["close"]) for r in rates_h1]
+                k20 = 2.0 / 21.0
+                k50 = 2.0 / 51.0
+                ema20_h1 = closes_h1[0]
+                ema50_h1 = closes_h1[0]
+                for c_val in closes_h1[1:]:
+                    ema20_h1 = c_val * k20 + ema20_h1 * (1.0 - k20)
+                    ema50_h1 = c_val * k50 + ema50_h1 * (1.0 - k50)
+                last_h1 = closes_h1[-1]
+                if is_buy and last_h1 < ema50_h1 and ema20_h1 < ema50_h1 and (ema50_h1 - last_h1) > 4.0:
+                    return False, f"Tren H1 sedang Bearish kuat (Harga ${last_h1:,.2f} di bawah EMA50 ${ema50_h1:,.2f}). Menahan {action} di Akun USD agar tidak melawan arus."
+                if (not is_buy) and last_h1 > ema50_h1 and ema20_h1 > ema50_h1 and (last_h1 - ema50_h1) > 4.0:
+                    return False, f"Tren H1 sedang Bullish kuat (Harga ${last_h1:,.2f} di atas EMA50 ${ema50_h1:,.2f}). Menahan {action} di Akun USD agar tidak melawan arus."
+
+            rates_m15 = self.mt5.copy_rates_from_pos(sym, self.mt5.TIMEFRAME_M15, 0, 25)
+            if rates_m15 is not None and len(rates_m15) >= 20:
+                closes_m15 = [float(r["close"]) for r in rates_m15]
+                opens_m15 = [float(r["open"]) for r in rates_m15]
+                k20 = 2.0 / 21.0
+                ema20_m15 = closes_m15[0]
+                for c_val in closes_m15[1:]:
+                    ema20_m15 = c_val * k20 + ema20_m15 * (1.0 - k20)
+                last_c = closes_m15[-1]
+                last_o = opens_m15[-1]
+                if is_buy and last_c < ema20_m15 and (last_o - last_c) >= 2.50:
+                    return False, f"Candle M15 sedang terjun tajam (-${last_o - last_c:.2f} di bawah EMA20). Menahan {action} di Akun USD agar modal aman."
+                if (not is_buy) and last_c > ema20_m15 and (last_c - last_o) >= 2.50:
+                    return False, f"Candle M15 sedang loncat tajam (+${last_c - last_o:.2f} di atas EMA20). Menahan {action} di Akun USD agar modal aman."
+
+                if not is_limit and len(closes_m15) >= 16:
+                    gains, losses = [], []
+                    for i in range(len(closes_m15) - 14, len(closes_m15)):
+                        diff = closes_m15[i] - closes_m15[i - 1]
+                        gains.append(max(0.0, diff))
+                        losses.append(max(0.0, -diff))
+                    avg_g = sum(gains) / 14.0
+                    avg_l = sum(losses) / 14.0
+                    rsi_m15 = 100.0 if avg_l == 0 else (100.0 - (100.0 / (1.0 + avg_g / avg_l)))
+                    if is_buy and rsi_m15 >= 68.0:
+                        return False, f"RSI M15 sudah pucuk jenuh beli ({rsi_m15:.1f} >= 68). Menahan BUY di Akun USD."
+                    if (not is_buy) and rsi_m15 <= 32.0:
+                        return False, f"RSI M15 sudah dasar jenuh jual ({rsi_m15:.1f} <= 32). Menahan SELL di Akun USD."
+        except Exception:
+            pass
+        return True, "OK"
+
     def cancel_opposite_pending_orders(self, symbol: str, new_direction: str = None) -> list:
         """
         Membatalkan pending limit order yang berlawanan arah dengan arah order/sinyal baru.
@@ -1049,10 +1151,15 @@ class MT5MemberBridge:
         if not is_cent:
             usd_only_high = self.cfg.get("usd_only_high_grade", True)
             pdf_score_val = float(sig.get("pdf_confluence_score", 0.0) or 0.0)
-            if (usd_only_high and not is_high_grade and master_lot < 0.05) or (0 < pdf_score_val < 80.0):
-                return {"success": False, "message": "Pending Limit dilewati: Akun Standard USD hanya untuk sinyal Sniper Grade A+ (≥80%)."}
+            is_ultra_usd = sig.get("is_ultra_usd_grade", is_high_grade)
+            if (usd_only_high and not is_ultra_usd) or (0 < pdf_score_val < 80.0):
+                return {"success": False, "message": f"Pending Limit dilewati: Akun Standard USD hanya mengambil sinyal Elit Grade A+ terbaik (Skor sinyal: {pdf_score_val:.0f}%)."}
+            elite_ok, elite_msg = self.verify_usd_elite_setup(sym, action, pdf_score=pdf_score_val)
+            if not elite_ok:
+                print(f"   🛡️ [USD ELITE GUARD] {elite_msg}")
+                return {"success": False, "message": elite_msg}
             trade_lot, lot_lbl = 0.01, "USD Standard Disiplin (Mutlak 0.01 Lot)"
-            print(f"   💎 [USD HIGH GRADE PENDING] BUY/SELL LIMIT {trade_lot} Lot di Akun Standard USD ({lot_lbl}).")
+            print(f"   💎 [USD ELITE SNIPER PENDING] {action} {trade_lot} Lot di Akun Standard USD ({lot_lbl}).")
         else:
             trade_lot, lot_lbl = self.calculate_lot_size(sig, is_cent=True)
             print(f"   🎯 [CENT USC PENDING] BUY/SELL LIMIT {trade_lot} Lot ({lot_lbl}).")
@@ -1188,6 +1295,19 @@ class MT5MemberBridge:
         # Delegasikan ke Pending Limit jika tipe aksi BUY_LIMIT / SELL_LIMIT
         if action in ["BUY_LIMIT", "SELL_LIMIT"] or sig.get("is_limit_order"):
             return self.execute_limit_order(sig)
+
+        # Jika sinyal berasal dari [ORDER LIMIT TERJEMPUT] Master:
+        # 1. Cek apakah pending limit order Member sendiri sudah terjemput duluan menjadi posisi aktif di MT5
+        # 2. Jika belum terjemput karena selisih spread tipis, hapus pending limit searah lalu masuk market agar sama dengan Master!
+        if sig.get("is_filled_limit"):
+            open_now = self.mt5.positions_get(symbol=sym) or []
+            same_open = [p for p in open_now if (p.type == 0 and action == "BUY") or (p.type == 1 and action == "SELL")]
+            sig_ep = float(sig.get("entry_price", 0.0) or 0.0)
+            if same_open and (not self.is_cent_account() or any(abs(float(p.price_open) - sig_ep) <= 4.0 for p in same_open)):
+                existing_t = same_open[0].ticket
+                print(f"   ✅ [SYNC LIMIT TERJEMPUT] Posisi {action} (#{existing_t}) sudah aktif/terjemput di MT5 Member. Tidak membuka order dobel.")
+                return {"success": True, "ticket": existing_t, "price": same_open[0].price_open, "volume": same_open[0].volume, "symbol": sym}
+            self.cancel_same_side_pending_orders(sym, action)
 
         # Proteksi Anti-Tabrakan & Anti-Hedging Disiplin (Kaidah 9 Buku PDF):
         # Jika ada posisi yang berlawanan arah (misal ada BUY aktif, lalu muncul sinyal SELL):
@@ -1334,12 +1454,13 @@ class MT5MemberBridge:
         usd_only_high = self.cfg.get("usd_only_high_grade", True)
 
         if not is_cent:
-            # Akun Standard USD:
-            if usd_only_high and not is_high_grade and master_lot < 0.05:
+            # Akun Standard USD: Wajib Sinyal Elit Grade A+ Terbaik + Lolos Verifikasi Teknikal Live MT5
+            pdf_score_val = float(sig.get("pdf_confluence_score", 0.0) or 0.0)
+            is_ultra_usd = sig.get("is_ultra_usd_grade", is_high_grade)
+            if (usd_only_high and not is_ultra_usd) or (0 < pdf_score_val < 80.0):
                 skip_msg = (
-                    f"🛡️ [USD STANDARD FILTER] Sinyal ini adalah sinyal standar/kurang bagus (0.01 lot master). "
-                    f"Sesuai arahan pengguna: Akun Standard USD DILARANG masuk pada sinyal 0.01 standar. "
-                    f"HANYA masuk pada sinyal Grade A+ (0.05 lot bagus). Order dilewati demi melindungi modal USD!"
+                    f"🛡️ [USD ELITE FILTER] Sinyal ini belum memenuhi standar Elit Akun USD (Skor {pdf_score_val:.0f}%). "
+                    f"Akun Standard USD hanya mengeksekusi sinyal Grade A+ terbaik demi melindungi modal!"
                 )
                 print(f"\n{skip_msg}\n")
                 return {
@@ -1347,8 +1468,16 @@ class MT5MemberBridge:
                     "status": "usd_skip_standard_grade",
                     "message": skip_msg,
                 }
+            elite_ok, elite_msg = self.verify_usd_elite_setup(sym, action, pdf_score=pdf_score_val)
+            if not elite_ok:
+                print(f"\n🛡️ [USD ELITE GUARD] {elite_msg}\n")
+                return {
+                    "success": False,
+                    "status": "usd_elite_guard_skip",
+                    "message": elite_msg,
+                }
             trade_lot, lot_lbl = 0.01, "USD Standard Disiplin (Mutlak 0.01 Lot)"
-            print(f"   💎 [USD HIGH GRADE] Sinyal Grade A+ (Momen Bagus 0.05 Lot). Membuka posisi disiplin {trade_lot} Lot di Akun Standard USD ({lot_lbl}).")
+            print(f"   💎 [USD ELITE GRADE A+] Sinyal Terbaik Terkonfirmasi. Membuka posisi disiplin {trade_lot} Lot di Akun Standard USD ({lot_lbl}).")
         else:
             # Akun Cent (USC): Sesuai arahan pengguna: HANYA Grade A+ (0.05 lot)
             cent_only_high = self.cfg.get("cent_only_high_grade", True)

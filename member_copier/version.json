@@ -1,33 +1,4 @@
 {
-  "version": "2.5.0",
-  "name": "MT5 VIP Auto-Copier (Strict USD 0.01 Lot Lock & Sniper Limit Capital Guard)",
-  "released_at": "2026-10-20",
-  "min_python": "3.10",
-  "changelog": "Pembaruan v2.5.0: Kunci Mutlak 0.01 Lot untuk Akun Standard USD, Seleksi Ketat BUY LIMIT & SELL LIMIT Grade A+ (Anti-Kuras Modal / Maks 1 Limit Sniper), dan Sinkronisasi Posisi Live 0-Delay.",
-  "features": [
-    "Strict USD 0.01 Lot Lock: Akun Standard USD dikunci mutlak 0.01 Lot pada Market maupun Pending Limit Order",
-    "Sniper Limit Capital Guard: Hanya 1 Pending Limit Order Grade A+ (>=80%) terbaik & dilarang menumpuk limit saat posisi aktif berjalan",
-    "Zero-Delay Live Position Sync: Deteksi instan order limit terjemput & penutupan TP/SL langsung dari posisi live Master MT5",
-    "Windows Clock-Skew Immunity: Toleransi selisih jam PC member hingga 15 menit agar sinyal live tidak pernah terlewat",
-    "Instant Filled-Limit Grade A+ Recognition: Sinyal [ORDER LIMIT TERJEMPUT] otomatis dieksekusi dengan prioritas Grade A+",
-    "Clean Slate Protocol 19:00 WIB: Otomatis batalkan sisa pending limit order Sesi UK/Asia saat memasuki Sesi US",
-    "US Session Expiry 30m: Khusus Sesi US kadaluarsa pending order 30 menit (Sesi UK & Asia tetap normal 120 menit)",
-    "SMC Institutional Reversal Guard: Veto BUY saat Bearish CHoCH dan Veto SELL saat Bullish CHoCH",
-    "Auto Cut-Loss Dini: Otomatis potong kerugian saat market berbalik arah tanpa menunggu SL penuh",
-    "Hermes Auto-Repair & Self-Healing: Proteksi posisi tanpa SL, pembatalan pending order kadaluarsa, dan anti-freeze",
-    "Synchronized Setup with Master: Buy Limit / Sell Limit persis mengikuti setup Master Bot (Single-Sided Sniper Momen Bagus)",
-    "Strict Exposure & Position Cap: Mencegah penumpukan posisi liar (maksimal 1 layer / sesuai kuota Master)",
-    "Private TP/SL Alerts: Member menerima notifikasi TP/SL khusus akun MT5 miliknya sendiri di Telegram (Saved Messages)",
-    "Opsi 2 Pure Sniper: 100% Sinyal dipasang sebagai pending BUY LIMIT & SELL LIMIT",
-    "Anti-Kejar Lilin Bob Volman: Entry retest 20 EMA di level diskon (BUY) dan premium (SELL)",
-    "Auto-Cancel 120 Menit: Pending limit order otomatis dibatalkan jika tidak tersentuh dalam 2 jam",
-    "Restrukturisasi SHORT & LONG: Scalping 60 pips (R:R 1:1) dan Intraday Swing 180 pips (R:R 3:1)",
-    "Auto-BEP +60 Pips untuk LONG Swing: Mengunci Break Even otomatis saat profit mencapai +60 pips ($6.00 USD)",
-    "Max 1 Layer Strict Lock: Menjaga akun disiplin maksimal 1 posisi aktif",
-    "Broker-Adaptive Spread Protection: Eksekusi cerdas toleransi spread normal broker 3.6 - 3.7 pips",
-    "Auto-Reversal Cleanup: Pembatalan otomatis pending order lawan saat arah market berbalik",
-    "Auto-Spawn Reopen: Jendela copier baru otomatis terbuka kembali saat update diterapkan",
-    "Zero-Touch Hot Reload: Transisi mulus tanpa member perlu buka-tutup manual",
-    "Preserve Config: Pengaturan akun & lot kustom member tetap aman 100%"
-  ]
+  "version": "2.5.1",
+  "changelog": "Sinkronisasi Penuh Sinyal Master-Member (BUY/SELL LIMIT & Market) + Filter Elit Grade A+ Khusus Akun Standard USD (0.01 Lot, H1 Trend Guard, M15 Anti-Waterfall, Max 1 Posisi)"
 }

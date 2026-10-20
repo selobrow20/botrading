@@ -516,7 +516,7 @@ class PipelineRunner:
                         or (getattr(sig_result, "ladder_limit_orders", None) and len(sig_result.ladder_limit_orders) > 0)
                     )
                     cfg_mt5_chk = getattr(self, "config", {}).get("mt5", {}) if hasattr(self, "config") else load_config().get("mt5", {})
-                    if is_pending_sig and not bool(cfg_mt5_chk.get("notify_pending_limit_signals", False)):
+                    if is_pending_sig and not bool(cfg_mt5_chk.get("notify_pending_limit_signals", True)):
                         skip_broadcast = True
                         skip_reason = "Sinyal pending ditiadakan dari Telegram sesuai instruksi pengguna (menunggu order terjemput)"
 
@@ -1057,7 +1057,7 @@ class PipelineRunner:
                         "sl": po.get("sl"),
                         "score": getattr(sig_result, "pdf_confluence_score", 90.0) if sig_result else 90.0,
                         "grade": getattr(sig_result, "setup_grade", "Grade A+") if sig_result else "Grade A+",
-                    })
+                    }, admin_only=False)
                 except Exception as ex_tg:
                     logger.debug(f"Gagal kirim kartu laporan limit order ke Telegram: {ex_tg}")
 
