@@ -950,13 +950,14 @@ class PipelineRunner:
         active_buys = [p for p in open_positions if "BUY" in str(p.get("type", "")).upper()]
         active_sells = [p for p in open_positions if "SELL" in str(p.get("type", "")).upper()]
 
-        # PROTOKOL PATEN SESI US (19:00 - 24:00 WIB): HARD CAP MUTLAK 1 LAYER (ANTI-MARTINGALE / ANTI-10 LAYER)
-        # Sesuai arahan mutlak pengguna: "zona us buy & sell limit jgn banyak, semalem smp 10 layer klo ga close bsa mc krn us anjlok"
+        # PROTOKOL PATEN SESI US (19:00 - 24:00 WIB): HARD CAP MAKSIMAL 4 LAYER (ANTI-MARTINGALE / ANTI-10 LAYER)
+        # Sesuai arahan mutlak pengguna: "maax 4 layer oke lah zona us"
         now_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
         is_us_time = (19 <= now_wib.hour <= 23)
-        if is_us_time and (len(open_positions) + len(active_pending) >= 1):
+        us_max_cap = int(cfg_mt5.get("us_session_max_positions", 4))
+        if is_us_time and (len(open_positions) + len(active_pending) >= us_max_cap):
             logger.info(
-                f"🛑 [US SESSION 1-LAYER CAP] Sesi US dibatasi MUTLAK MAKSIMAL 1 ORDER aktif/pending "
+                f"🛑 [US SESSION {us_max_cap}-LAYER CAP] Sesi US dibatasi MAKSIMAL {us_max_cap} ORDER aktif/pending "
                 f"({len(open_positions)} posisi + {len(active_pending)} pending di MT5). "
                 f"Menolak penambahan layer baru demi mencegah MC saat market US anjlok!"
             )
@@ -994,7 +995,10 @@ class PipelineRunner:
                 b.cancel_pending_order(so["ticket"])
                 logger.info(f"🛑 [MOMEN SYNC] Membatalkan SELL LIMIT #{so['ticket']} karena momen terkonfirmasi BUY.")
             sell_limits = []
-            needs_buy = (len(buy_limits) == 0 and len(active_buys) == 0 and len(active_sells) == 0)
+            if is_us_time:
+                needs_buy = ((len(active_buys) + len(buy_limits)) < us_max_cap) and len(active_sells) == 0
+            else:
+                needs_buy = (len(buy_limits) == 0 and len(active_buys) == 0 and len(active_sells) == 0)
             needs_sell = False
         elif "SELL" in sig_action:
             # Sinyal Momen Bagus SELL -> Hanya pasang SELL LIMIT di salah satu sisi (Retest Premium Resisten / EMA 20)
@@ -1003,7 +1007,10 @@ class PipelineRunner:
                 logger.info(f"🛑 [MOMEN SYNC] Membatalkan BUY LIMIT #{bo['ticket']} karena momen terkonfirmasi SELL.")
             buy_limits = []
             needs_buy = False
-            needs_sell = (len(sell_limits) == 0 and len(active_sells) == 0 and len(active_buys) == 0)
+            if is_us_time:
+                needs_sell = ((len(active_sells) + len(sell_limits)) < us_max_cap) and len(active_buys) == 0
+            else:
+                needs_sell = (len(sell_limits) == 0 and len(active_sells) == 0 and len(active_buys) == 0)
         else:
             return
 

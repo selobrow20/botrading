@@ -14,11 +14,11 @@ from member_copier.client_copier import (
 
 
 def test_copier_version_exists():
-    assert CLIENT_COPIER_VERSION == "2.5.0"
     v_file = Path("member_copier/version.json")
     assert v_file.exists()
     data = json.loads(v_file.read_text(encoding="utf-8"))
-    assert data["version"] == "2.5.0"
+    assert CLIENT_COPIER_VERSION == data["version"]
+    assert parse_version(CLIENT_COPIER_VERSION) >= parse_version("2.5.0")
     assert parse_version("2.5.0") > parse_version("2.4.9")
     assert parse_version("2.4.9") > parse_version("2.4.8")
     assert parse_version("2.4.8") > parse_version("2.4.7")

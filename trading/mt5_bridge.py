@@ -1655,7 +1655,7 @@ class MT5Bridge:
             max_positions = 1
         else:
             if is_us:
-                max_positions = 1  # Sesi US mutlak maksimal 1 posisi (Anti-10 layer / Anti-MC)
+                max_positions = int(cfg_mt5.get("us_session_max_positions", 4))  # Sesi US maksimal 4 posisi (Sesuai arahan: max 4 layer)
             else:
                 max_positions = int(cfg_mt5.get("max_positions_cent", 1))
 

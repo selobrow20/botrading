@@ -82,7 +82,7 @@ mt5:
   trading_hours: all
   max_positions_usd: 1              # Akun USD Standard: Maksimal 1 posisi (disiplin margin)
   max_positions_cent: 1             # Akun Cent (USC): Maksimal 1 posisi (MAX 1 LAYER - PDF Section 20)
-  us_session_max_positions: 1       # Sesi US Akun Cent (USC): Maksimal 3 posisi
+  us_session_max_positions: 4       # Sesi US Akun Cent (USC): Maksimal 4 layer/posisi (Sesuai arahan: max 4 layer)
   min_grid_spacing: 1.0             # Jarak minimal antar posisi $1.00 USD (10 pips) agar tidak staking di titik yang sama
   notify_veto: false                # Heningkan (mute) notifikasi pembatalan trade (veto) ke Telegram (anti-spam)
   use_trailing_stop: true           # Diaktifkan: Pengawal profit otomatis via dynamic trailing stop

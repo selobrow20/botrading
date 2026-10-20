@@ -29,7 +29,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.5.6"
+CLIENT_COPIER_VERSION = "2.5.7"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -1067,8 +1067,8 @@ class MT5MemberBridge:
         # Sesuai arahan pengguna: "semua ikut setup gw aja bor" (Disiplin ketat, member tidak boleh buka 10 posisi!)
         open_pos = self.mt5.positions_get(symbol=sym) or []
         if is_us:
-            # Sesi US (19:00 - 24:00 WIB): Hard Cap Mutlak 1 Layer (Anti-10 Layer / Anti-MC saat US anjlok)
-            max_pos = 1
+            # Sesi US (19:00 - 24:00 WIB): Hard Cap Maksimal 4 Layer (Anti-10 Layer / Anti-MC saat US anjlok)
+            max_pos = int(self.cfg.get("us_session_max_positions", 4))
         elif not is_cent:
             max_pos = int(self.cfg.get("max_positions_standard", 1))
         else:
@@ -1094,9 +1094,10 @@ class MT5MemberBridge:
 
         # 3. CEK TOTAL KUOTA PENDING ORDERS & POSISI AKTIF (Khusus USD mutlak maks 1 pending order sniper)
         active_pending = self.get_pending_orders(symbol=sym)
-        max_pending = 1 if (is_us or not is_cent) else int(self.cfg.get("max_pending_orders_per_symbol", 1))
-        if is_us and (len(open_pos) + len(active_pending) >= 1):
-            msg_us_cap = f"Pending limit {action} dilewati: Sesi US dibatasi MUTLAK 1 LAYER ({len(open_pos)} posisi + {len(active_pending)} pending aktif). Mencegah penumpukan layer saat market US anjlok!"
+        us_cap = int(self.cfg.get("us_session_max_positions", 4))
+        max_pending = us_cap if is_us else (1 if not is_cent else int(self.cfg.get("max_pending_orders_per_symbol", 1)))
+        if is_us and (len(open_pos) + len(active_pending) >= us_cap):
+            msg_us_cap = f"Pending limit {action} dilewati: Sesi US dibatasi MAKSIMAL {us_cap} LAYER ({len(open_pos)} posisi + {len(active_pending)} pending aktif). Mencegah penumpukan 10 layer saat market US anjlok!"
             print(f"   🛑 {msg_us_cap}")
             return {"success": False, "message": msg_us_cap}
         if len(open_pos) + len(active_pending) >= max_pending:
@@ -1374,7 +1375,7 @@ class MT5MemberBridge:
         else:
             cent_base = int(self.cfg.get("max_positions_cent", 3))
             if is_us:
-                max_positions = max(cent_base, int(self.cfg.get("us_session_max_positions", 3)))
+                max_positions = max(cent_base, int(self.cfg.get("us_session_max_positions", 4)))
             else:
                 max_positions = cent_base
 
