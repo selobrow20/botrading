@@ -29,7 +29,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.5.3"
+CLIENT_COPIER_VERSION = "2.5.4"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -482,14 +482,12 @@ def parse_signal(text: str) -> dict:
     elif (is_limit_order or is_filled_limit) and not has_plain_a_only:
         is_high_grade = True
 
-    # Khusus Akun Standard USD: Wajib Sinyal Elit Grade A+ Terbaik (>= 85% / Grade A+ Murni tanpa keraguan)
+    # Khusus Akun Standard USD: Selaras dengan Master Bot (Sinyal Sama Persis @ 0.01 Lot)
     is_ultra_usd_grade = False
     if not has_low_grade_tag and not has_plain_a_only:
-        if pdf_score >= 85.0:
+        if pdf_score >= 80.0 or "GRADE A+" in text_upper or "GRADE: A+" in text_upper:
             is_ultra_usd_grade = True
-        elif pdf_score == 0.0 and ("GRADE A+" in text_upper or "GRADE: A+" in text_upper or is_filled_limit):
-            is_ultra_usd_grade = True
-        elif pdf_score >= 80.0 and ("GRADE A+" in text_upper or "GRADE: A+" in text_upper):
+        elif is_limit_order or is_filled_limit or "PENDING ORDER" in text_upper or "SNIPER" in text_upper:
             is_ultra_usd_grade = True
 
     # Ekstrak Trade Type: SHORT (Scalping) vs LONG (Intraday Swing)
@@ -960,6 +958,12 @@ class MT5MemberBridge:
                     ema20_m15 = c_val * k20 + ema20_m15 * (1.0 - k20)
                 last_c = closes_m15[-1]
                 last_o = opens_m15[-1]
+                # Protokol Paten UK Session Caution (13:00 - 19:00 WIB) pada Akun Standard USD
+                now_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
+                if 13 <= now_wib.hour < 19:
+                    if is_buy and (last_c < ema20_m15 or (rates_h1 is not None and len(rates_h1) >= 50 and last_h1 < ema50_h1)):
+                        return False, "Protokol UK Caution: Sesi London aktif & harga di bawah EMA20/50. Menahan BUY di Akun USD (Fokus pasar turun / SELL)."
+
                 if is_buy and last_c < ema20_m15 and (last_o - last_c) >= 2.50:
                     return False, f"Candle M15 sedang terjun tajam (-${last_o - last_c:.2f} di bawah EMA20). Menahan {action} di Akun USD agar modal aman."
                 if (not is_buy) and last_c > ema20_m15 and (last_c - last_o) >= 2.50:
