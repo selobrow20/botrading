@@ -1682,15 +1682,10 @@ class SignalEngine:
         allow_buy = True
         allow_sell = True
 
-        # Evaluasi Tren Intraday M15 & Struktur SMC M15 KHUSUS SESI US (19:00 - 24:00 WIB)
-        # Sesi Asia & UK/London tetap menggunakan logika standar yang sudah aman.
-        now_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
-        curr_session, _ = get_trading_session(now_wib)
-        is_us_session = (curr_session == "US")
-
+        # Evaluasi Tren Intraday M15 & Struktur SMC M15 (Anti-Pisau Jatuh 24 Jam di Semua Sesi)
         is_m15_bearish = False
         is_m15_bullish = False
-        if is_us_session and len(df) >= 5:
+        if len(df) >= 5:
             m15_close = curr_price
             m15_ema20 = float(curr_row.get("EMA_20", curr_row.get("ema_20", ema20_raw)))
             m15_ema50 = float(curr_row.get("EMA_50", curr_row.get("ema_50", ema50_raw)))
@@ -1705,23 +1700,23 @@ class SignalEngine:
         enable_dual = bool(cfg_mt5.get("enable_dual_sided_limits", False))
         force_dual = bool(cfg_mt5.get("force_dual_bracket_test", False))
         if not force_dual and not enable_dual:
-            if is_us_session and is_m15_bearish:
+            if is_m15_bearish:
                 allow_buy = False
                 allow_sell = True
-                logger.info("🔒 [US SESSION STRUCTURE GUARD] M15 Terkonfirmasi Bearish / Breakdown di Sesi US: BUY LIMIT dinonaktifkan mutlak (Anti-Pisau Jatuh). Hanya SELL LIMIT diizinkan.")
-            elif is_us_session and is_m15_bullish and macro_bias != "BEARISH":
+                logger.info("🔒 [INTRADAY STRUCTURE GUARD] M15 Terkonfirmasi Bearish / Breakdown: BUY LIMIT dinonaktifkan mutlak (Anti-Pisau Jatuh). Hanya SELL LIMIT diizinkan.")
+            elif is_m15_bullish and macro_bias != "BEARISH":
                 allow_buy = True
                 allow_sell = False
-                logger.info("🔒 [US SESSION STRUCTURE GUARD] M15 Terkonfirmasi Bullish di Sesi US: SELL LIMIT dinonaktifkan (Anti-Hadang Kereta). Hanya BUY LIMIT diizinkan.")
+                logger.info("🔒 [INTRADAY STRUCTURE GUARD] M15 Terkonfirmasi Bullish: SELL LIMIT dinonaktifkan (Anti-Hadang Kereta). Hanya BUY LIMIT diizinkan.")
             elif macro_bias == "BEARISH":
                 allow_buy = False
                 allow_sell = True
                 logger.info("🔒 [TREND LOCK] Tren BEARISH: BUY LIMIT dinonaktifkan (Anti-Pisau Jatuh). Hanya SELL LIMIT diizinkan.")
             elif macro_bias == "BULLISH":
-                if is_us_session and curr_price < ema20_raw:
+                if curr_price < ema20_raw:
                     allow_buy = False
                     allow_sell = False
-                    logger.info("⏸️ [US SESSION PULLBACK CAUTION] H4 Bullish tapi M15 di bawah EMA 20 pada Sesi US: Tahan pasang BUY LIMIT sampai ada konfirmasi pantulan.")
+                    logger.info("⏸️ [PULLBACK CAUTION] H4 Bullish tapi M15 di bawah EMA 20: Tahan pasang BUY LIMIT sampai ada konfirmasi pantulan.")
                 else:
                     allow_buy = True
                     allow_sell = False

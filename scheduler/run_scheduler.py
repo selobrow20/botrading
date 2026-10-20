@@ -925,26 +925,22 @@ class PipelineRunner:
         buy_limits = [o for o in active_pending if "BUY" in str(o.get("type", "")).upper()]
         sell_limits = [o for o in active_pending if "SELL" in str(o.get("type", "")).upper()]
 
-        # ANTI-WATERFALL CRASH GUARD KHUSUS SESI US (19:00 - 24:00 WIB):
-        # Sesi Asia & UK tetap menggunakan logika standar yang sudah aman.
-        # Di Sesi US, jika M15 sedang longsor tajam di bawah EMA 20 (Close < EMA 20 dan body candle merah besar),
+        # ANTI-WATERFALL CRASH GUARD (24 Jam di Semua Sesi):
+        # Jika M15 sedang longsor tajam di bawah EMA 20 (Close < EMA 20 dan body candle merah besar),
         # segera batalkan seluruh BUY_LIMIT yang menggantung dan kunci penempatan BUY_LIMIT baru!
         is_waterfall_dump = False
         try:
-            now_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
-            is_us_session = (19 <= now_wib.hour <= 23)
-            if is_us_session:
-                last_c = float(df_ind["Close"].iloc[-1])
-                last_o = float(df_ind["Open"].iloc[-1])
-                last_e20 = float(df_ind["EMA_20"].iloc[-1]) if "EMA_20" in df_ind.columns else last_c
-                last_atr = float(df_ind["ATR"].iloc[-1]) if "ATR" in df_ind.columns else 2.5
-                if last_c < last_e20 and (last_o - last_c) >= max(1.50, last_atr * 0.8):
-                    is_waterfall_dump = True
-                    if buy_limits:
-                        for bo in buy_limits:
-                            b.cancel_pending_order(bo["ticket"])
-                            logger.warning(f"🚨 [US ANTI-WATERFALL GUARD] Membatalkan BUY LIMIT #{bo['ticket']} karena M15 sedang terjun bebas di bawah EMA 20 pada Sesi US!")
-                        buy_limits = []
+            last_c = float(df_ind["Close"].iloc[-1])
+            last_o = float(df_ind["Open"].iloc[-1])
+            last_e20 = float(df_ind["EMA_20"].iloc[-1]) if "EMA_20" in df_ind.columns else last_c
+            last_atr = float(df_ind["ATR"].iloc[-1]) if "ATR" in df_ind.columns else 2.5
+            if last_c < last_e20 and (last_o - last_c) >= max(1.50, last_atr * 0.8):
+                is_waterfall_dump = True
+                if buy_limits:
+                    for bo in buy_limits:
+                        b.cancel_pending_order(bo["ticket"])
+                        logger.warning(f"🚨 [ANTI-WATERFALL GUARD] Membatalkan BUY LIMIT #{bo['ticket']} karena M15 sedang terjun bebas di bawah EMA 20!")
+                    buy_limits = []
         except Exception:
             pass
 
