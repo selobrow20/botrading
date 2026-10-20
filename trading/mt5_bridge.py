@@ -1003,6 +1003,8 @@ class MT5Bridge:
             max_age = int(max_age_minutes)
         elif curr_session == "US":
             max_age = 30
+        elif curr_session == "LONDON":
+            max_age = 45  # Sesi UK/London lebih dinamis: batas pending 45 menit
         else:
             max_age = int(getattr(self, "limit_order_expiry_mins", 120))
 
@@ -1020,7 +1022,11 @@ class MT5Bridge:
 
             is_expired = age_mins >= max_age
             # Clean Slate Protocol: Jika saat ini Sesi US, order dari Sesi London/Asia wajib dibersihkan
-            is_session_drift = (max_age_minutes is None) and (curr_session == "US" and order_session in ["LONDON", "ASIA"])
+            # Clean Slate Protocol: Saat masuk Sesi US atau Sesi London (UK), bersihkan pending order dari sesi sebelumnya!
+            is_session_drift = (max_age_minutes is None) and (
+                (curr_session == "US" and order_session in ["LONDON", "ASIA"])
+                or (curr_session == "LONDON" and order_session == "ASIA")
+            )
 
             if is_expired or is_session_drift:
                 t_id = po.get("ticket")

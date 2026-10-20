@@ -1682,6 +1682,10 @@ class SignalEngine:
         allow_buy = True
         allow_sell = True
 
+        # Identifikasi Sesi Perdagangan Aktif
+        now_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
+        curr_session, session_name = get_trading_session(now_wib)
+
         # Evaluasi Tren Intraday M15 & Struktur SMC M15 (Anti-Pisau Jatuh 24 Jam di Semua Sesi)
         is_m15_bearish = False
         is_m15_bullish = False
@@ -1721,6 +1725,15 @@ class SignalEngine:
                     allow_buy = True
                     allow_sell = False
                     logger.info("🔒 [TREND LOCK] Tren BULLISH: SELL LIMIT dinonaktifkan (Anti-Hadang Kereta). Hanya BUY LIMIT diizinkan.")
+
+            # PROTOKOL PATEN KEHATI-HATIAN SESI UK / LONDON (13:00 - 19:00 WIB):
+            # Saat masuk Sesi London/UK, pasar sering mengalami aksi jual besar (Institutional Sell-Off / Pasar Takut Turun).
+            # Jika harga berada di bawah EMA 20 M15 atau tren M15 bearish, MUTLAK DILARANG BUY LIMIT.
+            # Sistem secara otomatis mengutamakan SELL LIMIT pada pantulan EMA 20 / Resistance.
+            if curr_session == "LONDON" and (curr_price < ema20_raw or is_m15_bearish):
+                allow_buy = False
+                allow_sell = True
+                logger.info("🛡️ [UK SESSION CAUTION GUARD] Sesi London Aktif & Harga di bawah EMA 20: BUY LIMIT dinonaktifkan mutlak (Anti-Pisau Jatuh). Fokus ke SELL LIMIT.")
             else:
                 if curr_price >= ema50_raw:
                     allow_buy = True

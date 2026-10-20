@@ -874,10 +874,10 @@ class MT5MemberBridge:
         now_ts = time.time()
         tz_wib = ZoneInfo("Asia/Jakarta")
         now_wib = datetime.now(tz_wib)
-        curr_session = "US" if 19 <= now_wib.hour <= 23 else ("LONDON" if 14 <= now_wib.hour < 19 else "ASIA")
+        curr_session = "US" if 19 <= now_wib.hour <= 23 else ("LONDON" if 13 <= now_wib.hour < 19 else "ASIA")
         default_cfg_mins = int((getattr(self, "cfg", None) or {}).get("limit_order_expiry_mins", 120))
         if max_age_minutes is None:
-            dynamic_limit = 30 if curr_session == "US" else default_cfg_mins
+            dynamic_limit = 30 if curr_session == "US" else (45 if curr_session == "LONDON" else default_cfg_mins)
         else:
             dynamic_limit = max_age_minutes
 
@@ -888,7 +888,7 @@ class MT5MemberBridge:
                 age_min = (now_ts - setup_time) / 60.0
                 setup_wib = datetime.fromtimestamp(setup_time, tz=tz_wib)
                 order_session = "US" if 19 <= setup_wib.hour <= 23 else ("LONDON" if 14 <= setup_wib.hour < 19 else "ASIA")
-                is_session_drift = (max_age_minutes is None) and (curr_session == "US" and order_session in ["LONDON", "ASIA"])
+                is_session_drift = (max_age_minutes is None) and ((curr_session == "US" and order_session in ["LONDON", "ASIA"]) or (curr_session == "LONDON" and order_session == "ASIA"))
 
                 if is_session_drift or age_min >= dynamic_limit:
                     t_id = po.get("ticket")
