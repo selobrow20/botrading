@@ -2366,7 +2366,7 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
                         o_act = "BUY_LIMIT" if o.type == bridge.mt5.ORDER_TYPE_BUY_LIMIT else (
                             "SELL_LIMIT" if o.type == bridge.mt5.ORDER_TYPE_SELL_LIMIT else "PENDING"
                         )
-                        print(f"   ⏳ ORDER {o_act.replace('_', ' ')} #{o.ticket} | {o.volume} Lot {o.symbol} @ ${o.price_open:,.2f} (SL: ${o.sl:,.2f} | TP: ${o.tp:,.2f})")
+                        print(f"   ⏳ ORDER {o_act.replace('_', ' ')} #{o.ticket} | {getattr(o, 'volume_current', 0.01)} Lot {o.symbol} @ ${o.price_open:,.2f} (SL: ${o.sl:,.2f} | TP: ${o.tp:,.2f})")
                         existing_prices.append((o_act, float(o.price_open), float(o.sl or 0), float(o.tp or 0)))
                         if o.tp > 0 and o.sl > 0:
                             recent_executed_signals[f"{o_act}_{float(o.tp):.1f}_{float(o.sl):.1f}"] = time.time()
