@@ -720,22 +720,37 @@ class TelegramNotifier:
         pnl_pct = float(res_sig.get("pnl_pct") or 0.0)
         pnl_cash = res_sig.get("pnl_cash")
 
-        # Prioritas 1: Jika pnl_cash negatif (< 0) atau outcome == "LOSE", status MUTLAK LOSE (Stop Loss)!
-        # Dilarang keras meng-override Stop Loss menjadi Take Profit!
-        if (pnl_cash is not None and float(pnl_cash) < 0) or outcome == "LOSE":
+        note = res_sig.get("outcome_note", "")
+        note_upper = (note or "").upper()
+
+        # Kalibrasi arah posisi mutlak berbasis level TP/SL matematis
+        if tp_p > 0 and entry_p > 0 and tp_p > entry_p:
+            sig_type = "BUY"
+        elif sl_p > 0 and entry_p > 0 and sl_p < entry_p:
+            sig_type = "BUY"
+        elif tp_p > 0 and entry_p > 0 and tp_p < entry_p:
+            sig_type = "SELL"
+        elif sl_p > 0 and entry_p > 0 and sl_p > entry_p:
+            sig_type = "SELL"
+
+        is_buy = "BUY" in sig_type
+        is_explicit_cut_loss = any(k in note_upper for k in ["CUT LOSS", "STOP LOSS", "TOLERANSI RISIKO", "RUGI"])
+        is_math_loss = (is_buy and exit_p < entry_p) or ((not is_buy) and exit_p > entry_p)
+
+        # Mutlak: Jika Cut Loss, PnL minus, outcome LOSE, atau harga rugi -> MUTLAK LOSE!
+        # Dilarang keras meng-override Stop Loss/Cut Loss menjadi Take Profit!
+        if is_explicit_cut_loss or (pnl_cash is not None and float(pnl_cash) < 0) or outcome == "LOSE" or is_math_loss:
             is_win = False
             outcome = "LOSE"
             pnl_pct = -abs(pnl_pct)
-        elif (pnl_cash is not None and float(pnl_cash) > 0) or outcome == "WIN":
+            if pnl_cash is not None:
+                pnl_cash = -abs(float(pnl_cash))
+        else:
             is_win = True
             outcome = "WIN"
             pnl_pct = abs(pnl_pct)
-        else:
-            # Fallback jika tidak ada pnl_cash dan outcome
-            is_buy = "BUY" in sig_type
-            is_win = (exit_p > entry_p) if is_buy else (exit_p < entry_p)
-            outcome = "WIN" if is_win else "LOSE"
-            pnl_pct = abs(pnl_pct) if is_win else -abs(pnl_pct)
+            if pnl_cash is not None:
+                pnl_cash = abs(float(pnl_cash))
 
         entry_str = format_currency(entry_p, ticker)
         exit_str = format_currency(exit_p, ticker)

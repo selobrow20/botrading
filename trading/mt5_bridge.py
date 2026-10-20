@@ -3012,6 +3012,16 @@ class MT5Bridge:
                     last_p = float(old_pos.get("price_current") or entry_p)
                     tp_p = float(old_pos.get("tp") or 0.0)
                     sl_p = float(old_pos.get("sl") or 0.0)
+
+                    # Kalibrasi arah posisi berbasis struktur matematis TP & SL mutlak
+                    if tp_p > 0 and entry_p > 0 and tp_p > entry_p:
+                        act = "BUY"
+                    elif sl_p > 0 and entry_p > 0 and sl_p < entry_p:
+                        act = "BUY"
+                    elif tp_p > 0 and entry_p > 0 and tp_p < entry_p:
+                        act = "SELL"
+                    elif sl_p > 0 and entry_p > 0 and sl_p > entry_p:
+                        act = "SELL"
                     vol = float(old_pos.get("volume") or 0.05)
                     sym_closed = old_pos.get("symbol", "XAUUSDc")
 

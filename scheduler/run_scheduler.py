@@ -1515,7 +1515,16 @@ class PipelineRunner:
                 tp_price = float(entry_sig.get("take_profit_price")) if entry_sig and entry_sig.get("take_profit_price") else None
                 sl_price = float(entry_sig.get("stop_loss_price")) if entry_sig and entry_sig.get("stop_loss_price") else None
 
-                # Hitung PnL % secara akurat
+                # Kalibrasi arah posisi mutlak berbasis level TP/SL matematis
+                if tp_price and entry_price and tp_price > entry_price:
+                    sig_type = "BUY"
+                elif sl_price and entry_price and sl_price < entry_price:
+                    sig_type = "BUY"
+                elif tp_price and entry_price and tp_price < entry_price:
+                    sig_type = "SELL"
+                elif sl_price and entry_price and sl_price > entry_price:
+                    sig_type = "SELL"
+
                 is_buy_type = "BUY" in str(sig_type).upper()
                 if entry_price > 0:
                     if is_buy_type:
@@ -1526,13 +1535,18 @@ class PipelineRunner:
                     pnl_pct = 0.0
 
                 # Sinkronkan tanda PnL % dan outcome dengan hasil riil MT5:
-                # Jika profit MT5 bernilai minus atau outcome LOSE, pnl_pct WAJIB minus!
-                if (pnl_cash is not None and float(pnl_cash) < 0) or outcome == "LOSE":
+                # Jika profit MT5 bernilai minus atau pergerakan harga rugi, MUTLAK LOSE (Stop Loss/Cut Loss)!
+                is_math_loss = (is_buy_type and exit_price < entry_price) or ((not is_buy_type) and exit_price > entry_price)
+                if (pnl_cash is not None and float(pnl_cash) < 0) or outcome == "LOSE" or is_math_loss:
                     outcome = "LOSE"
                     pnl_pct = -abs(pnl_pct)
+                    if pnl_cash is not None:
+                        pnl_cash = -abs(float(pnl_cash))
                 elif (pnl_cash is not None and float(pnl_cash) > 0) or outcome == "WIN":
                     outcome = "WIN"
                     pnl_pct = abs(pnl_pct)
+                    if pnl_cash is not None:
+                        pnl_cash = abs(float(pnl_cash))
 
                 from zoneinfo import ZoneInfo
                 tz_wib = ZoneInfo("Asia/Jakarta")
