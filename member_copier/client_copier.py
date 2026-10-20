@@ -2346,10 +2346,33 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
     asyncio.create_task(periodic_ota_checker())
 
     async def recent_signal_catchup():
-        """Memeriksa 3 pesan terakhir dari Master Bot (< 15 menit) saat startup/reload agar sinyal terbaru langsung dieksekusi."""
-        await asyncio.sleep(1.5)
+        """Memeriksa order aktif di MT5 dan 4 pesan terakhir dari Master Bot (< 15 menit) saat startup/reload."""
+        await asyncio.sleep(1.0)
         try:
-            msgs = await client.get_messages(bot_username, limit=4)
+            existing_prices = []
+            if bridge.ensure_connected():
+                sym = bridge.find_broker_symbol()
+                open_pos = bridge.mt5.positions_get(symbol=sym) or []
+                pend_ord = bridge.mt5.orders_get(symbol=sym) or []
+                if open_pos or pend_ord:
+                    print("📌 [STATUS ORDER AKTIF DI MT5 SAAT INI]")
+                    for p in open_pos:
+                        p_act = "BUY" if p.type == 0 else "SELL"
+                        print(f"   🟢 POSISI {p_act} #{p.ticket} | {p.volume} Lot {p.symbol} @ ${p.price_open:,.2f} (SL: ${p.sl:,.2f} | TP: ${p.tp:,.2f})")
+                        existing_prices.append((p_act, float(p.price_open), float(p.sl or 0), float(p.tp or 0)))
+                        if p.tp > 0 and p.sl > 0:
+                            recent_executed_signals[f"{p_act}_{float(p.tp):.1f}_{float(p.sl):.1f}"] = time.time()
+                    for o in pend_ord:
+                        o_act = "BUY_LIMIT" if o.type == bridge.mt5.ORDER_TYPE_BUY_LIMIT else (
+                            "SELL_LIMIT" if o.type == bridge.mt5.ORDER_TYPE_SELL_LIMIT else "PENDING"
+                        )
+                        print(f"   ⏳ ORDER {o_act.replace('_', ' ')} #{o.ticket} | {o.volume} Lot {o.symbol} @ ${o.price_open:,.2f} (SL: ${o.sl:,.2f} | TP: ${o.tp:,.2f})")
+                        existing_prices.append((o_act, float(o.price_open), float(o.sl or 0), float(o.tp or 0)))
+                        if o.tp > 0 and o.sl > 0:
+                            recent_executed_signals[f"{o_act}_{float(o.tp):.1f}_{float(o.sl):.1f}"] = time.time()
+                    print("=" * 65 + "\n")
+
+            msgs = await client.get_messages(target_bot, limit=4)
             now_utc = datetime.now(timezone.utc)
             for m in reversed(list(msgs or [])):
                 if not m or not getattr(m, "message", None):
@@ -2361,15 +2384,30 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
                     age_s = (now_utc - msg_dt).total_seconds()
                     if age_s > 900:
                         continue
-                sig_Test = parse_signal(m.message)
-                if sig_Test and sig_Test.get("action") in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]:
+                sig_test = parse_signal(m.message)
+                if sig_test and sig_test.get("action") in ["BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT"]:
+                    s_act = sig_test.get("action")
+                    s_entry = float(sig_test.get("entry_price") or 0)
+                    s_sl = float(sig_test.get("sl_price") or 0)
+                    s_tp = float(sig_test.get("tp_price") or 0)
+                    already_on_mt5 = False
+                    for e_act, e_price, e_sl, e_tp in existing_prices:
+                        if e_act == s_act and (
+                            (s_entry > 0 and abs(e_price - s_entry) < 1.5)
+                            or (s_tp > 0 and abs(e_tp - s_tp) < 1.5)
+                        ):
+                            already_on_mt5 = True
+                            break
+                    if already_on_mt5:
+                        continue
+
                     class _CatchupEvent:
                         def __init__(self, msg_obj):
                             self.message = msg_obj
                             self.raw_text = msg_obj.message
                         async def get_sender(self):
                             class _S:
-                                username = bot_username
+                                username = target_bot
                             return _S()
                     await message_handler(_CatchupEvent(m))
         except Exception as e_catch:

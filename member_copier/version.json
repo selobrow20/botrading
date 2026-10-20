@@ -1,4 +1,4 @@
 {
-  "version": "2.5.2",
-  "changelog": "Fix Permanen Windows Timezone (Tanpa Perlu Modul tzdata) + Auto-Catchup Sinyal Terbaru Saat Startup/Reload"
+  "version": "2.5.3",
+  "changelog": "Tampilkan Status Order Aktif MT5 Saat Startup + Sinkronisasi Sinyal Terbaru Otomatis"
 }
