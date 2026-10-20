@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.4.9"
+CLIENT_COPIER_VERSION = "2.5.0"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -521,8 +521,8 @@ class MT5MemberBridge:
           * Di luar Sesi US: 0.05 lot (cent_lot / default_lot)
         """
         if not is_cent:
-            lot = float(self.cfg.get("usd_lot", 0.01))
-            return lot, "USD Standard Disiplin"
+            # Dikunci mutlak 0.01 Lot untuk Akun Standard USD demi keamanan modal
+            return 0.01, "USD Standard Disiplin (Mutlak 0.01 Lot)"
 
         # Cek Sesi US untuk Akun Cent
         is_us = False
@@ -983,9 +983,9 @@ class MT5MemberBridge:
             # Bersihkan pending order lawan jika single-sided
             self.cancel_opposite_pending_orders(sym, action)
 
-        # 3. CEK TOTAL KUOTA PENDING ORDERS & POSISI AKTIF
+        # 3. CEK TOTAL KUOTA PENDING ORDERS & POSISI AKTIF (Khusus USD mutlak maks 1 pending order sniper)
         active_pending = self.get_pending_orders(symbol=sym)
-        max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 2))
+        max_pending = 1 if not is_cent else int(self.cfg.get("max_pending_orders_per_symbol", 1))
         if len(open_pos) + len(active_pending) >= max_pending:
             same_pending = [po for po in active_pending if ("BUY" in action and "BUY" in str(po.get("type", "")).upper()) or ("SELL" in action and "SELL" in str(po.get("type", "")).upper())]
             if same_pending:
@@ -1013,11 +1013,11 @@ class MT5MemberBridge:
         if limit_price <= 0 or tp_raw <= 0 or sl_raw <= 0:
             return {"success": False, "message": f"Harga limit (${limit_price:.2f}), TP (${tp_raw:.2f}), atau SL (${sl_raw:.2f}) tidak valid."}
 
-        # Multi-Level Support (Dual-Level & Dual-Sided Sniper)
-        enable_multi = bool(self.cfg.get("enable_multi_level_limits", True))
+        # Multi-Level Support (Khusus Akun Standard USD dilarang multi-level agar modal tidak terkuras)
+        enable_multi = False if not is_cent else bool(self.cfg.get("enable_multi_level_limits", False))
         ladder_items = sig.get("ladder_limit_orders", [])
-        max_levels = int(self.cfg.get("max_limit_levels", 2))
-        max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 4))
+        max_levels = 1 if not is_cent else int(self.cfg.get("max_limit_levels", 1))
+        max_pending = 1 if not is_cent else int(self.cfg.get("max_pending_orders_per_symbol", 1))
 
         orders_to_place = []
         if enable_multi and len(ladder_items) >= 2:
@@ -1048,9 +1048,10 @@ class MT5MemberBridge:
 
         if not is_cent:
             usd_only_high = self.cfg.get("usd_only_high_grade", True)
-            if usd_only_high and not is_high_grade and master_lot < 0.05:
-                return {"success": False, "message": "Pending Limit dilewati: Akun Standard USD hanya untuk sinyal Grade A+ (0.05 lot)."}
-            trade_lot, lot_lbl = self.calculate_lot_size(sig, is_cent=False)
+            pdf_score_val = float(sig.get("pdf_confluence_score", 0.0) or 0.0)
+            if (usd_only_high and not is_high_grade and master_lot < 0.05) or (0 < pdf_score_val < 80.0):
+                return {"success": False, "message": "Pending Limit dilewati: Akun Standard USD hanya untuk sinyal Sniper Grade A+ (≥80%)."}
+            trade_lot, lot_lbl = 0.01, "USD Standard Disiplin (Mutlak 0.01 Lot)"
             print(f"   💎 [USD HIGH GRADE PENDING] BUY/SELL LIMIT {trade_lot} Lot di Akun Standard USD ({lot_lbl}).")
         else:
             trade_lot, lot_lbl = self.calculate_lot_size(sig, is_cent=True)
@@ -1346,7 +1347,7 @@ class MT5MemberBridge:
                     "status": "usd_skip_standard_grade",
                     "message": skip_msg,
                 }
-            trade_lot, lot_lbl = self.calculate_lot_size(sig, is_cent=False)
+            trade_lot, lot_lbl = 0.01, "USD Standard Disiplin (Mutlak 0.01 Lot)"
             print(f"   💎 [USD HIGH GRADE] Sinyal Grade A+ (Momen Bagus 0.05 Lot). Membuka posisi disiplin {trade_lot} Lot di Akun Standard USD ({lot_lbl}).")
         else:
             # Akun Cent (USC): Sesuai arahan pengguna: HANYA Grade A+ (0.05 lot)

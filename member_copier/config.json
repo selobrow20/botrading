@@ -10,7 +10,7 @@
   "enable_limit_orders": true,
   "always_use_limit_orders": true,
   "limit_order_expiry_mins": 120,
-  "max_pending_orders_per_symbol": 2,
+  "max_pending_orders_per_symbol": 1,
   "enable_multi_level_limits": false,
   "enable_dual_sided_limits": false,
   "max_limit_levels": 1,

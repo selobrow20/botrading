@@ -1424,10 +1424,10 @@ class MT5Bridge:
         cfg_mt5 = cfg.get("mt5", {})
         always_limit = bool(cfg_mt5.get("always_use_limit_orders", False))
         if is_gold and always_limit and sig_type in ["BUY", "SELL"]:
-            min_limit_pips = float(cfg_mt5.get("min_limit_distance_pips", 15.0))
-            min_dist = max(1.50, min_limit_pips / 10.0)
+            min_limit_pips = float(cfg_mt5.get("min_limit_distance_pips", 25.0))
+            min_dist = max(2.50, min_limit_pips / 10.0)
 
-            target_sym = ticker if (mt5 is not None and not self.simulation_mode and mt5.symbol_select(ticker, True)) else (self.gold_symbol or "XAUUSDc")
+            target_sym = (self.find_symbol(ticker) or self.gold_symbol or "XAUUSDc") if (mt5 is not None and not self.simulation_mode) else ticker
             tick = mt5.symbol_info_tick(target_sym) if (mt5 is not None and not self.simulation_mode) else None
             live_price = float(tick.ask if sig_type == "BUY" else tick.bid) if tick else price
 
@@ -2346,7 +2346,7 @@ class MT5Bridge:
 
         # HARD RULES VETO ENGINE & GATEKEEPER VALIDATION (Hanya pada Akun Standard USD Live)
         # Arahan mutlak pengguna: "kalo usc jgn di batesin bor soal nya buat backtest"
-        if not is_cent and not always_limit and not self.simulation_mode:
+        if not self.simulation_mode:
             try:
                 from strategy.signal_engine import filter_and_validate_signal
                 is_valid, veto_msg = filter_and_validate_signal(sig, notifier=getattr(self, "notifier", None))
@@ -2360,6 +2360,27 @@ class MT5Bridge:
                     }
             except Exception as e_veto:
                 logger.debug(f"Pemeriksaan filter_and_validate_signal limit order: {e_veto}")
+
+            # Cegah pasang limit order baru jika kuota posisi terbuka sudah penuh (Anti-Kuras Modal)
+            open_positions_now = self.get_open_positions()
+            active_open_sym = [
+                p for p in open_positions_now
+                if (is_gold_symbol and any(k in str(p.get("symbol", "")).upper() for k in ["XAUUSD", "GOLD"]))
+                or str(p.get("symbol", "")).upper() == ticker.upper()
+            ]
+            max_pos_allowed = 1 if not is_cent else int(cfg_mt5.get("max_positions_cent", 1))
+            if len(active_open_sym) >= max_pos_allowed:
+                msg_open_cap = (
+                    f"⏸️ [OPEN POSITION LOCK] Pending limit {sig_type} ditahan: "
+                    f"Sudah ada {len(active_open_sym)}/{max_pos_allowed} posisi {ticker} aktif berjalan di MT5. "
+                    f"Menunggu posisi selesai (TP/SL) agar tidak menguras modal!"
+                )
+                logger.info(msg_open_cap)
+                return {
+                    "success": False,
+                    "status": "already_open",
+                    "message": msg_open_cap,
+                }
 
             active_pending_now = self.get_pending_orders(symbol=ticker)
             can_place, gate_msg = self.can_place_order(
@@ -2376,7 +2397,7 @@ class MT5Bridge:
                     "status": status_tag,
                     "message": gate_msg,
                 }
-        if not always_limit and score < min_limit_score and "A+" not in str(grade).upper():
+        if (not always_limit or not self.simulation_mode) and score < min_limit_score and "A+" not in str(grade).upper():
             msg = (
                 f"🛡️ [PENDING LIMIT FILTER] Sinyal {sig_type} ditolak: Skor ({score:.0f}%, {grade}) "
                 f"belum tembus batas Grade A+ (≥{min_limit_score:.0f}%). Pending limit hanya untuk sniper Grade A+!"
@@ -2420,6 +2441,9 @@ class MT5Bridge:
             except Exception as e_ng:
                 logger.debug(f"Pengecekan news guard dilewati: {e_ng}")
 
+        if not bool(cfg_mt5.get("enable_dual_sided_limits", False)):
+            self.cancel_opposite_pending_orders(sig_type, symbol=ticker)
+
         active_pending = self.get_pending_orders(symbol=ticker)
         max_pending = int(cfg_mt5.get("max_pending_orders_per_symbol", 1))
         if len(active_pending) >= max_pending:
@@ -2458,7 +2482,7 @@ class MT5Bridge:
 
         is_cent = self.is_cent_account()
         if not is_cent:
-            lot = float(cfg_mt5.get("limit_order_lot_usd", cfg_mt5.get("usd_execution_lot", 0.01)))
+            lot = 0.01  # Dikunci mutlak 0.01 Lot untuk Akun Standard USD
         else:
             if self.is_us_session_window():
                 lot = float(cfg_mt5.get("us_session_aggressive_lot", 0.05))
