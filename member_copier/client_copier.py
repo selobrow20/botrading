@@ -29,7 +29,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.6.0"
+CLIENT_COPIER_VERSION = "2.6.1"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -897,7 +897,7 @@ class MT5MemberBridge:
                         cancelled.append(t_id)
         return cancelled
 
-    def cancel_same_side_pending_orders(self, symbol: str, action: str) -> list:
+    def cancel_same_side_pending_orders(self, symbol: str, action: str, match_price: float = None) -> list:
         """Membatalkan pending limit order searah saat sinyal [ORDER LIMIT TERJEMPUT] dieksekusi agar tidak dobel order."""
         if not self.ensure_connected():
             return []
@@ -908,6 +908,10 @@ class MT5MemberBridge:
         for po in pending:
             po_type = str(po.get("type", "")).upper()
             if (is_buy_act and "BUY" in po_type) or (not is_buy_act and "SELL" in po_type):
+                if match_price is not None and match_price > 0:
+                    po_p = float(po.get("price", 0.0) or 0.0)
+                    if abs(po_p - match_price) > 0.50:
+                        continue  # Jangan batalkan pending order layer lain di harga berbeda!
                 res = self.cancel_pending_order(po["ticket"])
                 if res.get("success"):
                     cancelled.append(po["ticket"])
@@ -1097,16 +1101,16 @@ class MT5MemberBridge:
         active_pending = self.get_pending_orders(symbol=sym)
         limit_p_chk = float(sig.get("entry_price", 0.0) or 0.0)
 
-        # Cek apakah pending order yang sama persis (arah sama & harga selisih < $2.00) sudah ada di MT5
+        # Cek apakah pending order yang sama persis (arah sama & harga selisih <= $0.40 USD / 4 pips) sudah ada di MT5
         same_exact = [
             po for po in active_pending
             if (("BUY" in action and "BUY" in str(po.get("type", "")).upper()) or ("SELL" in action and "SELL" in str(po.get("type", "")).upper()))
-            and abs(float(po.get("price", 0.0)) - limit_p_chk) < 2.0
+            and abs(float(po.get("price", 0.0)) - limit_p_chk) <= 0.40
         ]
         if same_exact:
             dup_po = same_exact[0]
             dup_t = dup_po.get("ticket")
-            dup_vol = float(dup_po.get("volume", 0.01) or 0.01)
+            dup_vol = float(dup_po.get("volume", 0.05) or 0.05)
             dup_p = float(dup_po.get("price", limit_p_chk) or limit_p_chk)
             print(f"   ℹ️ Pending order {action} @ ${limit_p_chk:,.2f} sudah terpasang aktif di MT5 Member (#{dup_t}). Dilewati.")
             return {
@@ -1128,21 +1132,23 @@ class MT5MemberBridge:
         elif not is_cent:
             max_pending = 1
         else:
-            max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 1))
+            max_pending = int(self.cfg.get("max_positions_cent", 3))
 
-        # Jika ada pending order lama yang berbeda harga:
-        # Pada akun Standard USD atau mode single-sided: Master hanya memasang 1 setup limit aktif.
-        # Otomatis batalkan pending order lama yang berbeda harga tersebut (Auto-Replace Stale Setup)
-        # agar MT5 Member 100% tersinkronisasi persis dengan Setup Terbaru Master Bot!
-        if len(open_pos) + len(active_pending) >= max_pending or not is_dual or not is_cent:
-            for po in active_pending:
-                po_price = float(po.get("price", 0.0))
-                if abs(po_price - limit_p_chk) >= 2.0:
-                    print(f"   🔄 [SINKRONISASI SETUP MASTER] Membatalkan pending order lama #{po['ticket']} "
-                          f"({po.get('type')} @ ${po_price:,.2f}) untuk digantikan dengan Limit Order Baru Master @ ${limit_p_chk:,.2f}!")
-                    self.cancel_pending_order(po["ticket"])
-            # Refresh daftar pending order setelah pembatalan order lama
-            active_pending = self.get_pending_orders(symbol=sym)
+        # Hanya bersihkan order lama JIKA kuota posisi + pending sudah benar-benar penuh (>= max_pending).
+        # Member diperbolehkan memiliki hingga 4 layer di Sesi US selaras dengan Master!
+        if len(open_pos) + len(active_pending) >= max_pending:
+            stale_candidates = [
+                po for po in active_pending
+                if abs(float(po.get("price", 0.0)) - limit_p_chk) > 0.40
+            ]
+            if stale_candidates:
+                oldest_po = stale_candidates[0]
+                po_price = float(oldest_po.get("price", 0.0))
+                print(f"   🔄 [SINKRONISASI SETUP MASTER] Kuota layer penuh ({len(open_pos) + len(active_pending)}/{max_pending}). "
+                      f"Membatalkan pending order lama #{oldest_po['ticket']} ({oldest_po.get('type')} @ ${po_price:,.2f}) "
+                      f"untuk digantikan dengan Limit Order Baru Master @ ${limit_p_chk:,.2f}!")
+                self.cancel_pending_order(oldest_po["ticket"])
+                active_pending = self.get_pending_orders(symbol=sym)
 
         # Cek ulang kuota setelah pembersihan setup lama
         if is_us and (len(open_pos) + len(active_pending) >= us_cap):
@@ -1365,16 +1371,17 @@ class MT5MemberBridge:
 
         # Jika sinyal berasal dari [ORDER LIMIT TERJEMPUT] Master:
         # 1. Cek apakah pending limit order Member sendiri sudah terjemput duluan menjadi posisi aktif di MT5
-        # 2. Jika belum terjemput karena selisih spread tipis, hapus pending limit searah lalu masuk market agar sama dengan Master!
+        # 2. Jika belum terjemput karena selisih spread tipis, hapus pending limit di harga tersebut lalu masuk market agar sama dengan Master!
         if sig.get("is_filled_limit"):
             open_now = self.mt5.positions_get(symbol=sym) or []
             same_open = [p for p in open_now if (p.type == 0 and action == "BUY") or (p.type == 1 and action == "SELL")]
             sig_ep = float(sig.get("entry_price", 0.0) or 0.0)
-            if same_open and (not self.is_cent_account() or any(abs(float(p.price_open) - sig_ep) <= 4.0 for p in same_open)):
-                existing_t = same_open[0].ticket
-                print(f"   ✅ [SYNC LIMIT TERJEMPUT] Posisi {action} (#{existing_t}) sudah aktif/terjemput di MT5 Member. Tidak membuka order dobel.")
-                return {"success": True, "ticket": existing_t, "price": same_open[0].price_open, "volume": same_open[0].volume, "symbol": sym}
-            self.cancel_same_side_pending_orders(sym, action)
+            matching_open = [p for p in same_open if abs(float(p.price_open) - sig_ep) <= 0.50]
+            if matching_open:
+                existing_t = matching_open[0].ticket
+                print(f"   ✅ [SYNC LIMIT TERJEMPUT] Posisi {action} (#{existing_t} @ ${matching_open[0].price_open:,.2f}) sudah aktif/terjemput di MT5 Member. Tidak membuka order dobel.")
+                return {"success": True, "ticket": existing_t, "price": matching_open[0].price_open, "volume": matching_open[0].volume, "symbol": sym, "already_active": True}
+            self.cancel_same_side_pending_orders(sym, action, match_price=sig_ep)
 
         # Proteksi Anti-Tabrakan & Anti-Hedging Disiplin (Kaidah 9 Buku PDF):
         # Jika ada posisi yang berlawanan arah (misal ada BUY aktif, lalu muncul sinyal SELL):
@@ -1457,9 +1464,10 @@ class MT5MemberBridge:
         curr_price = tick.ask if action == "BUY" else tick.bid
 
         # Anti-Stacking Protection: Minimal jarak harga antar posisi terbuka searah (default $1.00 USD)
+        # Jika sinyal terisi (is_filled_limit) dari Master, ikuti Master secara presisi tanpa blokir stacking
         min_grid_spacing = float(self.cfg.get("min_grid_spacing", 1.0))
         same_side_pos = [p for p in open_pos if (p.type == 0 and action == "BUY") or (p.type == 1 and action == "SELL")]
-        if same_side_pos and curr_price > 0:
+        if same_side_pos and curr_price > 0 and not sig.get("is_filled_limit"):
             min_dist = min(abs(curr_price - float(p.price_open)) for p in same_side_pos)
             if min_dist < min_grid_spacing:
                 msg_stack = (
@@ -2213,7 +2221,8 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
         if sig_ticket and f"ticket_{sig_ticket}" in recent_executed_signals:
             is_duplicate = True
         elif sig_tp > 0 and sig_sl > 0:
-            param_key = f"{sig_act}_{sig_tp:.1f}_{sig_sl:.1f}"
+            sig_ep_key = round(float(sig.get("entry_price", 0.0) or 0.0), 1)
+            param_key = f"{sig_act}_{sig_ep_key}_{sig_tp:.1f}_{sig_sl:.1f}"
             if param_key in recent_executed_signals:
                 if now_ts - recent_executed_signals[param_key] < 900:  # 15 menit
                     is_duplicate = True
@@ -2518,10 +2527,7 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
                     s_tp = float(sig_test.get("tp_price") or 0)
                     already_on_mt5 = False
                     for e_act, e_price, e_sl, e_tp in existing_prices:
-                        if e_act == s_act and (
-                            (s_entry > 0 and abs(e_price - s_entry) < 1.5)
-                            or (s_tp > 0 and abs(e_tp - s_tp) < 1.5)
-                        ):
+                        if e_act == s_act and s_entry > 0 and abs(e_price - s_entry) <= 0.40:
                             already_on_mt5 = True
                             break
                     if already_on_mt5:

@@ -19,7 +19,7 @@
   "news_limit_guard_minutes_before": 10,
   "news_limit_guard_minutes_after": 15,
   "max_positions_standard": 1,
-  "max_positions_cent": 1,
+  "max_positions_cent": 3,
   "us_session_max_positions": 4,
   "gold_symbol": "XAUUSD",
   "symbol_suffix": "",

@@ -1,4 +1,4 @@
 {
-  "version": "2.6.0",
-  "changelog": "Perbaikan Proteksi KeyError volume & Eliminasi Unhandled Exception saat Pending Order Sudah Aktif"
+  "version": "2.6.1",
+  "changelog": "Sinkronisasi Multi-Layer US Session: Presisi Anti-Duplikasi (0.40 USD) & Dukungan Penuh Hingga 4 Posisi Selaras Master"
 }

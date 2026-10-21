@@ -180,10 +180,10 @@ def test_execute_limit_order_skips_same_price_duplicate():
     mock_mt5.positions_get.return_value = []
     bridge.mt5 = mock_mt5
 
-    # Master mengirim BUY LIMIT di 2640.50 (selisih hanya $0.50)
+    # Master mengirim BUY LIMIT di 2640.20 (selisih hanya $0.20 <= 0.40)
     sig_dup = {
         "action": "BUY_LIMIT",
-        "entry_price": 2640.50,
+        "entry_price": 2640.20,
         "tp_price": 2650.00,
         "sl_price": 2630.00,
     }
