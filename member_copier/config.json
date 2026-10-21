@@ -3,7 +3,7 @@
   "account_type": "auto",
   "usd_lot": 0.01,
   "cent_lot": 0.05,
-  "us_session_cent_lot": 0.08,
+  "us_session_cent_lot": 0.05,
   "default_lot": 0.05,
   "usd_only_high_grade": true,
   "cent_only_high_grade": true,

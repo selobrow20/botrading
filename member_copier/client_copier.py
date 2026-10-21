@@ -219,8 +219,8 @@ def load_config() -> dict:
         "bot_username": "selo_saham_bot",
         "account_type": "auto",       # Pilihan: "auto" (deteksi otomatis), "usd" (Standard USD), "usc" (Cent)
         "usd_lot": 0.01,              # Lot khusus Akun Standard USD (Kaidah disiplin: 0.01 lot)
-        "cent_lot": 0.05,             # Lot khusus Akun Cent USC (0.05 lot luar Sesi US)
-        "us_session_cent_lot": 0.08,  # Lot Akun Cent USC di Sesi US (19:00 - 24:00 WIB)
+        "cent_lot": 0.05,             # Lot khusus Akun Cent USC (Mutlak 0.05 lot sama persis dengan Master)
+        "us_session_cent_lot": 0.05,  # Lot Akun Cent USC (Mutlak 0.05 lot, tidak ada 0.08)
         "default_lot": 0.01,          # Fallback
         "usd_only_high_grade": True,  # Filter Akun USD hanya masuk pada Sinyal Grade A+
         "max_positions_cent": 3,      # Maksimal posisi akun Cent di luar US (minimal 3 posisi)
@@ -243,6 +243,17 @@ def load_config() -> dict:
             with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
                 cfg.update(loaded)
+        except Exception:
+            pass
+
+    # Otomatis koreksi lot: Master bot mutlak 0.05 lot untuk Cent USC dan 0.01 lot untuk Standard USD
+    if float(cfg.get("us_session_cent_lot", 0.05) or 0.05) > 0.05 or float(cfg.get("cent_lot", 0.05) or 0.05) > 0.05:
+        cfg["us_session_cent_lot"] = 0.05
+        cfg["cent_lot"] = 0.05
+        cfg["default_lot"] = 0.05
+        try:
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f_cfg_w:
+                json.dump(cfg, f_cfg_w, indent=2)
         except Exception:
             pass
 
@@ -536,28 +547,17 @@ class MT5MemberBridge:
         - Akun Standard USD:
           * Strictly 0.01 lot (usd_lot) untuk melindungi modal USD.
         - Akun Cent (USC):
-          * Sesi US (19:00 - 24:00 WIB): 0.08 lot (us_session_cent_lot)
-          * Di luar Sesi US: 0.05 lot (cent_lot / default_lot)
+          * Mutlak 0.05 lot (cent_lot) sama persis dengan Master Bot ("kalo master 0,05 semua").
         """
         if not is_cent:
             # Dikunci mutlak 0.01 Lot untuk Akun Standard USD demi keamanan modal
             return 0.01, "USD Standard Disiplin (Mutlak 0.01 Lot)"
 
-        # Cek Sesi US untuk Akun Cent
-        is_us = False
-        try:
-            from datetime import datetime, time
-            now_wib = datetime.now(ZoneInfo("Asia/Jakarta")).time()
-            is_us = time(19, 0) <= now_wib <= time(23, 59, 59)
-        except Exception:
-            pass
-
-        if is_us:
-            lot = float(self.cfg.get("us_session_cent_lot", 0.08))
-            return lot, "Cent USC Sesi US"
-        else:
-            lot = float(self.cfg.get("cent_lot", self.cfg.get("default_lot", 0.05)))
-            return lot, "Cent USC Standar"
+        # Akun Cent (USC): Mutlak 0.05 Lot (Sama persis dengan Master Bot di semua sesi)
+        lot = float(self.cfg.get("cent_lot", self.cfg.get("default_lot", 0.05)) or 0.05)
+        if lot > 0.05:
+            lot = 0.05
+        return lot, "Cent USC Disiplin (Mutlak 0.05 Lot)"
 
     def is_cent_account(self) -> bool:
         """
