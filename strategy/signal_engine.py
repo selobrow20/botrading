@@ -1563,6 +1563,110 @@ class SignalEngine:
 
         return True, ""
 
+    @staticmethod
+    def extract_active_ob_and_fvg(df: pd.DataFrame, curr_price: float, lookback: int = 50) -> Dict[str, Any]:
+        """
+        Mendeteksi area Order Block (OB) dan Fair Value Gap (FVG / Imbalance) aktif
+        yang belum termitigasi (unmitigated) sesuai kaidah Smart Money Concepts (SMC) & Trading Alchemist.
+
+        - Bullish OB: Candle merah sebelum rally kencang menembus struktur (Demand Zone).
+        - Bullish FVG: Celah harga antara High candle 1 dan Low candle 3 (Imbalance Demand).
+        - Bearish OB: Candle hijau sebelum drop kencang menembus struktur (Supply Zone).
+        - Bearish FVG: Celah harga antara Low candle 1 dan High candle 3 (Imbalance Supply).
+        """
+        res = {
+            "bullish_ob": None,
+            "bullish_fvg": None,
+            "bearish_ob": None,
+            "bearish_fvg": None,
+        }
+        if df is None or len(df) < 5:
+            return res
+
+        df_work = df.copy()
+        if "order_block_bullish" not in df_work.columns or "fvg_bullish" not in df_work.columns:
+            try:
+                from indicators.technical import TechnicalIndicators
+                ms = TechnicalIndicators.market_structure(df_work["High"], df_work["Low"], df_work["Close"], df_work["Open"])
+                for k, v in ms.items():
+                    df_work[k] = v
+            except Exception:
+                pass
+
+        n = len(df_work)
+        start_idx = max(2, n - lookback)
+
+        # 1. Cari Bullish FVG & Bullish OB (Area Diskon di bawah curr_price)
+        for i in range(n - 1, start_idx - 1, -1):
+            # Bullish FVG: low[i] > high[i-2]
+            if res["bullish_fvg"] is None and bool(df_work["fvg_bullish"].iloc[i] if "fvg_bullish" in df_work.columns else False):
+                fvg_top = float(df_work["Low"].iloc[i])
+                fvg_bottom = float(df_work["High"].iloc[i - 2])
+                fvg_mid = round((fvg_top + fvg_bottom) / 2.0, 2)
+                if fvg_top <= curr_price and fvg_top > fvg_bottom:
+                    lowest_after = float(df_work["Low"].iloc[i+1:].min()) if i < n - 1 else curr_price
+                    if lowest_after >= fvg_bottom:
+                        res["bullish_fvg"] = {
+                            "top": round(fvg_top, 2),
+                            "bottom": round(fvg_bottom, 2),
+                            "mid": fvg_mid,
+                            "entry": round(fvg_top, 2),
+                            "sl": round(fvg_bottom, 2),
+                            "bar_idx": i,
+                        }
+
+            # Bullish OB: candle merah di i-1
+            if res["bullish_ob"] is None and bool(df_work["order_block_bullish"].iloc[i] if "order_block_bullish" in df_work.columns else False):
+                ob_high = float(df_work["High"].iloc[i - 1])
+                ob_low = float(df_work["Low"].iloc[i - 1])
+                ob_mid = round((ob_high + ob_low) / 2.0, 2)
+                if ob_high <= curr_price:
+                    lowest_after = float(df_work["Low"].iloc[i:].min()) if i < n else curr_price
+                    if lowest_after >= ob_low:
+                        res["bullish_ob"] = {
+                            "high": round(ob_high, 2),
+                            "low": round(ob_low, 2),
+                            "mid": ob_mid,
+                            "entry": round(ob_high, 2),
+                            "sl": round(ob_low, 2),
+                            "bar_idx": i - 1,
+                        }
+
+            # 2. Cari Bearish FVG & Bearish OB (Area Premium di atas curr_price)
+            if res["bearish_fvg"] is None and bool(df_work["fvg_bearish"].iloc[i] if "fvg_bearish" in df_work.columns else False):
+                fvg_bottom = float(df_work["High"].iloc[i])
+                fvg_top = float(df_work["Low"].iloc[i - 2])
+                fvg_mid = round((fvg_bottom + fvg_top) / 2.0, 2)
+                if fvg_bottom >= curr_price and fvg_top > fvg_bottom:
+                    highest_after = float(df_work["High"].iloc[i+1:].max()) if i < n - 1 else curr_price
+                    if highest_after <= fvg_top:
+                        res["bearish_fvg"] = {
+                            "top": round(fvg_top, 2),
+                            "bottom": round(fvg_bottom, 2),
+                            "mid": fvg_mid,
+                            "entry": round(fvg_bottom, 2),
+                            "sl": round(fvg_top, 2),
+                            "bar_idx": i,
+                        }
+
+            if res["bearish_ob"] is None and bool(df_work["order_block_bearish"].iloc[i] if "order_block_bearish" in df_work.columns else False):
+                ob_high = float(df_work["High"].iloc[i - 1])
+                ob_low = float(df_work["Low"].iloc[i - 1])
+                ob_mid = round((ob_high + ob_low) / 2.0, 2)
+                if ob_low >= curr_price:
+                    highest_after = float(df_work["High"].iloc[i:].max()) if i < n else curr_price
+                    if highest_after <= ob_high:
+                        res["bearish_ob"] = {
+                            "high": round(ob_high, 2),
+                            "low": round(ob_low, 2),
+                            "mid": ob_mid,
+                            "entry": round(ob_low, 2),
+                            "sl": round(ob_high, 2),
+                            "bar_idx": i - 1,
+                        }
+
+        return res
+
     def generate_dual_sided_limit_orders(
         self,
         df: pd.DataFrame,
@@ -1610,9 +1714,24 @@ class SignalEngine:
         recent_low = float(recent_slice["Low"].min()) if "Low" in recent_slice.columns else (curr_price - 10.0)
         recent_high = float(recent_slice["High"].max()) if "High" in recent_slice.columns else (curr_price + 10.0)
 
-        # ─── 1. SISI BUY LIMIT (Lantai Support / Diskon) ───
+        # Ekstraksi Zona Institusional Smart Money: Order Block (OB) & Fair Value Gap (FVG)
+        smc_zones = self.extract_active_ob_and_fvg(df, curr_price=curr_price)
+        b_fvg = smc_zones.get("bullish_fvg")
+        b_ob = smc_zones.get("bullish_ob")
+        s_fvg = smc_zones.get("bearish_fvg")
+        s_ob = smc_zones.get("bearish_ob")
+
+        # ─── 1. SISI BUY LIMIT (Lantai Support / Diskon / OB & FVG) ───
         max_buy1 = round(curr_price - min_dist, 2)
-        if ema20_raw <= max_buy1:
+
+        # Penentuan Level 1 Buy Limit: Prioritas FVG (Retest Imbalance) atau OB atau EMA 20
+        if b_fvg and b_fvg["entry"] <= max_buy1:
+            buy1_p = round(b_fvg["entry"], 2)
+            buy1_lbl = "BUY LIMIT L1 (Retest Bullish FVG Demand)"
+        elif b_ob and b_ob["entry"] <= max_buy1:
+            buy1_p = round(b_ob["entry"], 2)
+            buy1_lbl = "BUY LIMIT L1 (Mitigasi Bullish Order Block)"
+        elif ema20_raw <= max_buy1:
             buy1_p = round(ema20_raw, 2)
             buy1_lbl = "BUY LIMIT L1 (Retest 20 EMA Support)"
         else:
@@ -1621,16 +1740,29 @@ class SignalEngine:
                 buy1_p = max_buy1
             buy1_lbl = "BUY LIMIT L1 (Demand Rebound / Diskon)"
 
-        # Stop Loss Dinamis Berbasis Struktur Swing Low (Bukan Statis $6)
-        base_buy_sl = round(recent_low - buffer_usd, 2)
+        # Stop Loss Dinamis Berbasis Struktur Swing Low & OB Low
+        lowest_anchor = recent_low
+        if b_ob and b_ob["sl"] < lowest_anchor:
+            lowest_anchor = b_ob["sl"]
+        base_buy_sl = round(lowest_anchor - buffer_usd, 2)
         sl_dist1_buy = max(round(buy1_p - base_buy_sl, 2), max(4.0, round(atr_val * 1.5, 2)))
         buy1_sl = round(buy1_p - sl_dist1_buy, 2)
         tp_dist1_buy = round(sl_dist1_buy * (3.0 if trade_type == "LONG" else 1.5), 2)
         buy1_tp = round(buy1_p + tp_dist1_buy, 2)
         buy1_rrr = round(tp_dist1_buy / max(sl_dist1_buy, 0.01), 2)
 
+        # Penentuan Level 2 Buy Limit: Prioritas OB (Deep Mitigation), atau 50% OB/FVG, atau EMA 50
         max_buy2 = round(buy1_p - min_spacing_usd, 2)
-        if ema50_raw <= max_buy2:
+        if b_ob and b_ob["entry"] <= max_buy2 and "Order Block" not in buy1_lbl:
+            buy2_p = round(b_ob["entry"], 2)
+            buy2_lbl = "BUY LIMIT L2 (Mitigasi Bullish Order Block)"
+        elif b_ob and b_ob["mid"] <= max_buy2:
+            buy2_p = round(b_ob["mid"], 2)
+            buy2_lbl = "BUY LIMIT L2 (50% Mean Threshold Bullish OB)"
+        elif b_fvg and b_fvg["mid"] <= max_buy2 and "FVG" not in buy1_lbl:
+            buy2_p = round(b_fvg["mid"], 2)
+            buy2_lbl = "BUY LIMIT L2 (50% Consequent Encroachment FVG)"
+        elif ema50_raw <= max_buy2:
             buy2_p = round(ema50_raw, 2)
             buy2_lbl = "BUY LIMIT L2 (Retest 50 EMA Support)"
         else:
@@ -1643,9 +1775,17 @@ class SignalEngine:
         buy2_tp = round(buy2_p + tp_dist2_buy, 2)
         buy2_rrr = round(tp_dist2_buy / max(sl_dist2_buy, 0.01), 2)
 
-        # ─── 2. SISI SELL LIMIT (Atap Resisten / Premium) ───
+        # ─── 2. SISI SELL LIMIT (Atap Resisten / Premium / OB & FVG) ───
         min_sell1 = round(curr_price + min_dist, 2)
-        if ema20_raw >= min_sell1:
+
+        # Penentuan Level 1 Sell Limit: Prioritas FVG (Retest Imbalance) atau OB atau EMA 20
+        if s_fvg and s_fvg["entry"] >= min_sell1:
+            sell1_p = round(s_fvg["entry"], 2)
+            sell1_lbl = "SELL LIMIT L1 (Retest Bearish FVG Supply)"
+        elif s_ob and s_ob["entry"] >= min_sell1:
+            sell1_p = round(s_ob["entry"], 2)
+            sell1_lbl = "SELL LIMIT L1 (Mitigasi Bearish Order Block)"
+        elif ema20_raw >= min_sell1:
             sell1_p = round(ema20_raw, 2)
             sell1_lbl = "SELL LIMIT L1 (Retest 20 EMA Resistance)"
         else:
@@ -1654,16 +1794,29 @@ class SignalEngine:
                 sell1_p = min_sell1
             sell1_lbl = "SELL LIMIT L1 (Supply Pullback / Premium)"
 
-        # Stop Loss Dinamis Berbasis Struktur Swing High (Bukan Statis $6)
-        base_sell_sl = round(recent_high + buffer_usd, 2)
+        # Stop Loss Dinamis Berbasis Struktur Swing High & OB High
+        highest_anchor = recent_high
+        if s_ob and s_ob["sl"] > highest_anchor:
+            highest_anchor = s_ob["sl"]
+        base_sell_sl = round(highest_anchor + buffer_usd, 2)
         sl_dist1_sell = max(round(base_sell_sl - sell1_p, 2), max(4.0, round(atr_val * 1.5, 2)))
         sell1_sl = round(sell1_p + sl_dist1_sell, 2)
         tp_dist1_sell = round(sl_dist1_sell * (3.0 if trade_type == "LONG" else 1.5), 2)
         sell1_tp = round(sell1_p - tp_dist1_sell, 2)
         sell1_rrr = round(tp_dist1_sell / max(sl_dist1_sell, 0.01), 2)
 
+        # Penentuan Level 2 Sell Limit: Prioritas OB jika Level 1 FVG, atau 50% OB/FVG, atau EMA 50
         min_sell2 = round(sell1_p + min_spacing_usd, 2)
-        if ema50_raw >= min_sell2:
+        if s_ob and s_ob["entry"] >= min_sell2 and "Order Block" not in sell1_lbl:
+            sell2_p = round(s_ob["entry"], 2)
+            sell2_lbl = "SELL LIMIT L2 (Mitigasi Bearish Order Block)"
+        elif s_ob and s_ob["mid"] >= min_sell2:
+            sell2_p = round(s_ob["mid"], 2)
+            sell2_lbl = "SELL LIMIT L2 (50% Mean Threshold Bearish OB)"
+        elif s_fvg and s_fvg["mid"] >= min_sell2 and "FVG" not in sell1_lbl:
+            sell2_p = round(s_fvg["mid"], 2)
+            sell2_lbl = "SELL LIMIT L2 (50% Consequent Encroachment FVG)"
+        elif ema50_raw >= min_sell2:
             sell2_p = round(ema50_raw, 2)
             sell2_lbl = "SELL LIMIT L2 (Retest 50 EMA Resistance)"
         else:
