@@ -1,4 +1,4 @@
 {
-  "version": "2.5.9",
-  "changelog": "Pending Limit Sync 1:1: Harmonisasi Sinyal Buy Limit & Sell Limit Otomatis Member MT5 (Auto-Replace Setup Lama & Catchup Fleksibel)"
+  "version": "2.6.0",
+  "changelog": "Perbaikan Proteksi KeyError volume & Eliminasi Unhandled Exception saat Pending Order Sudah Aktif"
 }

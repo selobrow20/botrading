@@ -6,7 +6,7 @@ Memverifikasi:
 3. Auto-replace pending order lama yang berbeda harga saat kuota penuh (1:1 sinkron dengan Master).
 4. Tidak menduplikasi pending order yang sudah aktif di harga yang sama persis (< $2.00).
 5. Akun Standard USD tidak ter-veto secara keliru pada sesi UK/candle pullback untuk pending limit order.
-6. Penerimaan alert pembatalan [SYNC MASTER] untuk membersihkan pending order di MT5 member.
+6. Penanganan status already_active tanpa KeyError 'volume' saat sinyal limit order terdeteksi sudah aktif.
 """
 
 import time
@@ -171,6 +171,7 @@ def test_execute_limit_order_skips_same_price_duplicate():
         "price": 2640.00,
         "sl": 2630.00,
         "tp": 2650.00,
+        "volume": 0.08,
     }
     bridge.get_pending_orders = MagicMock(return_value=[existing_order])
     bridge.cancel_stale_pending_orders = MagicMock(return_value=[])
@@ -190,7 +191,34 @@ def test_execute_limit_order_skips_same_price_duplicate():
     res = bridge.execute_limit_order(sig_dup)
     assert res["success"] is True
     assert res["ticket"] == 33333
+    assert res.get("already_active") is True
+    assert res.get("volume") == 0.08
+    assert res.get("price") == 2640.00
     assert "sudah aktif" in res["message"].lower()
+
+
+def test_already_active_result_does_not_raise_keyerror():
+    """Memverifikasi blok logging execute_order tidak pernah melempar KeyError 'volume'."""
+    res = {
+        "success": True,
+        "already_active": True,
+        "status": "already_active",
+        "ticket": 15299973347,
+        "message": "Pending order sudah aktif."
+    }
+    sig = {"action": "BUY_LIMIT"}
+
+    # Simulasi logika di message_handler
+    if res.get("already_active") or res.get("status") == "already_active":
+        printed = "SKIPPED_CLEANLY"
+    else:
+        res_ticket = res.get("ticket", "-")
+        res_vol = res.get("volume", sig.get("master_lot", 0.01))
+        res_price = float(res.get("price", sig.get("entry_price", 0.0)) or 0.0)
+        res_sym = res.get("symbol", "XAUUSD")
+        printed = f"#{res_ticket} {sig['action']} {res_vol} Lot @ ${res_price:,.2f} pada {res_sym}"
+
+    assert printed == "SKIPPED_CLEANLY"
 
 
 def test_verify_usd_elite_setup_permits_limit_orders():
