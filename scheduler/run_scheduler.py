@@ -941,6 +941,10 @@ class PipelineRunner:
                         b.cancel_pending_order(bo["ticket"])
                         logger.warning(f"🚨 [ANTI-WATERFALL GUARD] Membatalkan BUY LIMIT #{bo['ticket']} karena M15 sedang terjun bebas di bawah EMA 20!")
                     buy_limits = []
+                    try:
+                        self.notifier.send_pending_limit_cancellation_alert("BUY_LIMIT", reason="Anti-Waterfall Guard (M15 terjun bebas di bawah EMA 20)")
+                    except Exception:
+                        pass
         except Exception:
             pass
 
@@ -991,10 +995,15 @@ class PipelineRunner:
                 logger.warning("🚨 [ANTI-WATERFALL GUARD] Menahan pemasangan BUY LIMIT baru karena M15 sedang crash tajam di bawah EMA 20!")
                 return
             # Sinyal Momen Bagus BUY -> Hanya pasang BUY LIMIT di salah satu sisi (Retest Diskon Support / EMA 20)
-            for so in sell_limits:
-                b.cancel_pending_order(so["ticket"])
-                logger.info(f"🛑 [MOMEN SYNC] Membatalkan SELL LIMIT #{so['ticket']} karena momen terkonfirmasi BUY.")
-            sell_limits = []
+            if sell_limits:
+                for so in sell_limits:
+                    b.cancel_pending_order(so["ticket"])
+                    logger.info(f"🛑 [MOMEN SYNC] Membatalkan SELL LIMIT #{so['ticket']} karena momen terkonfirmasi BUY.")
+                sell_limits = []
+                try:
+                    self.notifier.send_pending_limit_cancellation_alert("SELL_LIMIT", reason="Momen terkonfirmasi BUY")
+                except Exception:
+                    pass
             if is_us_time:
                 needs_buy = ((len(active_buys) + len(buy_limits)) < us_max_cap) and len(active_sells) == 0
             else:
@@ -1002,10 +1011,15 @@ class PipelineRunner:
             needs_sell = False
         elif "SELL" in sig_action:
             # Sinyal Momen Bagus SELL -> Hanya pasang SELL LIMIT di salah satu sisi (Retest Premium Resisten / EMA 20)
-            for bo in buy_limits:
-                b.cancel_pending_order(bo["ticket"])
-                logger.info(f"🛑 [MOMEN SYNC] Membatalkan BUY LIMIT #{bo['ticket']} karena momen terkonfirmasi SELL.")
-            buy_limits = []
+            if buy_limits:
+                for bo in buy_limits:
+                    b.cancel_pending_order(bo["ticket"])
+                    logger.info(f"🛑 [MOMEN SYNC] Membatalkan BUY LIMIT #{bo['ticket']} karena momen terkonfirmasi SELL.")
+                buy_limits = []
+                try:
+                    self.notifier.send_pending_limit_cancellation_alert("BUY_LIMIT", reason="Momen terkonfirmasi SELL")
+                except Exception:
+                    pass
             needs_buy = False
             if is_us_time:
                 needs_sell = ((len(active_sells) + len(sell_limits)) < us_max_cap) and len(active_buys) == 0

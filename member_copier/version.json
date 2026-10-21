@@ -1,4 +1,4 @@
 {
-  "version": "2.5.8",
-  "changelog": "Smart Money Concepts: Penentuan Titik Limit Order Presisi di Area OB (Order Block) & FVG (Fair Value Gap)"
+  "version": "2.5.9",
+  "changelog": "Pending Limit Sync 1:1: Harmonisasi Sinyal Buy Limit & Sell Limit Otomatis Member MT5 (Auto-Replace Setup Lama & Catchup Fleksibel)"
 }

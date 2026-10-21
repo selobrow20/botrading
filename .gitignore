@@ -17,6 +17,7 @@ data/*.sqlite3
 
 # Environment credentials
 .env
+.env.*
 config/.env
 *.session
 *.session-journal

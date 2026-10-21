@@ -294,10 +294,11 @@ class TelegramNotifier:
             if wr_badge:
                 lines.append(wr_badge)
 
+            grade_str, score_val = _get_grade_and_score()
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append(f"⭐ <b>Konfluensi 9 PDF:</b> {score_val}% ({grade_str})")
             pdf_details = getattr(sig, "pdf_confluence_details", [])
             if pdf_details:
-                grade_str, score_val = _get_grade_and_score()
-                lines.append("━━━━━━━━━━━━━━━━━━━━━━")
                 lines.append(f"📚 <b>TELAAH 9 BUKU PDF ({grade_str} - {score_val}%):</b>")
                 for chk in pdf_details[:5]:
                     lines.append(f"• {html.escape(chk)}")
@@ -1474,6 +1475,25 @@ class TelegramNotifier:
         ]])
 
         return self.broadcast_text(msg, target_chat_ids=approved_ids, reply_markup=tv_markup)
+
+    def send_pending_limit_cancellation_alert(self, action: str, reason: str = "Refresh Setup Baru") -> bool:
+        """Kirim notifikasi pembatalan pending limit order ke Telegram agar Copier Member ikut sinkron membatalkan order."""
+        action_u = str(action).upper()
+        action_lbl = "BUY LIMIT" if "BUY" in action_u else ("SELL LIMIT" if "SELL" in action_u else "BUY & SELL LIMIT")
+        lines = [
+            "🛑 <b>[SYNC MASTER] PENDING LIMIT ORDER DIBATALKAN!</b>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "📊 <b>Instrumen:</b> <code>XAUUSD (Gold)</code>",
+            f"🔄 <b>Order Dibatalkan:</b> <b>{action_lbl}</b>",
+            f"💡 <b>Alasan:</b> <i>{reason}</i>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "🛡️ <i>Pending order di akun MT5 Member otomatis dibatalkan mengikuti Master Bot untuk menyelaraskan setup baru!</i>",
+        ]
+        msg = "\n".join(lines)
+        approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)
+        if not approved_ids:
+            approved_ids = [self.chat_id]
+        return self.broadcast_text(msg, target_chat_ids=approved_ids)
 
     def format_chart_confirmation_message(self, info: Dict[str, Any]) -> str:
         """
