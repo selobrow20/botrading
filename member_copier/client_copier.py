@@ -1381,6 +1381,9 @@ class MT5MemberBridge:
                 tp_val = round(p_val - tp_dist, digits)
                 sl_val = round(p_val + sl_dist, digits)
 
+            clean_tag = "AVG" if "AVG" in ord_info.get("label", "") else ("OB" if "OB" in ord_info.get("label", "") else f"L{ord_info.get('level', 1)}")
+            safe_comment = f"VIP-9PDF-{clean_tag}"[:25]
+
             req = {
                 "action": self.mt5.TRADE_ACTION_PENDING,
                 "symbol": sym,
@@ -1391,7 +1394,7 @@ class MT5MemberBridge:
                 "tp": tp_val,
                 "deviation": self.slippage,
                 "magic": self.magic,
-                "comment": f"VIP-9PDF-{ord_info['label']}"[:31],
+                "comment": safe_comment,
                 "type_time": self.mt5.ORDER_TIME_GTC,
             }
 
@@ -1418,6 +1421,8 @@ class MT5MemberBridge:
                     break
                 elif res:
                     last_err = f"RetCode: {res.retcode} - {res.comment}"
+                else:
+                    last_err = f"MT5 Error: {self.mt5.last_error()}"
 
         if not placed_tickets:
             if len(self.get_pending_orders(symbol=sym)) >= max_pending:
