@@ -29,9 +29,31 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.7.1"
+import socket
+
+CLIENT_COPIER_VERSION = "2.7.2"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
+
+_instance_socket = None
+
+def ensure_single_instance(port: int = 49852) -> bool:
+    """Pastikan hanya ada satu instance client_copier yang berjalan untuk mencegah SQLite lock."""
+    global _instance_socket
+    if _instance_socket is not None:
+        return True
+    _instance_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    start_t = time.time()
+    while time.time() - start_t < 3.0:
+        try:
+            _instance_socket.bind(("127.0.0.1", port))
+            return True
+        except OSError:
+            time.sleep(0.5)
+
+    print(f"\n⚠️ [PERINGATAN] Client Copier sudah berjalan di proses lain (Port {port} aktif).")
+    print("Mencegah duplikasi instance agar database Telethon SQLite tidak terkunci (database is locked).\n")
+    sys.exit(0)
 
 def parse_version(v_str: str) -> tuple:
     """Parse string versi '2.3.5' menjadi tuple (2, 3, 5) untuk perbandingan semver akurat."""
@@ -46,6 +68,13 @@ def restart_copier():
     Me-restart copier secara otomatis dan MEMBUKA KEMBALI jendela aplikasi seketika.
     Member TIDAK PERLU lagi buka-tutup manual!
     """
+    global _instance_socket
+    if _instance_socket:
+        try:
+            _instance_socket.close()
+            _instance_socket = None
+        except Exception:
+            pass
     try:
         sys.stdout.flush()
         sys.stderr.flush()
@@ -2562,6 +2591,7 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
 
 
 def main():
+    ensure_single_instance()
     while True:
         try:
             _run_main_protected()

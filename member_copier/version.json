@@ -1,4 +1,4 @@
 {
-  "version": "2.7.1",
-  "changelog": "Mode Eksekusi Instan Pasar (No Pending Limit): Eksekusi Langsung BUY / SELL di Harga Pasar, Bebas Error Limit Broker"
+  "version": "2.7.2",
+  "changelog": "Single-instance socket lock: Mencegah duplikasi proses dan anti-lock database SQLite Telethon"
 }
