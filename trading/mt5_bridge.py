@@ -2367,19 +2367,23 @@ class MT5Bridge:
             except Exception as e_veto:
                 logger.debug(f"Pemeriksaan filter_and_validate_signal limit order: {e_veto}")
 
-            # Cegah pasang limit order baru jika kuota posisi terbuka sudah penuh (Anti-Kuras Modal)
+            # Cegah pasang limit order baru jika total komitmen (posisi terbuka + pending) sudah penuh (Anti-Kuras Modal & Anti-MC Stacking)
             open_positions_now = self.get_open_positions()
             active_open_sym = [
                 p for p in open_positions_now
                 if (is_gold_symbol and any(k in str(p.get("symbol", "")).upper() for k in ["XAUUSD", "GOLD"]))
                 or str(p.get("symbol", "")).upper() == ticker.upper()
             ]
-            max_pos_allowed = 1 if not is_cent else int(cfg_mt5.get("max_positions_cent", 1))
-            if len(active_open_sym) >= max_pos_allowed:
+            active_pending_now = self.get_pending_orders(symbol=ticker)
+            is_us = self.is_us_session_window() if hasattr(self, "is_us_session_window") else False
+            max_pos_allowed = int(cfg_mt5.get("us_session_max_positions", 4)) if (is_us and is_cent) else (1 if not is_cent else int(cfg_mt5.get("max_positions_cent", 2)))
+            total_committed = len(active_open_sym) + len(active_pending_now)
+
+            if total_committed >= max_pos_allowed:
                 msg_open_cap = (
-                    f"⏸️ [OPEN POSITION LOCK] Pending limit {sig_type} ditahan: "
-                    f"Sudah ada {len(active_open_sym)}/{max_pos_allowed} posisi {ticker} aktif berjalan di MT5. "
-                    f"Menunggu posisi selesai (TP/SL) agar tidak menguras modal!"
+                    f"⏸️ [TOTAL COMMITMENT LOCK] Pending limit {sig_type} ditahan: "
+                    f"Total komitmen ({len(active_open_sym)} posisi aktif + {len(active_pending_now)} pending = {total_committed}/{max_pos_allowed}) "
+                    f"sudah mencapai batas maksimal {ticker} di MT5. Menunggu order selesai (TP/SL) agar tidak menumpuk layer & anti-MC!"
                 )
                 logger.info(msg_open_cap)
                 return {
@@ -2387,8 +2391,6 @@ class MT5Bridge:
                     "status": "already_open",
                     "message": msg_open_cap,
                 }
-
-            active_pending_now = self.get_pending_orders(symbol=ticker)
             can_place, gate_msg = self.can_place_order(
                 sig=sig,
                 order_type=sig_type,

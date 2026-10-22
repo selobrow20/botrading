@@ -1068,40 +1068,9 @@ class MT5MemberBridge:
         except Exception:
             pass
 
-        # 1. CEK BATAS MAKSIMAL POSISI TERBUKA (OPEN POSITIONS) DI MT5 MEMBER
-        # Sesuai arahan pengguna: "semua ikut setup gw aja bor" (Disiplin ketat, member tidak boleh buka 10 posisi!)
-        open_pos = self.mt5.positions_get(symbol=sym) or []
-        if is_us:
-            # Sesi US (19:00 - 24:00 WIB): Hard Cap Maksimal 4 Layer (Anti-10 Layer / Anti-MC saat US anjlok)
-            max_pos = int(self.cfg.get("us_session_max_positions", 4))
-        elif not is_cent:
-            max_pos = int(self.cfg.get("max_positions_standard", 1))
-        else:
-            cent_base = int(self.cfg.get("max_positions_cent", 1))
-            max_pos = cent_base
-
-        if len(open_pos) >= max_pos:
-            mode_lbl = f"Sesi US (Maks {max_pos} Posisi)" if (is_cent and is_us) else (f"CENT USC (Maks {max_pos} Posisi)" if is_cent else f"USD Standard (Maks {max_pos} Posisi)")
-            msg_limit = f"Pending limit {action} dilewati: Batas posisi terbuka ({len(open_pos)}/{max_pos} aktif) sudah tercapai di MT5 Member [{mode_lbl}]. Menunggu posisi selesai sebelum memasang limit order baru."
-            print(f"   🛑 {msg_limit}")
-            return {"success": False, "message": msg_limit}
-
-        # 2. CEK ANTI-HEDGING & POSISI BERLAWANAN ARAH
-        # Jika ada posisi market berlawanan, dilarang pasang pending limit yang memicu tabrakan order
-        if not bool(self.cfg.get("enable_dual_sided_limits", False)):
-            opposite_open = [p for p in open_pos if (p.type == 0 and "SELL" in action) or (p.type == 1 and "BUY" in action)]
-            if opposite_open:
-                msg_opp = f"Pending limit {action} dilewati: Masih ada posisi berlawanan aktif di MT5. Mencegah bentrok order."
-                print(f"   🛑 {msg_opp}")
-                return {"success": False, "message": msg_opp}
-            # Bersihkan pending order lawan jika single-sided
-            self.cancel_opposite_pending_orders(sym, action)
-
-        # 3. CEK & HARMONISASI PENDING ORDERS (Auto-Sync & Auto-Replace Stale Setup Master)
+        # 1. CEK DUPLIKASI PENDING ORDER (Apakah order di harga ini sudah aktif?)
         active_pending = self.get_pending_orders(symbol=sym)
         limit_p_chk = float(sig.get("entry_price", 0.0) or 0.0)
-
-        # Cek apakah pending order yang sama persis (arah sama & harga selisih <= $0.40 USD / 4 pips) sudah ada di MT5
         same_exact = [
             po for po in active_pending
             if (("BUY" in action and "BUY" in str(po.get("type", "")).upper()) or ("SELL" in action and "SELL" in str(po.get("type", "")).upper()))
@@ -1125,18 +1094,27 @@ class MT5MemberBridge:
                 "message": "Pending order sudah aktif."
             }
 
-        us_cap = int(self.cfg.get("us_session_max_positions", 4))
-        is_dual = bool(self.cfg.get("enable_dual_sided_limits", False))
-        if is_us and is_cent:
-            max_pending = us_cap
-        elif not is_cent:
-            max_pending = 1
-        else:
-            max_pending = int(self.cfg.get("max_positions_cent", 3))
+        # 2. CEK ANTI-HEDGING & POSISI BERLAWANAN ARAH
+        open_pos = self.mt5.positions_get(symbol=sym) or []
+        if not bool(self.cfg.get("enable_dual_sided_limits", False)):
+            opposite_open = [p for p in open_pos if (p.type == 0 and "SELL" in action) or (p.type == 1 and "BUY" in action)]
+            if opposite_open:
+                msg_opp = f"Pending limit {action} dilewati: Masih ada posisi berlawanan aktif di MT5. Mencegah bentrok order."
+                print(f"   🛑 {msg_opp}")
+                return {"success": False, "message": msg_opp}
+            # Bersihkan pending order lawan jika single-sided
+            self.cancel_opposite_pending_orders(sym, action)
 
-        # Hanya bersihkan order lama JIKA kuota posisi + pending sudah benar-benar penuh (>= max_pending).
-        # Member diperbolehkan memiliki hingga 4 layer di Sesi US selaras dengan Master!
-        if len(open_pos) + len(active_pending) >= max_pending:
+        # 3. CEK & GANTI STALE ORDER (Auto-Replace Pending Order Lama jika kuota penuh)
+        if is_us:
+            max_pos = int(self.cfg.get("us_session_max_positions", 4))
+        elif not is_cent:
+            max_pos = int(self.cfg.get("max_positions_standard", 1))
+        else:
+            max_pos = int(self.cfg.get("max_positions_cent", 2))
+
+        total_committed = len(open_pos) + len(active_pending)
+        if total_committed >= max_pos:
             stale_candidates = [
                 po for po in active_pending
                 if abs(float(po.get("price", 0.0)) - limit_p_chk) > 0.40
@@ -1144,22 +1122,19 @@ class MT5MemberBridge:
             if stale_candidates:
                 oldest_po = stale_candidates[0]
                 po_price = float(oldest_po.get("price", 0.0))
-                print(f"   🔄 [SINKRONISASI SETUP MASTER] Kuota layer penuh ({len(open_pos) + len(active_pending)}/{max_pending}). "
+                print(f"   🔄 [SINKRONISASI SETUP MASTER] Kuota layer penuh ({total_committed}/{max_pos}). "
                       f"Membatalkan pending order lama #{oldest_po['ticket']} ({oldest_po.get('type')} @ ${po_price:,.2f}) "
                       f"untuk digantikan dengan Limit Order Baru Master @ ${limit_p_chk:,.2f}!")
                 self.cancel_pending_order(oldest_po["ticket"])
-                active_pending = self.get_pending_orders(symbol=sym)
+                active_pending = [po for po in active_pending if po.get("ticket") != oldest_po["ticket"]]
+                total_committed = len(open_pos) + len(active_pending)
 
-        # Cek ulang kuota setelah pembersihan setup lama
-        if is_us and (len(open_pos) + len(active_pending) >= us_cap):
-            msg_us_cap = f"Pending limit {action} dilewati: Sesi US dibatasi MAKSIMAL {us_cap} LAYER ({len(open_pos)} posisi + {len(active_pending)} pending aktif). Mencegah over-layer saat market US anjlok!"
-            print(f"   🛑 {msg_us_cap}")
-            return {"success": False, "message": msg_us_cap}
-
-        if len(open_pos) + len(active_pending) >= max_pending:
-            msg_cap = f"Pending limit {action} dilewati: Kuota total ({len(open_pos)} posisi + {len(active_pending)} pending / maks {max_pending}) sudah tercapai pada {sym}."
-            print(f"   ℹ️ {msg_cap}")
-            return {"success": False, "message": msg_cap}
+        # 4. CEK TOTAL KOMITMEN TERAKHIR (Anti-Stacking & Anti-MC)
+        if total_committed >= max_pos:
+            mode_lbl = f"Sesi US (Maks {max_pos} Order)" if (is_cent and is_us) else (f"CENT USC (Maks {max_pos} Order)" if is_cent else f"USD Standard (Maks {max_pos} Order)")
+            msg_limit = f"Pending limit {action} dilewati: Total komitmen ({len(open_pos)} posisi aktif + {len(active_pending)} pending = {total_committed}/{max_pos}) sudah penuh di MT5 Member [{mode_lbl}]. Anti-Stacking & Anti-MC aktif."
+            print(f"   🛑 {msg_limit}")
+            return {"success": False, "message": msg_limit}
 
         s_info = self.mt5.symbol_info(sym)
         if not s_info:
@@ -1443,15 +1418,17 @@ class MT5MemberBridge:
             else:
                 max_positions = cent_base
 
-        if len(open_pos) >= max_positions:
+        active_pending = self.get_pending_orders(symbol=sym)
+        total_committed = len(open_pos) + len(active_pending)
+        if total_committed >= max_positions:
             mode_lbl = (
-                f"Sesi US Agresif (Maks {max_positions} Posisi)"
+                f"Sesi US Agresif (Maks {max_positions} Order)"
                 if (is_cent and is_us)
-                else (f"CENT USC Disiplin (Maks {max_positions} Posisi)" if is_cent else f"USD Standard (Maks {max_positions} Posisi)")
+                else (f"CENT USC Disiplin (Maks {max_positions} Order)" if is_cent else f"USD Standard (Maks {max_positions} Order)")
             )
             return {
                 "success": False,
-                "message": f"Batas posisi tercapai ({len(open_pos)}/{max_positions} posisi {sym} aktif di MT5). Mode: {mode_lbl}. Menunggu posisi selesai sebelum open baru."
+                "message": f"Batas total komitmen tercapai ({len(open_pos)} posisi aktif + {len(active_pending)} pending = {total_committed}/{max_positions} order {sym} di MT5). Mode: {mode_lbl}. Menunggu order selesai sebelum open baru."
             }
 
         s_info = self.mt5.symbol_info(sym)
