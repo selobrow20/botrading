@@ -31,7 +31,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 
 import socket
 
-CLIENT_COPIER_VERSION = "2.7.4"
+CLIENT_COPIER_VERSION = "2.7.5"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -534,6 +534,17 @@ def parse_signal(text: str) -> dict:
     m_tt = re.search(r"Trade Type\s*[:=]?\s*(SHORT|LONG)", clean_text, re.IGNORECASE)
     trade_type = m_tt.group(1).upper() if m_tt else ("SHORT" if (tp_price and entry_price and abs(tp_price - entry_price) <= 10.0) else "LONG")
 
+    # Ekstrak Setup Grade
+    m_grade = re.search(r"Grade\s*[:=]?\s*([A-C]\+?)", clean_text, re.IGNORECASE)
+    if m_grade:
+        setup_grade = f"Grade {m_grade.group(1).upper()}"
+    elif "GRADE A+" in text_upper or "GRADE: A+" in text_upper or pdf_score >= 80.0:
+        setup_grade = "Grade A+"
+    elif "GRADE A" in text_upper or pdf_score >= 70.0:
+        setup_grade = "Grade A"
+    else:
+        setup_grade = "Grade B"
+
     return {
         "symbol": "XAUUSD",
         "action": action,
@@ -543,6 +554,7 @@ def parse_signal(text: str) -> dict:
         "sl_price": sl_price,
         "ticket": ticket_id,
         "pdf_confluence_score": pdf_score,
+        "setup_grade": setup_grade,
         "master_lot": master_lot,
         "is_high_grade": is_high_grade,
         "is_ultra_usd_grade": is_ultra_usd_grade,
@@ -1247,11 +1259,11 @@ class MT5MemberBridge:
         if not is_cent:
             usd_only_high = self.cfg.get("usd_only_high_grade", True)
             pdf_score_val = float(sig.get("pdf_confluence_score", 0.0) or 0.0)
-            c_grade = str(sig.get("setup_grade", "") or "")
+            c_grade = str(sig.get("setup_grade", "") or ("Grade A+" if pdf_score_val >= 80.0 else ""))
             is_ultra_usd = sig.get("is_ultra_usd_grade", is_high_grade)
-            # Wajib Grade A+ (Skor >= 80% dan Grade A+) sesuai arahan: "samain persis dengan usc tp untuk usd dia di grad a+ aja zona ob dan avg"
-            is_grade_a_plus = ("A+" in c_grade or (pdf_score_val >= 80.0 and "A" in c_grade))
-            if not is_grade_a_plus or (usd_only_high and not is_ultra_usd) or (0 < pdf_score_val < 80.0):
+            # Wajib Grade A+ (Skor >= 80% ATAU Grade A+)
+            is_grade_a_plus = (pdf_score_val >= 80.0 or "A+" in c_grade or is_ultra_usd)
+            if not is_grade_a_plus or (0 < pdf_score_val < 80.0):
                 return {"success": False, "message": f"Pending Limit dilewati: Akun Standard USD HANYA mengambil setup Grade A+ (Zona OB & AVG) terbaik (Skor saat ini: {pdf_score_val:.0f}%, Grade: {c_grade})."}
             elite_ok, elite_msg = self.verify_usd_elite_setup(sym, action, pdf_score=pdf_score_val)
             if not elite_ok:
