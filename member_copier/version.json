@@ -1,4 +1,4 @@
 {
-  "version": "2.7.5",
-  "changelog": "Perbaikan parsing Setup Grade A+ (Skor 100%) & Eksekusi Otomatis Zona OB dan Zona AVG Akun USD"
+  "version": "2.7.6",
+  "changelog": "USD Sniper Mode: Eksekusi otomatis HANYA di Zona AVG (50% Mean Threshold Sweet Spot) dengan Grade A+ confluence"
 }

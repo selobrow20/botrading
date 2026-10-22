@@ -31,7 +31,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 
 import socket
 
-CLIENT_COPIER_VERSION = "2.7.5"
+CLIENT_COPIER_VERSION = "2.7.6"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -1198,16 +1198,47 @@ class MT5MemberBridge:
         ladder_items = sig.get("ladder_limit_orders", [])
         max_levels = int(self.cfg.get("max_limit_levels", 2))
         is_dual = bool(self.cfg.get("enable_dual_sided_limits", False))
+        # Penentuan Zona Terbaik untuk Akun Standard USD (Zona AVG / 50% Mean Threshold Sweet Spot)
+        usd_use_avg_only = (not is_cent) and (self.cfg.get("usd_preferred_zone", "avg") == "avg" or self.cfg.get("usd_single_best_zone", True))
+
         if is_us and is_cent:
             max_pending = us_cap
+        elif usd_use_avg_only:
+            max_pending = 1  # Akun USD: Disiplin 1 order sniper terbaik di Zona AVG
         elif not is_cent:
-            # Akun USD: Mendukung 2 Zona (Zona OB & Zona AVG)
             max_pending = 4 if is_dual else max_levels
         else:
             max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 2))
 
         orders_to_place = []
-        if enable_multi and len(ladder_items) >= 2:
+        if usd_use_avg_only:
+            # Khusus Akun Standard USD: Ambil HANYA 1 Zona Terbaik yaitu Zona AVG (50% Mean Threshold Sweet Spot)!
+            min_dist = max(2.50, float(self.cfg.get("min_level_spacing_pips", 25.0)) / 10.0)
+            digits = int(getattr(s_info, "digits", 2) or 2)
+            if len(ladder_items) >= 2:
+                # Level 2 pada ladder_items adalah 50% Mean Threshold (Zona AVG)!
+                best_item = ladder_items[1]
+                item_sig = best_item.get("signal") or best_item.get("type") or best_item.get("order_type") or action
+                orders_to_place.append({
+                    "level": 1,
+                    "label": "Zona AVG (50% Mean Threshold Sweet Spot)",
+                    "type": item_sig,
+                    "price": float(best_item.get("price", limit_price)),
+                    "tp": float(best_item.get("tp", tp_raw)),
+                    "sl": float(best_item.get("sl", sl_raw)),
+                })
+            else:
+                # Hitung matematis titik 50% Mean Threshold (Zona AVG) lebih dalam
+                p_avg = round(limit_price - min_dist, digits) if "BUY" in action else round(limit_price + min_dist, digits)
+                orders_to_place.append({
+                    "level": 1,
+                    "label": "Zona AVG (50% Mean Threshold Sweet Spot)",
+                    "type": action,
+                    "price": p_avg,
+                    "tp": tp_raw,
+                    "sl": sl_raw,
+                })
+        elif enable_multi and len(ladder_items) >= 2:
             for itm in ladder_items[:max_pending]:
                 item_sig = itm.get("signal") or itm.get("type") or itm.get("order_type") or action
                 lvl = int(itm.get("level", len(orders_to_place) + 1))
