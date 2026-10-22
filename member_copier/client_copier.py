@@ -1184,10 +1184,11 @@ class MT5MemberBridge:
         enable_multi = False if not is_cent else bool(self.cfg.get("enable_multi_level_limits", False))
         ladder_items = sig.get("ladder_limit_orders", [])
         max_levels = 1 if not is_cent else int(self.cfg.get("max_limit_levels", 1))
+        is_dual = bool(self.cfg.get("enable_dual_sided_limits", False))
         if is_us and is_cent:
             max_pending = us_cap
         elif not is_cent:
-            max_pending = 1
+            max_pending = 2 if is_dual else 1
         else:
             max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 1))
 
@@ -1281,10 +1282,10 @@ class MT5MemberBridge:
                 if is_dup:
                     print(f"   ℹ️ Pending order #{cur_sig} @ {p_val} sudah ada aktif di area yang sama. Dilewati.")
                     continue
-                diff_pending = [po for po in active_pending if abs(float(po.get("price", 0.0)) - p_val) >= 2.0]
-                if diff_pending and (not is_cent or not is_dual):
+                diff_pending = [po for po in active_pending if po.get("type") == cur_sig and abs(float(po.get("price", 0.0)) - p_val) >= 2.0]
+                if diff_pending:
                     for dp in diff_pending:
-                        print(f"   🔄 [REPLACE PENDING] Membatalkan pending order lama #{dp['ticket']} @ ${float(dp.get('price', 0.0)):,.2f}!")
+                        print(f"   🔄 [REPLACE SAME-SIDE PENDING] Membatalkan pending order lama #{dp['ticket']} @ ${float(dp.get('price', 0.0)):,.2f}!")
                         self.cancel_pending_order(dp["ticket"])
                     active_pending = self.get_pending_orders(symbol=sym)
                 if len(active_pending) >= max_pending:
