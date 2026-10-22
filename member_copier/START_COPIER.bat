@@ -5,6 +5,10 @@ cd /d "%~dp0"
 set COPIER_IN_LOOP=1
 set COPIER_SUPERVISED=1
 
+set "PY_CMD=python"
+if exist "..\.venv\Scripts\python.exe" set "PY_CMD=..\.venv\Scripts\python.exe"
+if exist ".\.venv\Scripts\python.exe" set "PY_CMD=.\.venv\Scripts\python.exe"
+
 echo ======================================================================
 echo    MEMULAI AUTO-COPIER MT5 MEMBER (VIP 9 BUKU PDF)
 echo ======================================================================
@@ -19,15 +23,15 @@ echo    di latar belakang tanpa member perlu buka-tutup jendela console!
 echo ======================================================================
 echo.
 
-python -m pip install telethon MetaTrader5 tzdata >nul 2>&1
+%PY_CMD% -m pip install telethon MetaTrader5 tzdata >nul 2>&1
 
 :run_loop
-python client_copier.py
+%PY_CMD% client_copier.py
 set COPIER_EXIT_CODE=%ERRORLEVEL%
 if "%COPIER_EXIT_CODE%"=="42" (
     echo.
     echo ======================================================================
-    echo 🔄 [LIVE AUTO-UPDATE] Memuat ulang Copier ke versi terbaru...
+    echo [LIVE AUTO-UPDATE] Memuat ulang Copier ke versi terbaru...
     echo ======================================================================
     timeout /t 1 /nobreak >nul
     goto run_loop
@@ -35,7 +39,7 @@ if "%COPIER_EXIT_CODE%"=="42" (
 if "%COPIER_EXIT_CODE%"=="100" (
     echo.
     echo ======================================================================
-    echo 🔄 [LIVE AUTO-UPDATE] Memuat ulang Copier ke versi terbaru...
+    echo [LIVE AUTO-UPDATE] Memuat ulang Copier ke versi terbaru...
     echo ======================================================================
     timeout /t 1 /nobreak >nul
     goto run_loop
@@ -46,8 +50,8 @@ if "%COPIER_EXIT_CODE%"=="0" exit /b 0
 
 echo.
 echo ======================================================================
-echo 🛠️ [SELF-HEALING AUTO-RECOVERY] Terdeteksi anomali/exit code: %COPIER_EXIT_CODE%
-echo 🔄 Sistem Auto-Repair sedang memulihkan dan merestart Copier dalam 3 detik...
+echo [SELF-HEALING AUTO-RECOVERY] Terdeteksi anomali/exit code: %COPIER_EXIT_CODE%
+echo Sistem Auto-Repair sedang memulihkan dan merestart Copier dalam 3 detik...
 echo ======================================================================
 timeout /t 3 /nobreak >nul
 goto run_loop

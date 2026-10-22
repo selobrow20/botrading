@@ -342,8 +342,25 @@ def execute_trade_on_binance(signal: Dict[str, Any], exchange) -> bool:
     except Exception:
         pass
 
-    # 2. Hitung ukuran posisi agar Initial Margin TIDAK BOLEH LEBIH dari $0.55 USDT
-    # Target notional dihitung dari modal margin maksimal $0.55 dikali leverage
+    # 2. Periksa batas minimum Binance (Min Amount & Min Notional Cost)
+    try:
+        market_info = exchange.market(market_symbol)
+    except Exception:
+        market_info = {}
+
+    min_amount = float(market_info.get("limits", {}).get("amount", {}).get("min") or 0.0)
+    min_cost = float(market_info.get("limits", {}).get("cost", {}).get("min") or 5.0)
+
+    # Hitung notional minimal yang diizinkan Binance untuk koin ini
+    min_notional_required = max(min_amount * entry_price, min_cost, 5.0)
+    min_margin_required = min_notional_required / actual_leverage
+
+    # Validasi mutlak: Margin awal TIDAK BOLEH LEBIH dari $0.55 USDT
+    if min_margin_required > MAX_INITIAL_MARGIN_USDT:
+        print(f"⚠️ [BATAL] Koin {symbol} memerlukan margin minimal ${min_margin_required:.2f} (Notional min ${min_notional_required:.2f} @ {actual_leverage}x) > batas maksimal $0.55 USDT. Sinyal dilewati demi proteksi modal.")
+        return False
+
+    # 3. Hitung ukuran posisi agar Initial Margin mendekati $0.55 USDT tetapi tidak melebihinya
     target_notional = MAX_INITIAL_MARGIN_USDT * actual_leverage
     target_qty = target_notional / entry_price
 
@@ -366,30 +383,43 @@ def execute_trade_on_binance(signal: Dict[str, Any], exchange) -> bool:
     actual_margin = notional_value / actual_leverage
 
     # Step-down kuantitas jika pembulatan presisi membuat margin sedikit melebihi $0.55 USDT
-    try:
-        market_info = exchange.market(market_symbol)
-        amount_precision = market_info.get("precision", {}).get("amount")
-        step_size = float(market_info.get("limits", {}).get("amount", {}).get("min") or 0.0)
-        if amount_precision is not None and not step_size:
-            step_size = 10 ** (-amount_precision)
-    except Exception:
+    amount_precision = market_info.get("precision", {}).get("amount")
+    step_size = float(market_info.get("limits", {}).get("amount", {}).get("min") or 0.0)
+    if amount_precision is not None and not step_size:
+        step_size = 10 ** (-amount_precision)
+    if not step_size:
         step_size = 0.001
 
     attempts = 0
-    while actual_margin > MAX_INITIAL_MARGIN_USDT and attempts < 15 and step_size:
-        formatted_qty = float(exchange.amount_to_precision(market_symbol, formatted_qty - step_size))
+    while actual_margin > MAX_INITIAL_MARGIN_USDT and attempts < 15:
+        next_qty = formatted_qty - step_size
+        if next_qty < min_amount:
+            break
+        try:
+            formatted_qty = float(exchange.amount_to_precision(market_symbol, next_qty))
+        except Exception:
+            break
         notional_value = formatted_qty * formatted_price
         actual_margin = notional_value / actual_leverage
         attempts += 1
 
-    # Validasi batas minimal order Binance Futures ($5.00 USDT Notional)
-    if notional_value < 5.0:
-        print(f"⚠️ [BATAL] Notional order (${notional_value:.2f}) untuk {symbol} di bawah batas minimal Binance ($5.00 USDT).")
+    # Validasi batas minimal order Binance Futures
+    if notional_value < min_notional_required:
+        # Jika sedikit di bawah, coba naikkan ke min_notional jika marginnya masih <= 0.55
+        if min_margin_required <= MAX_INITIAL_MARGIN_USDT:
+            try:
+                formatted_qty = float(exchange.amount_to_precision(market_symbol, min_notional_required / formatted_price))
+                notional_value = formatted_qty * formatted_price
+                actual_margin = notional_value / actual_leverage
+            except Exception:
+                pass
+
+    if notional_value < 5.0 or notional_value < min_cost:
+        print(f"⚠️ [BATAL] Notional order (${notional_value:.2f}) untuk {symbol} di bawah batas minimal Binance (${max(min_cost, 5.0):.2f} USDT).")
         return False
 
-    # Validasi mutlak: Margin awal TIDAK BOLEH LEBIH dari $0.55 USDT
     if actual_margin > MAX_INITIAL_MARGIN_USDT:
-        print(f"⚠️ [BATAL] Koin {symbol} memerlukan margin minimal ${actual_margin:.2f} > batas maksimal $0.55 USDT. Sinyal dilewati demi proteksi modal.")
+        print(f"⚠️ [BATAL] Koin {symbol} memerlukan margin ${actual_margin:.2f} > batas maksimal $0.55 USDT. Sinyal dilewati demi proteksi modal.")
         return False
 
     # Periksa ketersediaan saldo dompet Futures
@@ -625,9 +655,12 @@ def main():
                         break
 
                     # Eksekusi sinyal
-                    success = execute_trade_on_binance(sig, exchange)
-                    if success:
-                        executed_signals.add(sig_key)
+                    try:
+                        success = execute_trade_on_binance(sig, exchange)
+                        if success:
+                            executed_signals.add(sig_key)
+                    except Exception as err_trade:
+                        print(f"⚠️ [LEWATI {symbol}]: {err_trade}")
             else:
                 print(f"[{ts_str}] Memindai sinyal provider... (Menunggu sinyal dengan skor >= {MIN_SCORE_THRESHOLD})")
 

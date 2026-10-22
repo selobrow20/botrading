@@ -60,9 +60,9 @@ mt5:
   high_confidence_threshold: 80.0
   usd_min_confluence_score: 85.0    # Khusus Akun USD Standard: Wajib sinyal elit Grade A+ (>= 85%)
   cent_only_high_grade: true        # Akun Cent (USC) HANYA masuk sinyal Grade A+ (0.05 Lot). Sinyal standar (< 80%) di-skip demi akurasi sniper
-  enable_limit_orders: true         # Mengaktifkan Pending Limit Order (Buy Limit & Sell Limit) anti-kejar lilin Bob Volman
-  always_use_limit_orders: true     # Mode Murni Pending Limit: Tidak entry langsung, hanya pasang BUY LIMIT dan SELL LIMIT
-  notify_pending_limit_signals: true # Sinyal pending jangan ditampilkan di Telegram (hanya kirim saat order terjemput/filled)
+  enable_limit_orders: false         # Mengaktifkan Pending Limit Order (Buy Limit & Sell Limit) anti-kejar lilin Bob Volman
+  always_use_limit_orders: false     # Mode Murni Pending Limit: Tidak entry langsung, hanya pasang BUY LIMIT dan SELL LIMIT
+  notify_pending_limit_signals: false # Sinyal pending jangan ditampilkan di Telegram (hanya kirim saat order terjemput/filled)
   limit_order_expiry_mins: 120      # Masa berlaku pending order: 120 menit (2 jam / 8 candle M15). Auto-cancel jika tidak tersentuh
   limit_order_lot: 0.05             # Fallback ukuran lot khusus pending limit order Grade A+
   limit_order_lot_cent: 0.05        # Ukuran lot pending limit order untuk Akun Cent USC (0.05 Lot)

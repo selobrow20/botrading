@@ -1,4 +1,4 @@
 {
-  "version": "2.7.0",
-  "changelog": "Fitur Pembalikan Arah & Auto-Flip Multi-Sesi: Deteksi Flash Waterfall Sesi Asia/London/US, Auto Cut Loss, dan Eksekusi Flip Instan"
+  "version": "2.7.1",
+  "changelog": "Mode Eksekusi Instan Pasar (No Pending Limit): Eksekusi Langsung BUY / SELL di Harga Pasar, Bebas Error Limit Broker"
 }
