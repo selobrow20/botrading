@@ -1307,13 +1307,17 @@ class MT5MemberBridge:
             order_raw_type = self.mt5.ORDER_TYPE_BUY_LIMIT if "BUY" in cur_sig else self.mt5.ORDER_TYPE_SELL_LIMIT
 
             # Validasi tick & smart pullback buffer (mencegah invalid price / reject broker)
-            min_limit_buffer = 2.0  # 20 pips buffer aman dari harga live
-            if "BUY" in cur_sig and p_val >= (tick.ask - 0.20):
+            # Level 1 (Zona OB): buffer 2.0 USD (20 pips), Level 2 (Zona AVG): buffer 4.5 USD (45 pips)
+            lvl_num = int(ord_info.get("level", 1))
+            lvl_spacing = (lvl_num - 1) * 2.50
+            min_limit_buffer = 2.0 + lvl_spacing
+            lbl_name = ord_info.get("label", f"Level {lvl_num}")
+            if "BUY" in cur_sig and p_val >= (tick.ask - 0.20 - lvl_spacing):
                 p_val = round(tick.ask - min_limit_buffer, digits)
-                print(f"   🔄 [SMART RETEST PULLBACK] Penyesuaian BUY LIMIT ke area aman ${p_val:,.2f} (di bawah Ask ${tick.ask:,.2f}).")
-            elif "SELL" in cur_sig and p_val <= (tick.bid + 0.20):
+                print(f"   🔄 [SMART RETEST PULLBACK] Penyesuaian BUY LIMIT ({lbl_name}) ke area aman ${p_val:,.2f} (di bawah Ask ${tick.ask:,.2f}).")
+            elif "SELL" in cur_sig and p_val <= (tick.bid + 0.20 + lvl_spacing):
                 p_val = round(tick.bid + min_limit_buffer, digits)
-                print(f"   🔄 [SMART RETEST PULLBACK] Penyesuaian SELL LIMIT ke area aman ${p_val:,.2f} (di atas Bid ${tick.bid:,.2f}).")
+                print(f"   🔄 [SMART RETEST PULLBACK] Penyesuaian SELL LIMIT ({lbl_name}) ke area aman ${p_val:,.2f} (di atas Bid ${tick.bid:,.2f}).")
 
             # Anti-duplicate & max pending check per level
             active_pending = self.get_pending_orders(symbol=sym)
