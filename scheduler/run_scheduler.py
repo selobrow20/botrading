@@ -1054,14 +1054,15 @@ class PipelineRunner:
         if not ladder_orders:
             return
 
-        # Filter order yang benar-benar dibutuhkan (Maksimal 1 order per arah yang belum antre)
+        # Filter order yang benar-benar dibutuhkan (Zona OB Level 1 & Zona AVG Level 2)
         orders_to_deploy = []
+        max_levels_to_deploy = int(cfg_mt5.get("max_limit_levels", 2))
         if needs_buy:
-            for o in [ord for ord in ladder_orders if "BUY" in ord.get("type", "")][:1]:
+            for o in [ord for ord in ladder_orders if "BUY" in ord.get("type", "")][:max_levels_to_deploy]:
                 o["lot"] = target_limit_lot
                 orders_to_deploy.append(o)
         if needs_sell:
-            for o in [ord for ord in ladder_orders if "SELL" in ord.get("type", "")][:1]:
+            for o in [ord for ord in ladder_orders if "SELL" in ord.get("type", "")][:max_levels_to_deploy]:
                 o["lot"] = target_limit_lot
                 orders_to_deploy.append(o)
 

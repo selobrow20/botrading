@@ -31,7 +31,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 
 import socket
 
-CLIENT_COPIER_VERSION = "2.7.3"
+CLIENT_COPIER_VERSION = "2.7.4"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -1181,34 +1181,58 @@ class MT5MemberBridge:
         if limit_price <= 0 or tp_raw <= 0 or sl_raw <= 0:
             return {"success": False, "message": f"Harga limit (${limit_price:.2f}), TP (${tp_raw:.2f}), atau SL (${sl_raw:.2f}) tidak valid."}
 
-        # Multi-Level Support (Khusus Akun Standard USD dilarang multi-level agar modal tidak terkuras)
-        enable_multi = False if not is_cent else bool(self.cfg.get("enable_multi_level_limits", False))
+        # Multi-Level Support: Level 1 (Zona OB) & Level 2 (Zona AVG / 50% Mean Threshold)
+        enable_multi = bool(self.cfg.get("enable_multi_level_limits", True))
         ladder_items = sig.get("ladder_limit_orders", [])
-        max_levels = 1 if not is_cent else int(self.cfg.get("max_limit_levels", 1))
+        max_levels = int(self.cfg.get("max_limit_levels", 2))
         is_dual = bool(self.cfg.get("enable_dual_sided_limits", False))
         if is_us and is_cent:
             max_pending = us_cap
         elif not is_cent:
-            max_pending = 2 if is_dual else 1
+            # Akun USD: Mendukung 2 Zona (Zona OB & Zona AVG)
+            max_pending = 4 if is_dual else max_levels
         else:
-            max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 1))
+            max_pending = int(self.cfg.get("max_pending_orders_per_symbol", 2))
 
         orders_to_place = []
         if enable_multi and len(ladder_items) >= 2:
             for itm in ladder_items[:max_pending]:
                 item_sig = itm.get("signal") or itm.get("type") or itm.get("order_type") or action
+                lvl = int(itm.get("level", len(orders_to_place) + 1))
+                default_lbl = "Zona OB (Order Block)" if lvl == 1 else "Zona AVG (Mean Threshold)"
                 orders_to_place.append({
-                    "level": itm.get("level", len(orders_to_place) + 1),
-                    "label": itm.get("label", f"Level {len(orders_to_place) + 1}"),
+                    "level": lvl,
+                    "label": itm.get("label", default_lbl),
                     "type": item_sig,
                     "price": float(itm.get("price", limit_price)),
                     "tp": float(itm.get("tp", tp_raw)),
                     "sl": float(itm.get("sl", sl_raw)),
                 })
+        elif enable_multi and len(orders_to_place) == 0:
+            # Otomatis buat 2 level: Zona OB (Entry) & Zona AVG (Retest 50% Buffer)
+            min_dist = max(2.0, float(self.cfg.get("min_level_spacing_pips", 20.0)) / 10.0)
+            digits = int(getattr(s_info, "digits", 2) or 2)
+            orders_to_place.append({
+                "level": 1,
+                "label": "Level 1 (Zona OB)",
+                "type": action,
+                "price": limit_price,
+                "tp": tp_raw,
+                "sl": sl_raw,
+            })
+            p2 = round(limit_price - min_dist, digits) if "BUY" in action else round(limit_price + min_dist, digits)
+            orders_to_place.append({
+                "level": 2,
+                "label": "Level 2 (Zona AVG)",
+                "type": action,
+                "price": p2,
+                "tp": tp_raw,
+                "sl": sl_raw,
+            })
         else:
             orders_to_place.append({
                 "level": 1,
-                "label": "Level 1",
+                "label": "Level 1 (Zona OB)",
                 "type": action,
                 "price": limit_price,
                 "tp": tp_raw,
@@ -1223,15 +1247,18 @@ class MT5MemberBridge:
         if not is_cent:
             usd_only_high = self.cfg.get("usd_only_high_grade", True)
             pdf_score_val = float(sig.get("pdf_confluence_score", 0.0) or 0.0)
+            c_grade = str(sig.get("setup_grade", "") or "")
             is_ultra_usd = sig.get("is_ultra_usd_grade", is_high_grade)
-            if (usd_only_high and not is_ultra_usd) or (0 < pdf_score_val < 80.0):
-                return {"success": False, "message": f"Pending Limit dilewati: Akun Standard USD hanya mengambil sinyal Elit Grade A+ terbaik (Skor sinyal: {pdf_score_val:.0f}%)."}
+            # Wajib Grade A+ (Skor >= 80% dan Grade A+) sesuai arahan: "samain persis dengan usc tp untuk usd dia di grad a+ aja zona ob dan avg"
+            is_grade_a_plus = ("A+" in c_grade or (pdf_score_val >= 80.0 and "A" in c_grade))
+            if not is_grade_a_plus or (usd_only_high and not is_ultra_usd) or (0 < pdf_score_val < 80.0):
+                return {"success": False, "message": f"Pending Limit dilewati: Akun Standard USD HANYA mengambil setup Grade A+ (Zona OB & AVG) terbaik (Skor saat ini: {pdf_score_val:.0f}%, Grade: {c_grade})."}
             elite_ok, elite_msg = self.verify_usd_elite_setup(sym, action, pdf_score=pdf_score_val)
             if not elite_ok:
                 print(f"   🛡️ [USD ELITE GUARD] {elite_msg}")
                 return {"success": False, "message": elite_msg}
             trade_lot, lot_lbl = 0.01, "USD Standard Disiplin (Mutlak 0.01 Lot)"
-            print(f"   💎 [USD ELITE SNIPER PENDING] {action} {trade_lot} Lot di Akun Standard USD ({lot_lbl}).")
+            print(f"   💎 [USD GRADE A+ ZONA OB & AVG] {action} {trade_lot} Lot di Akun Standard USD ({lot_lbl}).")
         else:
             trade_lot, lot_lbl = self.calculate_lot_size(sig, is_cent=True)
             print(f"   🎯 [CENT USC PENDING] BUY/SELL LIMIT {trade_lot} Lot ({lot_lbl}).")

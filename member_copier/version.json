@@ -1,4 +1,4 @@
 {
-  "version": "2.7.3",
-  "changelog": "Dual-Sided Pending Limit Mode (BUY & SELL LIMIT) dengan Smart Pullback Buffer, Tanpa Trading Instan Otomatis"
+  "version": "2.7.4",
+  "changelog": "Dual Level Pending Limit (Zona OB & Zona AVG): Akun USD Disiplin Mutlak Grade A+ (0.01 Lot)"
 }
