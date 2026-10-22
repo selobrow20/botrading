@@ -1135,10 +1135,11 @@ class MT5MemberBridge:
             self.cancel_opposite_pending_orders(sym, action)
 
         # 3. CEK & GANTI STALE ORDER (Auto-Replace Pending Order Lama jika kuota penuh)
+        is_dual = bool(self.cfg.get("enable_dual_sided_limits", False))
         if is_us:
             max_pos = int(self.cfg.get("us_session_max_positions", 4))
         elif not is_cent:
-            max_pos = int(self.cfg.get("max_positions_standard", 1))
+            max_pos = 2 if is_dual else int(self.cfg.get("max_positions_standard", 1))
         else:
             max_pos = int(self.cfg.get("max_positions_cent", 2))
 
@@ -1146,13 +1147,13 @@ class MT5MemberBridge:
         if total_committed >= max_pos:
             stale_candidates = [
                 po for po in active_pending
-                if abs(float(po.get("price", 0.0)) - limit_p_chk) > 0.40
+                if po.get("type") == action and abs(float(po.get("price", 0.0)) - limit_p_chk) > 0.40
             ]
             if stale_candidates:
                 oldest_po = stale_candidates[0]
                 po_price = float(oldest_po.get("price", 0.0))
-                print(f"   🔄 [SINKRONISASI SETUP MASTER] Kuota layer penuh ({total_committed}/{max_pos}). "
-                      f"Membatalkan pending order lama #{oldest_po['ticket']} ({oldest_po.get('type')} @ ${po_price:,.2f}) "
+                print(f"   🔄 [SINKRONISASI SETUP MASTER] Kuota layer searah penuh. "
+                      f"Membatalkan pending order {action} lama #{oldest_po['ticket']} @ ${po_price:,.2f} "
                       f"untuk digantikan dengan Limit Order Baru Master @ ${limit_p_chk:,.2f}!")
                 self.cancel_pending_order(oldest_po["ticket"])
                 active_pending = [po for po in active_pending if po.get("ticket") != oldest_po["ticket"]]
