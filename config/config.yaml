@@ -91,12 +91,12 @@ mt5:
   break_even_long_pips: 60.0        # Sinyal Long / TP Jauh: Otomatis BEP saat floating profit +60 pips ($6.00 USD)
   break_even_buffer_pips: 2.0       # Buffer pengaman di atas entry: +2 pips ($0.20 USD = 2 USC) mengunci spread jika kena pullback
   enable_reversal_auto_close: true  # Diaktifkan dengan Verifikasi Otak Gemini: Cut Loss cerdas sebelum terseret ke hard SL
-  reversal_auto_close_min_score: 85.0 # Batas minimal skor pembalikan
+  reversal_auto_close_min_score: 75.0 # Batas minimal skor pembalikan
   enable_reversal_flip: true        # Saran 1 (Hybrid Flip): Balik arah (Flip) seketika mengikuti tren baru (Tutup posisi lama dulu baru timpa)
-  min_reversal_flip_score: 85.0     # Minimal skor konfluensi pembalikan (Grade A+ 85% atau Disetujui Gemini)
+  min_reversal_flip_score: 75.0     # Minimal skor konfluensi pembalikan (Grade A+ 75% atau Disetujui Gemini)
   min_flip_position_age_seconds: 60.0 # Usia minimal posisi (60s) untuk cut loss dini saat floating minus (0s jika floating profit)
   enable_fast_reversal_guard: true  # Diaktifkan: Deteksi junam cepat & Judas Swing Dump untuk proteksi modal
-  fast_reversal_pips_threshold: 30.0 # Ambang batas pergerakan cepat (30 pips / $3.00 USD)
+  fast_reversal_pips_threshold: 22.0 # Ambang batas pergerakan cepat (22 pips / $2.20 USD)
   enable_judas_swing_filter: true   # Filter anti-manipulasi likuiditas Sesi London (12:00 - 16:00 WIB / jam 4 sore)
   london_h1_confirmation: true      # Khusus Sesi London: Open posisi wajib konfirmasi searah tren & candle H1 (1-Hour)
   london_h1_max_hour: 16            # Maksimal jam 16:00 WIB (setelah jam 4 sore manipulasi reda, kembali ke M15 biasa)

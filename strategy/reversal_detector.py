@@ -115,14 +115,16 @@ class GoldReversalDetector:
                 )
 
             # 2. Market Structure Shift / CHoCH (Trading Alchemist & SMC)
-            crossed_above_ema20 = (close > ema20) and (prev_close <= prev_ema20)
+            eff_price = current_price if current_price > 0 else close
+            crossed_above_ema20 = (max(close, eff_price) > ema20) and (min(prev_close, open_p) <= prev_ema20 or prev_close <= prev_ema20)
+            breakout_ema50 = (max(close, eff_price) > ema50) and (min(prev_close, open_p) <= ema50)
             smc_bull_shift = bool(smc_struct and (smc_struct.choch_bullish or smc_struct.bos_bullish or smc_struct.has_hh_hl))
             if smc_bull_shift:
                 score += 30.0
                 reasons.append(f"🏛️ SMC Reversal: {smc_struct.description} (Struktur berbalik Bullish melanggar posisi SELL)")
-            elif bos_bull or crossed_above_ema20:
+            elif bos_bull or crossed_above_ema20 or breakout_ema50:
                 score += 25.0
-                detail_bos = "Breakout Menembus Kembali ke Atas Dinamis 20 EMA" if crossed_above_ema20 else "Break of Structure (BOS) Bullish"
+                detail_bos = "Breakout Menembus Kembali ke Atas Dinamis 20/50 EMA" if (crossed_above_ema20 or breakout_ema50) else "Break of Structure (BOS) Bullish"
                 reasons.append(f"🏛️ Struktur Pasar: {detail_bos} (Indikasi pergantian karakter tren / CHoCH)")
 
             # 3. Chart Pattern Reversal (Buku 8 Chart Pattern)
@@ -168,14 +170,16 @@ class GoldReversalDetector:
                 )
 
             # 2. Market Structure Shift / CHoCH (Trading Alchemist & SMC)
-            crossed_below_ema20 = (close < ema20) and (prev_close >= prev_ema20)
+            eff_price = current_price if current_price > 0 else close
+            crossed_below_ema20 = (min(close, eff_price) < ema20) and (max(prev_close, open_p) >= prev_ema20 or prev_close >= prev_ema20)
+            breakdown_ema50 = (min(close, eff_price) < ema50) and (max(prev_close, open_p) >= ema50)
             smc_bear_shift = bool(smc_struct and (smc_struct.choch_bearish or smc_struct.bos_bearish or smc_struct.has_lh_ll))
             if smc_bear_shift:
                 score += 30.0
                 reasons.append(f"🏛️ SMC Reversal: {smc_struct.description} (Struktur berbalik Bearish melanggar posisi BUY)")
-            elif bos_bear or crossed_below_ema20:
+            elif bos_bear or crossed_below_ema20 or breakdown_ema50:
                 score += 25.0
-                detail_bos = "Breakdown Menembus ke Bawah Dinamis 20 EMA" if crossed_below_ema20 else "Break of Structure (BOS) Bearish"
+                detail_bos = "Breakdown Menembus ke Bawah Dinamis 20/50 EMA" if (crossed_below_ema20 or breakdown_ema50) else "Break of Structure (BOS) Bearish"
                 reasons.append(f"🏛️ Struktur Pasar: {detail_bos} (Indikasi pelemahan momentum / CHoCH Bearish)")
 
             # 3. Chart Pattern Reversal (Buku 8 Chart Pattern)
@@ -210,12 +214,13 @@ class GoldReversalDetector:
         # =========================================================================
         has_structure_break = False
         smc_opposing_confirmed = False
+        eff_price = current_price if current_price > 0 else close
         if pos_type == "SELL":
-            smc_opposing_confirmed = bool(smc_struct and (smc_struct.choch_bullish or smc_struct.bos_bullish or (smc_struct.trend == "BULLISH" and close > ema20)))
-            has_structure_break = (bos_bull or pat_db or pat_ihs or smc_opposing_confirmed) and (close >= ema20 or (smc_struct and smc_struct.choch_bullish))
+            smc_opposing_confirmed = bool(smc_struct and (smc_struct.choch_bullish or smc_struct.bos_bullish or (smc_struct.trend == "BULLISH" and eff_price > ema20)))
+            has_structure_break = (bos_bull or pat_db or pat_ihs or smc_opposing_confirmed or eff_price > ema20) and (eff_price >= ema20 or (smc_struct and smc_struct.choch_bullish))
         elif pos_type == "BUY":
-            smc_opposing_confirmed = bool(smc_struct and (smc_struct.choch_bearish or smc_struct.bos_bearish or (smc_struct.trend == "BEARISH" and close < ema20)))
-            has_structure_break = (bos_bear or pat_dt or pat_hs or smc_opposing_confirmed) and (close <= ema20 or (smc_struct and smc_struct.choch_bearish))
+            smc_opposing_confirmed = bool(smc_struct and (smc_struct.choch_bearish or smc_struct.bos_bearish or (smc_struct.trend == "BEARISH" and eff_price < ema20)))
+            has_structure_break = (bos_bear or pat_dt or pat_hs or smc_opposing_confirmed or eff_price < ema20) and (eff_price <= ema20 or (smc_struct and smc_struct.choch_bearish))
 
         # 1. Konfirmasi Utama: Skor Konfluensi Tinggi (>= 70%) + Minimal 3 Konfirmasi Independen + Wajib Rusak Struktur Pasar Nyata (BOS / Pola Mayor / SMC)
         is_reversal = (score >= 70.0) and (len(reasons) >= 3) and has_structure_break
@@ -318,15 +323,22 @@ class GoldReversalDetector:
                     score += 10.0
                     reasons.append(f"📉 TF 5M: Harga jebol di bawah Dynamic 20 EMA ({ema20_m5:.2f})")
 
-            # Bobot Sesi London (Judas Swing Dump)
+            # Bobot Sesi: London, US, dan ASIA / TOKYO
             if session_code == "LONDON":
                 score = max(score, 90.0)
                 reasons.append("🏛️ Sesi London: Terkonfirmasi pola Judas Swing Trap / False Bullish institusi")
+                rev_type = "FAST BEARISH PLUNGE (London Judas Swing Dump)"
             elif session_code == "US":
                 score = max(score, 85.0)
                 reasons.append("🗽 Sesi US: Terkonfirmasi volatilitas New York momentum break")
+                rev_type = "FAST BEARISH PLUNGE (US Session Momentum Dump)"
+            elif session_code in ["ASIA", "TOKYO"]:
+                score = max(score, 85.0)
+                reasons.append("🌅 Sesi Asia: Terkonfirmasi institutional open liquidity sweep / Asian waterfall dump")
+                rev_type = "FAST BEARISH PLUNGE (Asian Session Liquidity Dump)"
+            else:
+                rev_type = "FAST BEARISH PLUNGE (Impulsive Drop)"
 
-            rev_type = "FAST BEARISH PLUNGE (London Judas Swing Dump)"
             return True, rev_type, reasons, min(score, 95.0)
 
         elif pos_type == "SELL":
@@ -358,15 +370,22 @@ class GoldReversalDetector:
                     score += 10.0
                     reasons.append(f"📈 TF 5M: Harga menembus ke atas Dynamic 20 EMA ({ema20_m5:.2f})")
 
-            # Bobot Sesi London
+            # Bobot Sesi: London, US, dan ASIA / TOKYO
             if session_code == "LONDON":
                 score = max(score, 90.0)
                 reasons.append("🏛️ Sesi London: Terkonfirmasi pola Judas Swing Trap / False Bearish institusi")
+                rev_type = "FAST BULLISH PUMP (London Judas Swing Pump)"
             elif session_code == "US":
                 score = max(score, 85.0)
                 reasons.append("🗽 Sesi US: Terkonfirmasi volatilitas New York momentum break")
+                rev_type = "FAST BULLISH PUMP (US Session Momentum Pump)"
+            elif session_code in ["ASIA", "TOKYO"]:
+                score = max(score, 85.0)
+                reasons.append("🌅 Sesi Asia: Terkonfirmasi institutional open liquidity sweep / Asian pump reversal")
+                rev_type = "FAST BULLISH PUMP (Asian Session Liquidity Pump)"
+            else:
+                rev_type = "FAST BULLISH PUMP (Impulsive Surge)"
 
-            rev_type = "FAST BULLISH PUMP (London Judas Swing Pump)"
             return True, rev_type, reasons, min(score, 95.0)
 
         return False, "", [], 0.0

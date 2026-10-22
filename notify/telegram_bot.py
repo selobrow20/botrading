@@ -611,16 +611,16 @@ class TelegramNotifier:
             return {"success": False, "sent_count": 0, "recipients": [], "error": f"File {p} tidak ditemukan."}
 
         caption = custom_caption or (
-            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.6.1 (1:1 MULTI-LAYER & PRECISION SYNC)</b> 🚀\n"
+            "🔔 <b>[UPDATE_COPIER] AUTO-COPIER MT5 v2.7.0 (PEMBALIKAN ARAH & AUTO-FLIP MULTI-SESI)</b> 🚀\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Halo Trader VIP! Master merilis pembaruan Auto-Copier MT5 v2.6.1.\n\n"
-            "✨ <b>FITUR & LOGIKA TERBARU (v2.6.1):</b>\n"
-            "1. 🎯 <b>Sinkronisasi Posisi Presisi 1:1:</b> Toleransi duplikasi dipersempit ke $0.40 USD (4 pips) sehingga seluruh ladder layer Master tereksekusi sempurna tanpa ada posisi yang terlewat.\n"
-            "2. 🛡️ <b>Multi-Layer US Session (Maks 4 Layer):</b> Batas layer sesi US kini mendukung hingga 4 posisi sekaligus aman sesuai strategi ladder OB/FVG.\n"
-            "3. ⚡ <b>Bypass Anti-Stacking untuk Filled Limits:</b> Sinyal eksekusi order limit terjemput dari Master diprioritaskan instan tanpa terhalang minimum grid spacing.\n"
-            "4. 🔄 <b>OTA Auto-Reload:</b> Copier yang sedang berjalan akan otomatis me-reload update terbaru ini tanpa perlu intervensi manual!\n\n"
+            "Halo Trader VIP! Master merilis pembaruan besar Auto-Copier MT5 v2.7.0.\n\n"
+            "✨ <b>FITUR & LOGIKA TERBARU (v2.7.0):</b>\n"
+            "1. 🔄 <b>Pembalikan Arah & Auto-Flip 100%:</b> Deteksi dini flash drop/pump di semua sesi (Asia, London, US) dengan eksekusi Cut Loss Cerdas & otomatis balik arah seketika mengikuti tren baru.\n"
+            "2. 🚫 <b>Anti-Pisau Jatuh 24 Jam:</b> Dilarang keras pasang BUY LIMIT saat M15 breakdown / di bawah EMA 20, dan otomatis membatalkan pending order lama yang melawan arus.\n"
+            "3. ⚡ <b>Fast Reversal Guard (Bypass Grace Period):</b> Posisi yang terkena pergerakan tajam berlawanan langsung diamankan tanpa harus menunggu delay 15 menit.\n"
+            "4. 🔄 <b>OTA Auto-Reload:</b> Copier yang sedang aktif akan otomatis me-reload update terbaru ini dalam 30 detik tanpa perlu intervensi manual!\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "<i>Copier yang sedang aktif akan otomatis reload ke v2.6.1 dalam 30 detik!</i>"
+            "<i>Copier yang sedang aktif akan otomatis reload ke v2.7.0 dalam 30 detik!</i>"
         )
 
         approved_ids = self.storage.get_approved_chat_ids(admin_id=self.chat_id)

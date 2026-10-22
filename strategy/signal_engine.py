@@ -1879,21 +1879,14 @@ class SignalEngine:
                     allow_sell = False
                     logger.info("🔒 [TREND LOCK] Tren BULLISH: SELL LIMIT dinonaktifkan (Anti-Hadang Kereta). Hanya BUY LIMIT diizinkan.")
 
-            # PROTOKOL PATEN KEHATI-HATIAN SESI UK / LONDON (13:00 - 19:00 WIB):
-            # Saat masuk Sesi London/UK, pasar sering mengalami aksi jual besar (Institutional Sell-Off / Pasar Takut Turun).
-            # Jika harga berada di bawah EMA 20 M15 atau tren M15 bearish, MUTLAK DILARANG BUY LIMIT.
-            # Sistem secara otomatis mengutamakan SELL LIMIT pada pantulan EMA 20 / Resistance.
-            if curr_session == "LONDON" and (curr_price < ema20_raw or is_m15_bearish):
+            # PROTOKOL PATEN KEHATI-HATIAN SEMUA SESI (LONDON, ASIA, US):
+            # Saat market buka atau masuk Sesi London/Asia/US, jika harga berada di bawah EMA 20 M15 atau tren M15 bearish,
+            # MUTLAK DILARANG BUY LIMIT (Anti-Pisau Jatuh 24 Jam).
+            # Sistem secara otomatis membalik fokus ke SELL LIMIT pada pantulan EMA 20 / Resistance.
+            if (curr_session in ["LONDON", "ASIA", "TOKYO", "US"]) and (curr_price < ema20_raw or is_m15_bearish):
                 allow_buy = False
                 allow_sell = True
-                logger.info("🛡️ [UK SESSION CAUTION GUARD] Sesi London Aktif & Harga di bawah EMA 20: BUY LIMIT dinonaktifkan mutlak (Anti-Pisau Jatuh). Fokus ke SELL LIMIT.")
-            else:
-                if curr_price >= ema50_raw:
-                    allow_buy = True
-                    allow_sell = False
-                else:
-                    allow_buy = False
-                    allow_sell = True
+                logger.info(f"🛡️ [{curr_session} SESSION CAUTION GUARD] Sesi {session_name} Aktif & Harga di bawah EMA 20 / Breakdown: BUY LIMIT dinonaktifkan mutlak (Anti-Pisau Jatuh). Fokus ke SELL LIMIT.")
         else:
             allow_buy = True
             allow_sell = True

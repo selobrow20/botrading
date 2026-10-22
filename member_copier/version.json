@@ -1,4 +1,4 @@
 {
-  "version": "2.6.1",
-  "changelog": "Sinkronisasi Multi-Layer US Session: Presisi Anti-Duplikasi (0.40 USD) & Dukungan Penuh Hingga 4 Posisi Selaras Master"
+  "version": "2.7.0",
+  "changelog": "Fitur Pembalikan Arah & Auto-Flip Multi-Sesi: Deteksi Flash Waterfall Sesi Asia/London/US, Auto Cut Loss, dan Eksekusi Flip Instan"
 }

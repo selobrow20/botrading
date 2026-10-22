@@ -29,6 +29,8 @@
   "magic_number": 888888,
   "auto_tp_sl": true,
   "enable_reversal_auto_close": true,
+  "enable_reversal_flip": true,
+  "fast_reversal_pips_threshold": 22.0,
   "enable_break_even": true,
   "break_even_quick_pips": 20.0,
   "break_even_long_pips": 60.0,

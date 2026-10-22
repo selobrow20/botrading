@@ -29,7 +29,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-CLIENT_COPIER_VERSION = "2.6.1"
+CLIENT_COPIER_VERSION = "2.7.0"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -1405,6 +1405,8 @@ class MT5MemberBridge:
                 print(f"\n🔄 [REVERSAL FLIP 90%+ 9 BUKU PDF] Menutup posisi lawan [{opp_summary}] di MT5 Member untuk cut loss & flip ke {action}...")
                 for p in opposite_pos:
                     self.close_position(p.ticket)
+                # Batalkan pending order dari arah lama agar tidak terjemput
+                self.cancel_same_side_pending_orders(sym, "BUY" if action == "SELL" else "SELL")
                 import time
                 time.sleep(0.5)
                 open_pos = self.mt5.positions_get(symbol=sym) or []
@@ -2104,25 +2106,29 @@ async def run_telethon_listener(cfg: dict, bridge: MT5MemberBridge):
 
         msg_upper = msg_text.upper()
 
-        # Deteksi Reversal Guard (Ambil Untung Otomatis dari Master Bot)
-        if "REVERSAL GUARD" in msg_upper or "AMBIL UNTUNG OTOMATIS" in msg_upper:
-            enable_rev_close = bool(cfg.get("enable_reversal_auto_close", False))
+        # Deteksi Reversal Guard & Auto-Flip (Ambil Untung Otomatis / Cut Loss Cerdas dari Master Bot)
+        if any(k in msg_upper for k in ["REVERSAL GUARD", "AMBIL UNTUNG OTOMATIS", "REVERSAL AUTO-FLIP", "AUTO CUT LOSS", "REVERSAL FLIP"]):
+            enable_rev_close = bool(cfg.get("enable_reversal_auto_close", True))
             if enable_rev_close:
-                print(f"\n🛡️ [{datetime.now().strftime('%H:%M:%S')}] ALERT REVERSAL GUARD DITERIMA DARI MASTER BOT!")
+                print(f"\n🛡️ [{datetime.now().strftime('%H:%M:%S')}] ALERT REVERSAL GUARD / AUTO-FLIP DITERIMA DARI MASTER BOT!")
                 sym = bridge.find_broker_symbol()
                 target_act = None
-                if "POSISI DITUTUP: BUY" in msg_upper or "🟢 BUY" in msg_upper:
+                if "POSISI DITUTUP: BUY" in msg_upper or "🟢 BUY" in msg_upper or "MEMBALIK BUY" in msg_upper:
                     target_act = "BUY"
-                elif "POSISI DITUTUP: SELL" in msg_upper or "🔴 SELL" in msg_upper:
+                elif "POSISI DITUTUP: SELL" in msg_upper or "🔴 SELL" in msg_upper or "MEMBALIK SELL" in msg_upper:
                     target_act = "SELL"
 
                 closed_list = bridge.close_all_positions(sym, action=target_act)
                 if closed_list:
                     for c in closed_list:
                         status_lbl = "BERHASIL" if c["success"] else "GAGAL"
-                        print(f"   🔒 [AUTO-CLOSE REVERSAL] Posisi {c['action']} #{c['ticket']} {status_lbl} ditutup untuk mengamankan profit!")
+                        print(f"   🔒 [AUTO-CLOSE REVERSAL] Posisi {c['action']} #{c['ticket']} {status_lbl} ditutup untuk mengamankan modal!")
                 else:
                     print(f"   ℹ️ Tidak ada posisi terbuka {target_act or ''} pada {sym} di MT5 Anda.")
+
+                # Batalkan seluruh pending limit order searah posisi yang ditutup agar tidak terjemput
+                if target_act:
+                    bridge.cancel_same_side_pending_orders(sym, target_act)
             else:
                 print(f"\nℹ️ [{datetime.now().strftime('%H:%M:%S')}] PERINGATAN REVERSAL MASTER (INFO):")
                 print("   Master mendeteksi indikasi pembalikan pasar. Sesuai setting, posisi Anda tetap dibiarkan berjalan menuju target TP/SL.")
