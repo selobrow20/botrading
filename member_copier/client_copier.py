@@ -31,7 +31,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 
 import socket
 
-CLIENT_COPIER_VERSION = "2.7.2"
+CLIENT_COPIER_VERSION = "2.7.3"
 OTA_VERSION_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/version.json"
 OTA_SCRIPT_URL = "https://raw.githubusercontent.com/selobrow20/botrading/main/member_copier/client_copier.py"
 
@@ -1265,13 +1265,14 @@ class MT5MemberBridge:
             cur_sig = ord_info.get("type", action)
             order_raw_type = self.mt5.ORDER_TYPE_BUY_LIMIT if "BUY" in cur_sig else self.mt5.ORDER_TYPE_SELL_LIMIT
 
-            # Validasi tick
-            if "BUY" in cur_sig and p_val >= tick.ask:
-                print(f"   ⚠️ Harga BUY LIMIT (${p_val:,.2f}) harus lebih rendah dari harga Ask live (${tick.ask:,.2f}). Dilewati.")
-                continue
-            elif "SELL" in cur_sig and p_val <= tick.bid:
-                print(f"   ⚠️ Harga SELL LIMIT (${p_val:,.2f}) harus lebih tinggi dari harga Bid live (${tick.bid:,.2f}). Dilewati.")
-                continue
+            # Validasi tick & smart pullback buffer (mencegah invalid price / reject broker)
+            min_limit_buffer = 2.0  # 20 pips buffer aman dari harga live
+            if "BUY" in cur_sig and p_val >= (tick.ask - 0.20):
+                p_val = round(tick.ask - min_limit_buffer, digits)
+                print(f"   🔄 [SMART RETEST PULLBACK] Penyesuaian BUY LIMIT ke area aman ${p_val:,.2f} (di bawah Ask ${tick.ask:,.2f}).")
+            elif "SELL" in cur_sig and p_val <= (tick.bid + 0.20):
+                p_val = round(tick.bid + min_limit_buffer, digits)
+                print(f"   🔄 [SMART RETEST PULLBACK] Penyesuaian SELL LIMIT ke area aman ${p_val:,.2f} (di atas Bid ${tick.bid:,.2f}).")
 
             # Anti-duplicate & max pending check per level
             active_pending = self.get_pending_orders(symbol=sym)
@@ -1369,13 +1370,18 @@ class MT5MemberBridge:
         # Bersihkan order limit basi sebelum eksekusi order
         self.cancel_stale_pending_orders(symbol=sym)
 
-        # Delegasikan ke Pending Limit jika tipe aksi BUY_LIMIT / SELL_LIMIT
+        # Delegasikan ke Pending Limit jika tipe aksi BUY_LIMIT / SELL_LIMIT atau always_use_limit_orders
         enable_limits = bool(self.cfg.get("enable_limit_orders", False))
-        if action in ["BUY_LIMIT", "SELL_LIMIT"] or sig.get("is_limit_order"):
+        always_limits = bool(self.cfg.get("always_use_limit_orders", False))
+        if action in ["BUY_LIMIT", "SELL_LIMIT"] or sig.get("is_limit_order") or always_limits:
             if enable_limits:
+                if action in ["BUY", "SELL"] and always_limits:
+                    action = "BUY_LIMIT" if "BUY" in action else "SELL_LIMIT"
+                    sig["action"] = action
+                    sig["is_limit_order"] = True
                 return self.execute_limit_order(sig)
             else:
-                # Mode Eksekusi Instan Pasar (Kaidah No Pending Limit): Eksekusi langsung di harga pasar
+                # Mode Eksekusi Instan Pasar: Eksekusi langsung di harga pasar
                 action = "BUY" if "BUY" in action else "SELL"
                 sig["action"] = action
                 sig["is_limit_order"] = False
