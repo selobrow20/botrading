@@ -487,11 +487,13 @@ def filter_and_validate_signal(
             return False, msg
 
         calculated_rr = round(tp_dist / sl_dist, 2)
-        # SHORT trade scalping Hermes 3D berpegang pada target kilat 60 pips 1:1 R:R ($6 SL, $6 TP)
-        is_short_scalp = (abs(sl_dist - 6.0) <= 0.2 and abs(tp_dist - 6.0) <= 0.2)
-        min_rr = 0.95 if is_short_scalp else 1.45
+        # Sinyal SELL / SHORT atau Limit Order berpegang pada target adaptif R:R 1:1, sedangkan BUY / LONG berpegang pada R:R minimal 1:1.5
+        trade_type_val = str(getattr(sig, "trade_type", "")).upper()
+        is_limit_sig = getattr(sig, "is_limit_order", False) or "LIMIT" in action
+        is_short_or_limit = ("SELL" in action) or (trade_type_val == "SHORT") or is_limit_sig or (abs(sl_dist - 6.0) <= 0.2 and abs(tp_dist - 6.0) <= 0.2)
+        min_rr = 0.95 if is_short_or_limit else 1.45
         if calculated_rr < min_rr:
-            req_label = "1:1" if is_short_scalp else "1:1.5"
+            req_label = "1:1" if is_short_or_limit else "1:1.5"
             msg = f"Rasio Risk-to-Reward tidak memadai ({calculated_rr:.2f} < {min_rr+0.05:.1f}). Minimal R:R adalah {req_label}."
             _notify_veto(msg, notifier)
             return False, msg

@@ -647,7 +647,8 @@ def fetch_mtf_data_mt5(
         }
 
         # Hitung broker offset WIB (Asia/Jakarta UTC+7)
-        broker_offset_hours = 4
+        # Musim Dingin (Winter/EET) UTC+2 (Offset +5 WIB), Musim Panas (Summer/EEST) UTC+3 (Offset +4 WIB)
+        broker_offset_hours = 5
         try:
             tick = mt5.symbol_info_tick(target_sym)
             if tick and tick.time > 0:
@@ -655,7 +656,7 @@ def fetch_mtf_data_mt5(
                 broker_utc_diff_hours = round((tick.time - now_utc_ts) / 3600)
                 broker_offset_hours = 7 - broker_utc_diff_hours
         except Exception:
-            broker_offset_hours = 4
+            broker_offset_hours = 5
 
         result: Dict[str, pd.DataFrame] = {}
 

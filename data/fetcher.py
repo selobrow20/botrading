@@ -2,6 +2,7 @@ import time
 import json
 import urllib.request
 from typing import Optional, Dict, Any
+from datetime import datetime, timezone
 import pandas as pd
 import requests
 import yfinance as yf
@@ -169,16 +170,18 @@ class DataFetcher:
             rates = mt5.copy_rates_from_pos(target_symbol, tf, 0, limit)
             if rates is not None and len(rates) > 0:
                 df = pd.DataFrame(rates)
-                # Konversi waktu broker MT5 (HFM UTC+3) ke waktu lokal WIB (Asia/Jakarta UTC+7)
-                broker_offset_hours = 4
+                # Konversi waktu broker MT5 ke waktu lokal WIB (Asia/Jakarta UTC+7)
+                # Musim Dingin (Winter/EET) UTC+2 (Offset +5 WIB), Musim Panas (Summer/EEST) UTC+3 (Offset +4 WIB)
+                broker_offset_hours = 5
                 try:
                     tick = mt5.symbol_info_tick(target_symbol)
                     if tick and tick.time > 0:
                         now_utc_ts = datetime.now(timezone.utc).timestamp()
                         broker_utc_diff_hours = round((tick.time - now_utc_ts) / 3600)
                         broker_offset_hours = 7 - broker_utc_diff_hours
-                except Exception:
-                    broker_offset_hours = 4
+                except Exception as ex_offset:
+                    logger.debug(f"Gagal hitung dynamic broker_offset_hours: {ex_offset}")
+                    broker_offset_hours = 5
 
                 df["Date"] = pd.to_datetime(df["time"], unit="s") + pd.Timedelta(hours=broker_offset_hours)
                 df.rename(columns={

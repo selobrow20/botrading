@@ -62,13 +62,13 @@ mt5:
   cent_only_high_grade: true        # Akun Cent (USC) HANYA masuk sinyal Grade A+ (0.05 Lot). Sinyal standar (< 80%) di-skip demi akurasi sniper
   enable_limit_orders: true         # Mengaktifkan Pending Limit Order (Buy Limit & Sell Limit) anti-kejar lilin Bob Volman
   always_use_limit_orders: true     # Mode Murni Pending Limit: Tidak entry langsung, hanya pasang BUY LIMIT dan SELL LIMIT
-  notify_pending_limit_signals: false # Sinyal pending jangan ditampilkan di Telegram (hanya kirim saat order terjemput/filled)
+  notify_pending_limit_signals: true # Sinyal pending jangan ditampilkan di Telegram (hanya kirim saat order terjemput/filled)
   limit_order_expiry_mins: 120      # Masa berlaku pending order: 120 menit (2 jam / 8 candle M15). Auto-cancel jika tidak tersentuh
   limit_order_lot: 0.05             # Fallback ukuran lot khusus pending limit order Grade A+
   limit_order_lot_cent: 0.05        # Ukuran lot pending limit order untuk Akun Cent USC (0.05 Lot)
   limit_order_lot_usd: 0.01         # Ukuran lot pending limit order untuk Akun Standard USD (0.01 Lot)
   max_pending_orders_per_symbol: 2  # Maksimal 1 pending order sniper terbaik per simbol (Anti-Kuras Modal)
-  enable_multi_level_limits: false  # 1 level limit order sniper
+  enable_multi_level_limits: true  # 1 level limit order sniper
   enable_dual_sided_limits: true   # Dinonaktifkan: Hanya pasang di salah satu sisi saat ada momen bagus
   max_limit_levels: 2               # Maksimal 2 level limit bertingkat per sisi sinyal
   min_level_spacing_pips: 20.0      # Jarak minimal antar level limit: 20 pips ($2.00 USD)
