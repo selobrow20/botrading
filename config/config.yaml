@@ -69,7 +69,7 @@ mt5:
   limit_order_lot_usd: 0.01         # Ukuran lot pending limit order untuk Akun Standard USD (0.01 Lot)
   max_pending_orders_per_symbol: 2  # Maksimal 1 pending order sniper terbaik per simbol (Anti-Kuras Modal)
   enable_multi_level_limits: true  # 1 level limit order sniper
-  enable_dual_sided_limits: true   # Dinonaktifkan: Hanya pasang di salah satu sisi saat ada momen bagus
+  enable_dual_sided_limits: false   # Dinonaktifkan: Hanya pasang di salah satu sisi saat ada momen bagus
   max_limit_levels: 2               # Maksimal 2 level limit bertingkat per sisi sinyal
   min_level_spacing_pips: 20.0      # Jarak minimal antar level limit: 20 pips ($2.00 USD)
   min_limit_distance_pips: 25.0     # Jarak minimal harga limit retest dari harga pasar saat ini: 25 pips ($2.50 USD)
