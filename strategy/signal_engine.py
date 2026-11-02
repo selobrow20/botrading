@@ -1777,6 +1777,24 @@ class SignalEngine:
         buy2_tp = round(buy2_p + tp_dist2_buy, 2)
         buy2_rrr = round(tp_dist2_buy / max(sl_dist2_buy, 0.01), 2)
 
+        # Penentuan Level 3 Buy Limit: Prioritas Extreme OB Low Floor, Retest 50 EMA, atau Extreme Support S3
+        max_buy3 = round(buy2_p - min_spacing_usd, 2)
+        if b_ob and b_ob.get("sl", 9999) <= max_buy3:
+            buy3_p = round(max(base_buy_sl + 1.00, b_ob["sl"]), 2)
+            buy3_lbl = "BUY LIMIT L3 (Extreme Bullish OB Low Floor)"
+        elif ema50_raw <= max_buy3 and "EMA" not in buy2_lbl:
+            buy3_p = round(ema50_raw, 2)
+            buy3_lbl = "BUY LIMIT L3 (Retest 50 EMA Support)"
+        else:
+            buy3_p = max_buy3
+            buy3_lbl = "BUY LIMIT L3 (Extreme Floor S3 / Major Demand)"
+
+        sl_dist3_buy = max(round(buy3_p - base_buy_sl, 2), max(4.0, round(atr_val * 1.5, 2)))
+        buy3_sl = round(buy3_p - sl_dist3_buy, 2)
+        tp_dist3_buy = round(sl_dist3_buy * (3.0 if trade_type == "LONG" else 1.5), 2)
+        buy3_tp = round(buy3_p + tp_dist3_buy, 2)
+        buy3_rrr = round(tp_dist3_buy / max(sl_dist3_buy, 0.01), 2)
+
         # ─── 2. SISI SELL LIMIT (Atap Resisten / Premium / OB & FVG) ───
         min_sell1 = round(curr_price + min_dist, 2)
 
@@ -1830,6 +1848,24 @@ class SignalEngine:
         tp_dist2_sell = round(sl_dist2_sell * (3.0 if trade_type == "LONG" else 1.5), 2)
         sell2_tp = round(sell2_p - tp_dist2_sell, 2)
         sell2_rrr = round(tp_dist2_sell / max(sl_dist2_sell, 0.01), 2)
+
+        # Penentuan Level 3 Sell Limit: Prioritas Extreme OB High Ceiling, Retest 50 EMA, atau Extreme Resistance R3
+        min_sell3 = round(sell2_p + min_spacing_usd, 2)
+        if s_ob and s_ob.get("sl", 0) >= min_sell3:
+            sell3_p = round(min(base_sell_sl - 1.00, s_ob["sl"]), 2)
+            sell3_lbl = "SELL LIMIT L3 (Extreme Bearish OB High Ceiling)"
+        elif ema50_raw >= min_sell3 and "EMA" not in sell2_lbl:
+            sell3_p = round(ema50_raw, 2)
+            sell3_lbl = "SELL LIMIT L3 (Retest 50 EMA Resistance)"
+        else:
+            sell3_p = min_sell3
+            sell3_lbl = "SELL LIMIT L3 (Extreme Ceiling R3 / Major Supply)"
+
+        sl_dist3_sell = max(round(base_sell_sl - sell3_p, 2), max(4.0, round(atr_val * 1.5, 2)))
+        sell3_sl = round(sell3_p + sl_dist3_sell, 2)
+        tp_dist3_sell = round(sl_dist3_sell * (3.0 if trade_type == "LONG" else 1.5), 2)
+        sell3_tp = round(sell3_p - tp_dist3_sell, 2)
+        sell3_rrr = round(tp_dist3_sell / max(sl_dist3_sell, 0.01), 2)
 
         # ─── HARD RULE 1: Manajemen Sisi Limit Orders (H1/M15 Tren & Mode Jaring Dua Sisi) ───
         curr_row = df.iloc[-1] if not df.empty else pd.Series()
@@ -1894,6 +1930,7 @@ class SignalEngine:
             allow_sell = True
 
         orders = []
+        max_levels_cfg = int(cfg_mt5.get("max_limit_levels", 2))
         if allow_buy:
             orders.append({
                 "level": 1,
@@ -1917,9 +1954,22 @@ class SignalEngine:
                 "rrr": buy2_rrr,
                 "lot": order_lot,
             })
+            if max_levels_cfg >= 3:
+                orders.append({
+                    "level": 3,
+                    "label": buy3_lbl,
+                    "signal": "BUY_LIMIT",
+                    "type": "BUY_LIMIT",
+                    "price": buy3_p,
+                    "tp": buy3_tp,
+                    "sl": buy3_sl,
+                    "rrr": buy3_rrr,
+                    "lot": order_lot,
+                })
         if allow_sell:
+            base_s_lvl = 1 if not allow_buy else (len(orders) + 1)
             orders.append({
-                "level": 1 if not allow_buy else 3,
+                "level": base_s_lvl,
                 "label": sell1_lbl,
                 "signal": "SELL_LIMIT",
                 "type": "SELL_LIMIT",
@@ -1930,7 +1980,7 @@ class SignalEngine:
                 "lot": order_lot,
             })
             orders.append({
-                "level": 2 if not allow_buy else 4,
+                "level": base_s_lvl + 1,
                 "label": sell2_lbl,
                 "signal": "SELL_LIMIT",
                 "type": "SELL_LIMIT",
@@ -1940,6 +1990,18 @@ class SignalEngine:
                 "rrr": sell2_rrr,
                 "lot": order_lot,
             })
+            if max_levels_cfg >= 3:
+                orders.append({
+                    "level": base_s_lvl + 2,
+                    "label": sell3_lbl,
+                    "signal": "SELL_LIMIT",
+                    "type": "SELL_LIMIT",
+                    "price": sell3_p,
+                    "tp": sell3_tp,
+                    "sl": sell3_sl,
+                    "rrr": sell3_rrr,
+                    "lot": order_lot,
+                })
         return orders
 
     def evaluate_xau_3_pillars(

@@ -67,10 +67,10 @@ mt5:
   limit_order_lot: 0.05             # Fallback ukuran lot khusus pending limit order Grade A+
   limit_order_lot_cent: 0.05        # Ukuran lot pending limit order untuk Akun Cent USC (0.05 Lot)
   limit_order_lot_usd: 0.01         # Ukuran lot pending limit order untuk Akun Standard USD (0.01 Lot)
-  max_pending_orders_per_symbol: 2  # Maksimal 1 pending order sniper terbaik per simbol (Anti-Kuras Modal)
+  max_pending_orders_per_symbol: 3  # Maksimal 1 pending order sniper terbaik per simbol (Anti-Kuras Modal)
   enable_multi_level_limits: true  # 1 level limit order sniper
   enable_dual_sided_limits: false   # Dinonaktifkan: Hanya pasang di salah satu sisi saat ada momen bagus
-  max_limit_levels: 2               # Maksimal 2 level limit bertingkat per sisi sinyal
+  max_limit_levels: 3               # Maksimal 2 level limit bertingkat per sisi sinyal
   min_level_spacing_pips: 20.0      # Jarak minimal antar level limit: 20 pips ($2.00 USD)
   min_limit_distance_pips: 25.0     # Jarak minimal harga limit retest dari harga pasar saat ini: 25 pips ($2.50 USD)
   enable_news_limit_guard: true     # Otomatis hapus Buy Limit & Sell Limit 10 menit sebelum berita besar (High-Impact News)
@@ -81,7 +81,7 @@ mt5:
   gold_symbol: XAUUSDc
   trading_hours: all
   max_positions_usd: 1              # Akun USD Standard: Maksimal 1 posisi (disiplin margin)
-  max_positions_cent: 1             # Akun Cent (USC): Maksimal 1 posisi (MAX 1 LAYER - PDF Section 20)
+  max_positions_cent: 3             # Akun Cent (USC): Maksimal 1 posisi (MAX 1 LAYER - PDF Section 20)
   us_session_max_positions: 4       # Sesi US Akun Cent (USC): Maksimal 4 layer/posisi (Sesuai arahan: max 4 layer)
   min_grid_spacing: 1.0             # Jarak minimal antar posisi $1.00 USD (10 pips) agar tidak staking di titik yang sama
   notify_veto: false                # Heningkan (mute) notifikasi pembatalan trade (veto) ke Telegram (anti-spam)
