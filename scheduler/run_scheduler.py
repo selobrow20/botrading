@@ -879,10 +879,11 @@ class PipelineRunner:
         # Hanya batalkan jika sinyal aktif memiliki veto keras atau berita besar aktif (News Guard)
         if sig_result is not None and getattr(sig_result, "signal", "") not in ["HOLD", ""]:
             from trading.mt5_bridge import can_place_order
+            target_ot = "SELL_LIMIT" if "SELL" in getattr(sig_result, "signal", "").upper() else "BUY_LIMIT"
             # Notifier disetel None & silent=True agar pengecekan rutin latar belakang tidak membombardir Telegram
             allowed, gate_reason = can_place_order(
                 sig=sig_result,
-                order_type="BUY_LIMIT",
+                order_type=target_ot,
                 active_pending_orders=None,
                 notifier=None,
                 min_confluence_score=80.0,
@@ -1004,10 +1005,13 @@ class PipelineRunner:
                     self.notifier.send_pending_limit_cancellation_alert("SELL_LIMIT", reason="Momen terkonfirmasi BUY")
                 except Exception:
                     pass
+            max_allowed_pending = int(cfg_mt5.get("max_pending_orders_per_symbol", 3))
+            max_allowed_pos = int(cfg_mt5.get("max_positions_cent", 3)) if is_cent else int(cfg_mt5.get("max_positions_standard", 1))
+            effective_cap = min(max_allowed_pending, max_allowed_pos)
             if is_us_time:
-                needs_buy = ((len(active_buys) + len(buy_limits)) < us_max_cap) and len(active_sells) == 0
-            else:
-                needs_buy = (len(buy_limits) == 0 and len(active_buys) == 0 and len(active_sells) == 0)
+                effective_cap = min(effective_cap, us_max_cap)
+
+            needs_buy = ((len(active_buys) + len(buy_limits)) < effective_cap) and len(active_sells) == 0
             needs_sell = False
         elif "SELL" in sig_action:
             # Sinyal Momen Bagus SELL -> Hanya pasang SELL LIMIT di salah satu sisi (Retest Premium Resisten / EMA 20)
@@ -1021,10 +1025,13 @@ class PipelineRunner:
                 except Exception:
                     pass
             needs_buy = False
+            max_allowed_pending = int(cfg_mt5.get("max_pending_orders_per_symbol", 3))
+            max_allowed_pos = int(cfg_mt5.get("max_positions_cent", 3)) if is_cent else int(cfg_mt5.get("max_positions_standard", 1))
+            effective_cap = min(max_allowed_pending, max_allowed_pos)
             if is_us_time:
-                needs_sell = ((len(active_sells) + len(sell_limits)) < us_max_cap) and len(active_buys) == 0
-            else:
-                needs_sell = (len(sell_limits) == 0 and len(active_sells) == 0 and len(active_buys) == 0)
+                effective_cap = min(effective_cap, us_max_cap)
+
+            needs_sell = ((len(active_sells) + len(sell_limits)) < effective_cap) and len(active_buys) == 0
         else:
             return
 
